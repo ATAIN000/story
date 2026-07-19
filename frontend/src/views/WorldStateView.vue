@@ -2,7 +2,12 @@
 // 世界状态视图：物理层 / 关系层 / 心智层 / 叙事层（四层结构）
 import { computed } from 'vue'
 
-const props = defineProps({ world: { type: Object, required: true } })
+const props = defineProps({
+  world: { type: Object, required: true },
+  // App.vue 传入 chapters：轨道名取最新有效章节决策卡的 track_names（最短真实路径，
+  // 后端不把 genre 轨道名放进 world_state）；旧数据无该字段时退回 beats 的 track_name
+  chapters: { type: Array, default: () => [] },
+})
 
 const physicalGroups = computed(() => {
   const groups = { at: [], alive: [], other: [] }
@@ -15,7 +20,23 @@ const physicalGroups = computed(() => {
 })
 
 const affectColor = (v) => v >= 0.7 ? 'bg-red-400' : v >= 0.4 ? 'bg-amber-400' : 'bg-sky-400'
-const trackNames = { A: '主线', B: '刘伯弧', C: '展昭弧', D: '单元剧', E: '主题' }
+// 兼容 fallback：P3.10 前持久化的章节决策卡无 track_names，且早期数据 beats 也未必带
+// track_name —— 此时退回旧硬编码 map（仅对齐 mystery 演示项目，新数据不会走到）
+const FALLBACK_TRACK_NAMES = { A: '主线', B: '刘伯弧', C: '展昭弧', D: '单元剧', E: '主题' }
+const trackNames = computed(() => {
+  const cards = props.chapters.filter(c => !c.rolled_back && c.decision_card)
+  for (let i = cards.length - 1; i >= 0; i--) {
+    const dc = cards[i].decision_card
+    if (dc.track_names && Object.keys(dc.track_names).length) return dc.track_names
+  }
+  for (let i = cards.length - 1; i >= 0; i--) {
+    const beats = cards[i].decision_card.beats || []
+    const names = {}
+    for (const b of beats) if (b.track && b.track_name) names[b.track] = b.track_name
+    if (Object.keys(names).length) return names
+  }
+  return FALLBACK_TRACK_NAMES
+})
 </script>
 
 <template>

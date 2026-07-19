@@ -121,7 +121,7 @@ onMounted(async () => {
     <!-- 主视图 -->
     <main class="flex-1 max-w-7xl mx-auto px-4 py-5 w-full" v-if="project">
       <CoreLoopView v-if="tab === 'core'" :chapters="chapters" />
-      <WorldStateView v-else-if="tab === 'world'" :world="project.world_state" />
+      <WorldStateView v-else-if="tab === 'world'" :world="project.world_state" :chapters="chapters" />
       <TimelineView v-else-if="tab === 'timeline'"
                     :events="project.events" :foreshadows="project.world_state.foreshadows"
                     :snapshots="project.snapshots" :head-tick="meta.head_tick"

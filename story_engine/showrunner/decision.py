@@ -79,6 +79,8 @@ class DecisionCard:
     queued_foreshadows: list[dict] = field(default_factory=list)   # Step 9 满池排队
     pacing: dict | None = None                                # P3.4 填
     creative_seeds: list[dict] = field(default_factory=list)  # P3.7 填
+    # ---- P3.10 新增（只增不改）：前端轨道名展示 {id: name}，随 genre 插件走 ----
+    track_names: dict[str, str] = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -174,6 +176,7 @@ class Showrunner:
             plan_goals=plan_goals, concreteness_curve=concreteness_curve,
             pool_stats=pool_stats, queued_foreshadows=queued,
             pacing=pacing,
+            track_names={tid: t.name for tid, t in self.tracks.items()},
         )
 
     # ---------- P3.7: ConceptualBlending 门控挂载（决策7） ----------
