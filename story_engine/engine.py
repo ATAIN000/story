@@ -5,6 +5,9 @@ Phase 2（v0.3）：非剧本路径改为 Director→Actor→Showrunner：
   决策卡 → spawn 5 角色 Actor → tick×N（各自 SOAR commit）→
   汇总渲染章节文本 → 7步验证（报告）→ 伏笔池 → snapshot
 剧本路径（STORY_ENGINE_SCRIPTED_DEMO=1）完全保留，不依赖 Actor。
+Phase 4（v0.4）：真实 LLM 路径接 evaluator 自评迭代（决策5/6，
+  SCRIPTED_DEMO=0 且非 mock 且 STORY_ENGINE_EVAL_ENABLED!=0 时启用；
+  自评是增强不是门禁，异常自动退回未迭代结果）。
 
 关键架构约束（worldstate_paradox）：
 - 生成 prompt 不含 WorldState 秘密（doesnt_know/secret 不注入）
@@ -25,6 +28,9 @@ from uuid import uuid4
 from .kernel import Kernel
 from .kernel.actor import CharacterConfig
 from .creativity import ConceptualBlending
+from .evaluator import (ChapterSpec, IterationController, LeaderArbiter,
+                        PresentationScorer, ProcessGate, ReaderProxy)
+from .evaluator.critic_parliament import CriticParliament  # __init__ 未导出
 from .llm import LLMError  # 通过 shim 兼容旧 import 路径
 from .registry import ExtensionRegistry, PluginManifest
 from .showrunner import Showrunner
@@ -173,29 +179,24 @@ class StoryEngine:
         if not scripted:
             card = await self.showrunner.attach_creative_seed(card, chapter_no)
 
-        # Step 1: 生成初稿（生成通道 — 不含 WorldState 秘密！）
-        draft_text = await self._llm_generate_draft(chapter_no, card, state)
-
-        # Step 2: 事件抽取
-        draft_events = await self._llm_extract_events(chapter_no, draft_text)
-
-        # Step 3: 7步硬约束验证（检查通道 — 以 WorldState 为基准）
-        draft_results = self._validate_event_sequence(draft_events, state)
-        violations = [
-            {"event": r["event_summary"], "check": c["label"], "reason": c["reason"]}
-            for r in draft_results for c in r["checks"] if not c["passed"]
-        ]
-
-        # Step 4: 修正回路（修正通道 — WorldState + 违规报告）
-        correction = None
-        final_text, final_events = draft_text, draft_events
-        if violations:
-            correction = await self._llm_correct(chapter_no, draft_text, violations, state)
-            final_text = correction["text"]
-            final_events = correction["events"]
-            recheck = self._validate_event_sequence(final_events, state)
-            correction["recheck_passed"] = all(
-                c["passed"] for r in recheck for c in r["checks"])
+        # Step 1-4: 初稿 → 事件抽取 → 7步验证 → 修正回路
+        # P4.5（决策5）：真实 LLM 且自评门控通过 → 包 IterationController（best-of-K）；
+        # 自评链路任何异常 → 退回未迭代结果（自评是增强不是门禁）
+        evaluation = None
+        if not scripted and self._eval_enabled():
+            try:
+                (draft_text, draft_results, violations, correction,
+                 final_text, final_events, evaluation) = \
+                    await self._generate_with_evaluation(chapter_no, card, state)
+            except Exception:
+                evaluation = None
+                (draft_text, draft_results, violations, correction,
+                 final_text, final_events) = await self._generate_and_repair(
+                    chapter_no, card, state)
+        else:
+            (draft_text, draft_results, violations, correction,
+             final_text, final_events) = await self._generate_and_repair(
+                chapter_no, card, state)
 
         # 空结果守卫
         if not final_text.strip():
@@ -259,11 +260,199 @@ class StoryEngine:
             "foreshadow_updates": fs_updates,
             "snapshot_id": snapshot_id,
             "tick_range": [committed[0]["tick"] if committed else head, head],
+            # P4.5（决策6）：自评结果（mock/剧本/门控关闭/异常退回 → None），只增不改
+            "evaluation": evaluation,
         }
         chapters = self._read_chapters()
         chapters.append(record)
         self._write_chapters(chapters)
         return record
+
+    async def _generate_and_repair(self, chapter_no: int, card,
+                                   state: WorldState) -> tuple:
+        """现有生成 + L1 修正回路（原 _generate_chapter_llm_path Step 1-4 原样抽出，
+        供初版/兜底复用）。返回 (draft_text, draft_results, violations,
+        correction, final_text, final_events)。"""
+        # Step 1: 生成初稿（生成通道 — 不含 WorldState 秘密！）
+        draft_text = await self._llm_generate_draft(chapter_no, card, state)
+
+        # Step 2: 事件抽取
+        draft_events = await self._llm_extract_events(chapter_no, draft_text)
+
+        # Step 3: 7步硬约束验证（检查通道 — 以 WorldState 为基准）
+        draft_results = self._validate_event_sequence(draft_events, state)
+        violations = [
+            {"event": r["event_summary"], "check": c["label"], "reason": c["reason"]}
+            for r in draft_results for c in r["checks"] if not c["passed"]
+        ]
+
+        # Step 4: 修正回路（修正通道 — WorldState + 违规报告）
+        correction = None
+        final_text, final_events = draft_text, draft_events
+        if violations:
+            correction = await self._llm_correct(chapter_no, draft_text, violations, state)
+            final_text = correction["text"]
+            final_events = correction["events"]
+            recheck = self._validate_event_sequence(final_events, state)
+            correction["recheck_passed"] = all(
+                c["passed"] for r in recheck for c in r["checks"])
+        return (draft_text, draft_results, violations, correction,
+                final_text, final_events)
+
+    # ============ Phase 4：自评迭代（决策5/6，env 门控） ============
+    def _eval_enabled(self) -> bool:
+        """自评门控：SCRIPTED_DEMO=0 且 llm 非 mock 且 EVAL_ENABLED!=0。
+        三条件任一不满足 → 走现有路径原样（mock/剧本路径零变化）。"""
+        return (os.environ.get("STORY_ENGINE_SCRIPTED_DEMO", "1") == "0"
+                and not self.llm.is_mock
+                and os.environ.get("STORY_ENGINE_EVAL_ENABLED", "1") != "0")
+
+    @staticmethod
+    def _eval_max_rounds() -> int:
+        """EVAL_MAX_ROUNDS 默认 3，钳 [1, 5] 防失控（决策5）"""
+        try:
+            n = int(os.environ.get("STORY_ENGINE_EVAL_MAX_ROUNDS", "3"))
+        except ValueError:
+            n = 3
+        return max(1, min(5, n))
+
+    def _build_eval_controller(self) -> tuple:
+        """按需构建 evaluator 组件（仅门控通过时调用，mock/剧本零开销）。
+        返回 (controller, reader, scorer)。
+        STORY_ENGINE_CRITIC_MODEL 是蓝图「critic 模型 ≥ generator」的预留
+        配置位：LLMPool.call 暂无 model 参数，本期 critic 与 generator 同模型。
+        """
+        parliament = CriticParliament(kernel=self.kernel, genre=self.bundle)
+        gates = ProcessGate(style=self._prompt_config()["style"],
+                            validator=self.validator)
+        # 决策5：persona 取 genre params reader_persona，缺省用普通类型读者
+        persona = (self.bundle.genre_params.get("reader_persona")
+                   or "喜欢本类型的普通读者")
+        reader = ReaderProxy(persona, kernel=self.kernel)
+        controller = IterationController(
+            parliament, LeaderArbiter(), gates, reader,
+            max_rounds=self._eval_max_rounds())
+        scorer = PresentationScorer(self.bundle.genre_params)
+        return controller, reader, scorer
+
+    async def _generate_with_evaluation(self, chapter_no: int, card,
+                                        state: WorldState) -> tuple:
+        """决策5：IterationController 包「现有生成 + L1 修正回路」，best-of-K。
+
+        generate_fn：首轮 = _generate_and_repair 初版原样；后续轮不重走生成
+        通道，由 controller 把 revision.blocking 的 must_fix 作 feedback 传入，
+        复用 _llm_correct 修正通道携带。每轮完整记录（文本→事件/验证/修正），
+        供 best 版本回溯出待提交事件。
+        返回 _generate_and_repair 五元组（初版 draft 字段 + best 的 final）
+        + evaluation dict（决策6）。best=None（全轮 gate FAIL）→ 保留初版。
+        """
+        controller, reader, scorer = self._build_eval_controller()
+        rounds: list[dict] = []
+
+        async def generate_fn(spec, feedback=None):
+            if not rounds:
+                (dtext, dresults, viols, corr, ftext, fevents) = \
+                    await self._generate_and_repair(chapter_no, card, state)
+                rounds.append({"text": ftext, "events": fevents,
+                               "draft_text": dtext, "draft_results": dresults,
+                               "violations": viols, "correction": corr})
+                return ftext
+            prev = rounds[-1]
+            corr = await self._llm_correct(
+                chapter_no, prev["text"], prev["violations"], state,
+                feedback=feedback)
+            recheck = self._validate_event_sequence(corr["events"], state)
+            corr["recheck_passed"] = all(
+                c["passed"] for r in recheck for c in r["checks"])
+            rounds.append({"text": corr["text"], "events": corr["events"],
+                           "draft_text": prev["text"], "draft_results": recheck,
+                           "violations": prev["violations"], "correction": corr})
+            return corr["text"]
+
+        # 章节级迭代：L1/L2/L3 缺单事件/角色/beat 上下文自动跳过，L5 恒跑
+        result = await controller.run(
+            generate_fn, ChapterSpec(state=state, decision=card))
+        evaluation = await self._assemble_evaluation(
+            result, controller, reader, scorer,
+            rounds[0]["text"] if rounds else "")
+
+        r0 = rounds[0]
+        best = result.best
+        if best is not None:
+            chosen = next(
+                (r for r in reversed(rounds) if r["text"] == best.text), r0)
+        else:
+            chosen = r0  # 全轮 gate FAIL → 保留初版，evaluation.gates 记原因
+        return (r0["draft_text"], r0["draft_results"], r0["violations"],
+                r0["correction"], chosen["text"], chosen["events"], evaluation)
+
+    async def _iterate_display_text(self, chapter_no: int, base_text: str,
+                                    violations: list[dict], state: WorldState,
+                                    card) -> tuple:
+        """决策5 Actor 路径：事件已提交，迭代只重生成展示文本（沿用 Actor
+        text-only 修正先例），critic 评估对象是文本，事件历史不改写。
+        返回 (best_text, evaluation)；best=None → 保留 base_text。"""
+        controller, reader, scorer = self._build_eval_controller()
+        rounds: list[str] = []
+
+        async def generate_fn(spec, feedback=None):
+            if not rounds:
+                rounds.append(base_text)
+                return base_text
+            corr = await self._llm_correct(
+                chapter_no, rounds[-1], violations, state,
+                feedback=feedback, with_events=False)
+            text = corr["text"] if corr["text"].strip() else rounds[-1]
+            rounds.append(text)
+            return text
+
+        result = await controller.run(
+            generate_fn, ChapterSpec(state=state, decision=card))
+        evaluation = await self._assemble_evaluation(
+            result, controller, reader, scorer, base_text)
+        best = result.best
+        return (best.text if best is not None else base_text), evaluation
+
+    async def _assemble_evaluation(self, result, controller, reader, scorer,
+                                   initial_text: str) -> dict:
+        """决策6：evaluation 返回体（只增）。
+
+        reader 取与 best 版本对齐的反应（controller._reactions 与 versions
+        平行）；get_predictions() 暂只存入返回体（反预期设计接 L4 是后续）。
+        best=None（全轮 gate FAIL）时重跑规则 gate 记 FAIL 原因
+        （ProcessGate 纯规则无 LLM，零成本）。
+        """
+        versions = result.all_versions
+        best = result.best
+        predictions = reader.get_predictions() if reader else []
+        if best is None:
+            gate_objs = []
+            if controller.gates is not None and initial_text:
+                gate_objs = [await controller.gates.check_l5(initial_text)]
+            return {
+                "rounds": controller.max_rounds,
+                "best_round": None,
+                "gates": [asdict(g) for g in gate_objs],
+                "critiques": [],
+                "revision": None,
+                "reader": None,
+                "score": asdict(scorer.score([], None)),
+                "reader_predictions": predictions,
+            }
+        idx = versions.index(best)
+        reaction = (controller._reactions[idx]
+                    if idx < len(controller._reactions) else None)
+        curves = reader.get_reaction_curve() if reader else None
+        return {
+            "rounds": max(v.round for v in versions) + 1,
+            "best_round": best.round,
+            "gates": [asdict(g) for g in best.gates],
+            "critiques": [asdict(c) for c in best.critiques],
+            "revision": asdict(best.revision) if best.revision else None,
+            "reader": asdict(reaction) if reaction else None,
+            "score": asdict(scorer.score(best.critiques, curves)),
+            "reader_predictions": predictions,
+        }
 
     async def _generate_chapter_actor_path(
         self, chapter_no: int, state: WorldState, t0: float
@@ -335,6 +524,16 @@ class StoryEngine:
                     "recheck_passed": False,
                 }
 
+        # P4.5（决策5）：Actor 路径事件已提交，自评迭代只重生成展示文本
+        # （沿用上方 text-only 修正先例），critic 评估对象是文本，不重写事件历史
+        evaluation = None
+        if self._eval_enabled() and final_text.strip():
+            try:
+                final_text, evaluation = await self._iterate_display_text(
+                    chapter_no, final_text, violations, pre_state, card)
+            except Exception:
+                evaluation = None  # 自评是增强不是门禁
+
         if not final_text.strip() and not all_actions:
             raise StoryEngineError(
                 "Actor 模式未产生任何行动 — 请检查 LLM/规则兜底是否可用。")
@@ -387,6 +586,8 @@ class StoryEngine:
                 committed[0]["tick"] if committed else head,
                 head,
             ],
+            # P4.5（决策6）：自评结果（mock/门控关闭/异常退回 → None），只增不改
+            "evaluation": evaluation,
         }
         chapters = self._read_chapters()
         chapters.append(record)
@@ -562,15 +763,30 @@ class StoryEngine:
             f"=== 章节文本 ===\n{text[:3000]}\n\n只输出 JSON 数组，不要解释。")
 
     async def _llm_correct(self, chapter_no: int, draft_text: str,
-                           violations: list[dict], state: WorldState) -> dict:
-        """修正通道：WorldState + 违规报告（对照基准，针对性修正）"""
-        v_text = "；".join(f"{v['event']}——{v['reason']}" for v in violations)
+                           violations: list[dict], state: WorldState,
+                           feedback: list[str] | None = None,
+                           with_events: bool = True) -> dict:
+        """修正通道：WorldState + 违规报告（对照基准，针对性修正）
+
+        P4.5（决策5）：feedback 为自评 Leader 仲裁的 must_fix，拼进修正 prompt
+        （复用本设施，不新建通道）；with_events=False 跳过修正后的事件重抽取
+        （Actor 展示文本迭代只要文本，省 1 次 LLM 调用）。
+        两者均为可选参数，缺省调用行为与原样逐字一致。
+        """
+        v_text = "；".join(f"{v['event']}——{v['reason']}" for v in violations) or "无"
+        fb_txt = ""
+        task_line = "修正这些违规，保持叙事质量与篇幅。规则：\n"
+        if feedback:
+            fb_txt = ("自评反馈（必须逐条处理）：\n"
+                      + "\n".join(f"- {f}" for f in feedback) + "\n\n")
+            task_line = "修正上述违规与自评反馈，保持叙事质量与篇幅。规则：\n"
         prompt = (
             f"【CHAPTER={chapter_no}】\n"
             f"以下是世界状态（检查基准）：\n{self._world_state_digest(state)}\n\n"
             f"以下是生成的文本（含违规）：\n{draft_text[:2500]}\n\n"
             f"检查发现的违规：{v_text}\n\n"
-            "修正这些违规，保持叙事质量与篇幅。规则：\n"
+            f"{fb_txt}"
+            f"{task_line}"
             "- 认知违规：改为合法获知渠道（调查/证词/物证），或删去该信息\n"
             "- 物理违规：补上必要的位置转移过程\n"
             "- 世界规则违规：超自然只作氛围，破案改走证据链\n"
@@ -582,6 +798,10 @@ class StoryEngine:
                         mock_script.respond("extract_corrected_events", f"【CHAPTER={chapter_no}】")),
                     "note": note, "violations_addressed": len(violations)}
         resp = await self.llm.call(prompt, purpose="correct_chapter", temperature=0.5)
+        if not with_events:
+            return {"text": resp.text, "events": [],
+                    "note": "LLM 对照世界状态修正（仅展示文本）",
+                    "violations_addressed": len(violations)}
         resp_events = await self.llm.call(
             self._real_extract_prompt(chapter_no, resp.text),
             purpose="extract_corrected_events", temperature=0.2)

@@ -9,6 +9,13 @@
 - Stage 2：对存疑段按 `genre_params.active_critics` 维度并行 asyncio.gather，
   每维 1 次 LLM（temperature=0.3，critique 低温更确定）
 
+world_state 紧凑摘要（P4.5 接线，原 P4.2 defer 项）：
+- assess(chapter, world_state) 的 world_state 经 `_world_state_summary` 投影为
+  紧凑文本（故事时间/场景 + at() 位置事实 + 各角色认知/目标，全表截断、
+  总长约 600 字封顶），注入 judge 与 critic prompt 作「对照基准」——
+  setting_consistency 维度按蓝图对照 L1 世界状态（非原文）
+- world_state=None（测试/无状态场景）→ 摘要为空串，prompt 与原样逐字一致
+
 两道后处理（全部按蓝图）：
 - **quote 过滤** `_has_valid_evidence`：evidence 必须非空且每条能在章节原文中
   子串命中（防 CriticGPT 幻觉的可执行版），无 quote 的 critique 丢弃
@@ -160,6 +167,7 @@ class CriticParliament:
     # ---------- Stage 1：单 judge 粗筛 ----------
     async def _single_judge_screen(self, chapter: str,
                                    world_state=None) -> list[SuspectSegment]:
+        state_block = _state_prompt_block(world_state)
         prompt = (
             "你是小说质量粗筛员。通读下面的章节，标记「存疑段」——可能存在"
             "质量问题（情节矛盾、动机牵强、设定冲突、对话失真、套路化等）的段落。\n"
@@ -169,7 +177,7 @@ class CriticParliament:
             "  quote: 存疑段落的逐字原文引用（必须能在章节原文中逐字找到）\n"
             "  reason: 一句话存疑理由\n"
             "- 只输出 YAML 列表本身，不要任何解释。\n\n"
-            f"章节原文：\n{chapter}")
+            f"章节原文：\n{chapter}{state_block}")
         text = await self._call_llm(prompt, purpose="critic_judge",
                                     max_tokens=_JUDGE_MAX_TOKENS)
         return self._parse_suspects(text, chapter)
@@ -204,11 +212,12 @@ class CriticParliament:
         seg_lines = "\n".join(
             f"{i + 1}. 引文：{s.quote}\n   粗筛理由：{s.reason or '（无）'}"
             for i, s in enumerate(suspects))
+        state_block = _state_prompt_block(world_state)
         prompt = (
             f"你是小说评审专家，只负责「{dimension}」这一个维度。\n"
             f"维度说明：{desc}\n{good}\n{bad}\n\n"
             "以下段落被粗筛标记为存疑（引自章节原文），请逐段从该维度审查：\n"
-            f"{seg_lines}\n\n"
+            f"{seg_lines}{state_block}\n\n"
             "审查完毕，按 YAML 输出恰好这四个字段：\n"
             "verdict: PASS 或 FAIL（该维度是否有确实问题）\n"
             "evidence: 逐字引自上述引文的句子列表（FAIL 必须给出；无引用视为无效）\n"
@@ -304,3 +313,52 @@ def _extract_structured(text: str):
         return yaml.safe_load(candidate)
     except Exception:
         return None
+
+
+# ---------- world_state 紧凑摘要（P4.5：token 预算优先） ----------
+_SUMMARY_MAX_CHARS = 600      # 整段硬封顶（约 300 token 以内）
+_SUMMARY_MAX_AT = 10          # 位置事实条数上限
+_SUMMARY_MAX_MINDS = 6        # 角色行数上限
+_SUMMARY_MAX_KNOWS = 6        # 每角色认知条数上限
+_SUMMARY_MAX_GOALS = 3        # 每角色目标条数上限
+
+
+def _world_state_summary(world_state) -> str:
+    """世界状态 → 紧凑文本投影（供 judge/critic prompt 作对照基准）。
+
+    只取评估所需的最小面：故事时间/场景 + at() 位置事实 + 各角色
+    认知/目标（ beliefs 为 True 的项）；各项截断、整段 _SUMMARY_MAX_CHARS
+    封顶。取不到属性/异常 → ""（调用方按无摘要处理，prompt 不变）。
+    """
+    if world_state is None:
+        return ""
+    try:
+        physical = getattr(world_state, "physical", None) or {}
+        at = sorted(str(f) for f, v in physical.items()
+                    if v and str(f).startswith("at("))[:_SUMMARY_MAX_AT]
+        narrative = getattr(world_state, "narrative", None)
+        story_time = getattr(narrative, "last_story_time", "") or ""
+        scene = getattr(narrative, "current_scene", "") or ""
+        lines: list[str] = []
+        if story_time or scene:
+            lines.append(f"故事时间={story_time or '?'} 场景={scene or '?'}")
+        if at:
+            lines.append("位置：" + "，".join(at))
+        minds = getattr(world_state, "minds", None) or {}
+        for cid, m in list(minds.items())[:_SUMMARY_MAX_MINDS]:
+            known = [str(f) for f, v in (getattr(m, "beliefs", None) or {}).items()
+                     if v][:_SUMMARY_MAX_KNOWS]
+            goals = [str(g) for g in (getattr(m, "goals", None) or [])][:_SUMMARY_MAX_GOALS]
+            lines.append(
+                f"{cid}：知道[{', '.join(known)}] 目标[{', '.join(goals)}]")
+        return "\n".join(lines)[:_SUMMARY_MAX_CHARS]
+    except Exception:
+        return ""
+
+
+def _state_prompt_block(world_state) -> str:
+    """prompt 注入块；无摘要 → ""（prompt 与未注入时逐字一致）"""
+    summary = _world_state_summary(world_state)
+    if not summary:
+        return ""
+    return f"\n\n=== 世界状态摘要（对照基准）===\n{summary}"
