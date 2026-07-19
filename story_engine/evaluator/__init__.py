@@ -6,8 +6,9 @@ Phase 4 实现（独立层，P4.5 才接线 engine）：
   process_gates — ProcessGate 过程检查点 L1/L2/L3/L5（规则化，不调 LLM）
   leader        — LeaderArbiter 宪法化优先级仲裁（蓝图 6.3，纯规则）
   reader_proxy  — ReaderProxy 读者代理（蓝图 6.4，行为预测非评分）
-
-（iteration / presentation_scorer 为后续任务，本子包暂不包含。）
+  iteration     — IterationController 3 轮 best-of-K 迭代控制器（蓝图 6.5）
+  presentation_scorer — PresentationScorer 展示层打分（蓝图 6.6，
+                  唯一出数字分的地方，分数不影响内部判断）
 """
 from .types_eval import (
     Gate, Critique, RevisionPlan, ReaderReaction,
@@ -22,6 +23,10 @@ from .leader import (
     BLOCKING_DIMENSIONS, ARBITRATION_ORDER,
 )
 from .reader_proxy import ReaderProxy
+from .iteration import IterationController, ChapterSpec
+from .presentation_scorer import (
+    PresentationScorer, DIMENSION_WEIGHT_KEYS, NEUTRAL_ENGAGEMENT,
+)
 
 __all__ = [
     "Gate", "Critique", "RevisionPlan", "ReaderReaction",
@@ -31,4 +36,6 @@ __all__ = [
     "LeaderArbiter", "CONSTITUTIONAL_PRIORITY",
     "BLOCKING_DIMENSIONS", "ARBITRATION_ORDER",
     "ReaderProxy",
+    "IterationController", "ChapterSpec",
+    "PresentationScorer", "DIMENSION_WEIGHT_KEYS", "NEUTRAL_ENGAGEMENT",
 ]
