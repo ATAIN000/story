@@ -8,6 +8,11 @@ Phase 2（v0.3）：非剧本路径改为 Director→Actor→Showrunner：
 Phase 4（v0.4）：真实 LLM 路径接 evaluator 自评迭代（决策5/6，
   SCRIPTED_DEMO=0 且非 mock 且 STORY_ENGINE_EVAL_ENABLED!=0 时启用；
   自评是增强不是门禁，异常自动退回未迭代结果）。
+Phase 5（v0.5）：真实 LLM 路径文本产出改 IR-first（决策6，
+  SCRIPTED_DEMO=0 且非 mock 且 STORY_ENGINE_IR_FIRST!=0 时启用）：
+  IRBuilder → Fabula/Sjuzhet → Narrativizer（Realizer 1 次 LLM 替代原 1 次
+  生成）；空稿/异常记 warning 并回退旧路径（增强不是门禁），
+  返回体只增 narrative_ir 摘要（mock/剧本路径为 None）。
 
 关键架构约束（worldstate_paradox）：
 - 生成 prompt 不含 WorldState 秘密（doesnt_know/secret 不注入）
@@ -20,6 +25,7 @@ import copy
 import json
 import os
 import time
+import warnings
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
@@ -32,6 +38,8 @@ from .evaluator import (ChapterSpec, IterationController, LeaderArbiter,
                         PresentationScorer, ProcessGate, ReaderProxy)
 from .evaluator.critic_parliament import CriticParliament  # __init__ 未导出
 from .llm import LLMError  # 通过 shim 兼容旧 import 路径
+from .narrative import (FabulaBuilder, IRBuilder, Narrativizer,
+                        SjuzhetSelector)
 from .registry import ExtensionRegistry, PluginManifest
 from .showrunner import Showrunner
 from .types import (WorldEvent, WorldState, CharacterMind, Relation,
@@ -50,6 +58,36 @@ _GENERIC_PROMPT = {
     "style": "800-1200字，叙事连贯",
     "hard_requirements": [],
 }
+
+
+class _ChapterClosingKernelView:
+    """P5.6 IR-first 专用 kernel 视图：给 all_events 虚拟追加本章闭合
+    narrative_beat 标记（不落库、不占 tick、不改世界状态）。
+
+    背景：IRBuilder._chapter_slice 的章界规则要求「最后一个 chapter==k 标记
+    含」作右界，而引擎在文本产出时刻本章尚未以伏笔同步 beat 收尾（产出在前、
+    收尾在后），直接 build 对进行中的本章切出空区间（Actor 路径第 2 章起
+    actor 事件将不可见）。虚拟闭合标记让切片覆盖「上一章收尾之后到当前日志
+    末尾」= 本章已提交事件。仅 IRBuilder.build 期间使用。
+    """
+
+    def __init__(self, kernel, chapter: int):
+        self._kernel = kernel
+        self._chapter = chapter
+
+    def query_world(self, key, *args, **kwargs):
+        result = self._kernel.query_world(key, *args, **kwargs)
+        if key == "all_events":
+            return list(result) + [{
+                "event_id": "_ir_chapter_close",
+                "event_type": "narrative_beat",
+                "timestamp": "", "world_tick": 0, "branch_id": "main",
+                "payload": {"chapter": self._chapter}, "active": True,
+            }]
+        return result
+
+    def __getattr__(self, name):
+        return getattr(self._kernel, name)
 
 
 class StoryEngine:
@@ -119,6 +157,9 @@ class StoryEngine:
             self._write_chapters([])
         self._actors_ready = False
         self._director_ref = None
+        # P5.6：本章 IR-first 产出的 narrative_ir 摘要（每章生成前重置；
+        # 仅 IR-first 成功时非 None，mock/剧本/回退 → None）
+        self._chapter_narrative_ir = None
 
     # ============ 创世（seed 世界） ============
     @staticmethod
@@ -183,6 +224,7 @@ class StoryEngine:
         # P4.5（决策5）：真实 LLM 且自评门控通过 → 包 IterationController（best-of-K）；
         # 自评链路任何异常 → 退回未迭代结果（自评是增强不是门禁）
         evaluation = None
+        self._chapter_narrative_ir = None  # P5.6：本章摘要重置（成功才置值）
         if not scripted and self._eval_enabled():
             try:
                 (draft_text, draft_results, violations, correction,
@@ -262,6 +304,9 @@ class StoryEngine:
             "tick_range": [committed[0]["tick"] if committed else head, head],
             # P4.5（决策6）：自评结果（mock/剧本/门控关闭/异常退回 → None），只增不改
             "evaluation": evaluation,
+            # P5.6（决策6）：IR-first 摘要（beats/events/texture 等扁平小对象；
+            # mock/剧本/IR_FIRST=0/回退 → None），只增不改
+            "narrative_ir": self._chapter_narrative_ir,
         }
         chapters = self._read_chapters()
         chapters.append(record)
@@ -274,7 +319,9 @@ class StoryEngine:
         供初版/兜底复用）。返回 (draft_text, draft_results, violations,
         correction, final_text, final_events)。"""
         # Step 1: 生成初稿（生成通道 — 不含 WorldState 秘密！）
-        draft_text = await self._llm_generate_draft(chapter_no, card, state)
+        # P5.6（决策6）：IR-first 门控通过 → IR→Realizer 产初稿（Realizer 1 次
+        # LLM 替代原 1 次生成）；空稿/异常 → warning + 回退 P3.8 prompt 路径
+        draft_text = await self._produce_draft_text(chapter_no, card, state)
 
         # Step 2: 事件抽取
         draft_events = await self._llm_extract_events(chapter_no, draft_text)
@@ -298,6 +345,83 @@ class StoryEngine:
                 c["passed"] for r in recheck for c in r["checks"])
         return (draft_text, draft_results, violations, correction,
                 final_text, final_events)
+
+    # ============ Phase 5：IR-first 文本产出（决策6，env 门控） ============
+    def _ir_first_enabled(self) -> bool:
+        """IR-first 门控：SCRIPTED_DEMO=0 且 llm 非 mock 且 IR_FIRST!=0（默认开）。
+        三条件任一不满足 → 走现有路径原样（mock/剧本零变化）；
+        IR_FIRST=0 是质量漂移逃生门（回退 P3.8 prompt 路径）。"""
+        return (os.environ.get("STORY_ENGINE_SCRIPTED_DEMO", "1") == "0"
+                and not self.llm.is_mock
+                and os.environ.get("STORY_ENGINE_IR_FIRST", "1") != "0")
+
+    async def _produce_draft_text(self, chapter_no: int, card,
+                                  state: WorldState) -> str:
+        """直接 LLM 路径初稿产出：IR-first 优先，失败回退旧生成通道。
+
+        门控/空稿/异常三种回退都在本方法内消化（迭代器与修正回路无感知）；
+        摘要状态每轮重置，防止自评异常退回复跑时残留上一轮的 stale 值。
+        """
+        self._chapter_narrative_ir = None
+        if self._ir_first_enabled():
+            text, summary = await self._ir_first_narrate(chapter_no, card)
+            if text is not None:
+                self._chapter_narrative_ir = summary
+                return text
+        return await self._llm_generate_draft(chapter_no, card, state)
+
+    async def _ir_first_narrate(self, chapter_no: int, card,
+                                *, close_chapter: bool = False) -> tuple:
+        """IR-first 文本产出：IRBuilder → Fabula → Sjuzhet → Narrativizer。
+
+        IR 构建/Sjuzhet 零 LLM 调用；Narrativizer.narrate 恰好 1 次（realize），
+        替代原 1 次生成调用（每章 LLM 调用数持平）。
+        close_chapter=True（Actor 路径：本章事件已提交但尚未收尾）时用
+        _ChapterClosingKernelView 让章切片覆盖进行中的本章事件；
+        直接 LLM 路径初稿时本章事件尚不存在（抽取在初稿之后），IR 由决策卡
+        beats 承载内容，不需要虚拟闭合。
+
+        返回 (text, narrative_ir_summary)；失败一律 (None, None) + warning：
+        - narrate 空稿（Realizer 侧 LLM 故障返回 ""）→ 空稿 warning
+          （不能让 LLM 故障变成无声空章，评审传导1）
+        - IR 链路任何意外异常 → catch + warning（增强不是门禁，同 P4.5 原则）
+        调用方负责回退旧路径。
+        """
+        try:
+            kernel = (_ChapterClosingKernelView(self.kernel, chapter_no)
+                      if close_chapter else self.kernel)
+            ir = IRBuilder(kernel, self.bundle).build(card, chapter_no)
+            active = [e for e in self.kernel.query_world("all_events")
+                      if e.get("active", True)]
+            fabula = FabulaBuilder().build(active)
+            sjuzhet = SjuzhetSelector().select(fabula, self.bundle)
+            text = await Narrativizer(self.kernel, self.bundle).narrate(ir, sjuzhet)
+        except Exception as exc:
+            warnings.warn(
+                f"P5.6 IR-first 链路异常（{exc!r}），回退旧文本产出路径",
+                stacklevel=2)
+            return None, None
+        if not text.strip():
+            warnings.warn(
+                "P5.6 IR-first 产出空稿（Realizer LLM 故障），回退旧文本产出路径",
+                stacklevel=2)
+            return None, None
+        # 摘要（扁平小对象，非全量 IR —— 快照体积控制）：
+        # beats/events/dialogue 计数 + texture 8 字段值 + 语言 + sjuzhet pov/order
+        texture = asdict(ir.texture)
+        # 句长分布 tuple → list，与 chapters.json 落盘形态一致（JSON 无 tuple）
+        texture["sentence_length_distribution"] = list(
+            ir.texture.sentence_length_distribution)
+        summary = {
+            "beats": len(ir.beats),
+            "events": len(ir.events),
+            "dialogue": len(ir.dialogue_lines),
+            "language": self.bundle.language,
+            "texture": texture,
+            "pov": sjuzhet.pov,
+            "order": sjuzhet.order,
+        }
+        return text, summary
 
     # ============ Phase 4：自评迭代（决策5/6，env 门控） ============
     def _eval_enabled(self) -> bool:
@@ -494,7 +618,16 @@ class StoryEngine:
             }
             for e in actor_events
         ]
-        draft_text = self._render_actor_chapter(chapter_no, card, all_actions)
+        # P5.6（决策6）：IR-first 门控通过 → actor 事件经 IR→Realizer 产文本，
+        # 替代汇总渲染（close_chapter=True：本章事件已提交但尚未收尾，
+        # 虚拟闭合让章切片覆盖本章）；空稿/异常 → warning + 回退汇总渲染
+        narrative_ir = None
+        draft_text = None
+        if self._ir_first_enabled():
+            draft_text, narrative_ir = await self._ir_first_narrate(
+                chapter_no, card, close_chapter=True)
+        if draft_text is None:
+            draft_text = self._render_actor_chapter(chapter_no, card, all_actions)
 
         draft_results = self._validate_event_sequence(draft_events, pre_state) if draft_events else []
         violations = [
@@ -588,6 +721,8 @@ class StoryEngine:
             ],
             # P4.5（决策6）：自评结果（mock/门控关闭/异常退回 → None），只增不改
             "evaluation": evaluation,
+            # P5.6（决策6）：IR-first 摘要（mock/IR_FIRST=0/回退 → None），只增不改
+            "narrative_ir": narrative_ir,
         }
         chapters = self._read_chapters()
         chapters.append(record)

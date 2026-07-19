@@ -46,8 +46,10 @@ TEXTURE_DEFAULTS: dict[str, dict[str, Any]] = {
         "implicit_vs_explicit": 0.3,
         "register_switching": 0.3,
         "sentence_length_distribution": (15.0, 6.0),
-        "perspective_distance": "全知",
-        "temporal_ordering": "顺叙",
+        # P5.6 评审传导修复：en 表值直出英文 prompt（_texture_block 不翻译），
+        # 不能用中文值；zh 表保持中文
+        "perspective_distance": "omniscient",
+        "temporal_ordering": "linear",
     },
 }
 
