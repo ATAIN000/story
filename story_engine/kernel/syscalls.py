@@ -18,11 +18,15 @@ Phase 2 实现：
 - 扩展系统：完整工作（薄包装 ExtensionRegistry）
 - LLM：完整工作（薄包装 LLMPool）
 - 记忆 recall：接 SemanticMemoryBanks + MemoryRetrieval（本地 embedding）
-- branch_timeline / merge_branch / HITL：留 NotImplementedError（Phase 5）
+- HITL：P5.9 真实现（pending 落盘 + asyncio.Event 等待应答，超时返回 None）
+- branch_timeline / merge_branch：留 NotImplementedError（Phase 5 后续）
 """
 from __future__ import annotations
 
+import asyncio
+import json
 import os
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -81,6 +85,9 @@ class Kernel:
             self._load_plugins(plugin_dir)
 
         self._human_input_handlers: list = []
+        # HITL 应答等待注册表（P5.9）：request_id → asyncio.Event / 应答内容
+        self._human_input_events: dict[str, asyncio.Event] = {}
+        self._human_input_answers: dict[str, Any] = {}
         # branch registry：Phase 5 完整实现，先占位
         self._branches: dict[BranchID, SnapshotID] = {}
 
@@ -221,12 +228,88 @@ class Kernel:
     # =========================================================
     # HITL
     # =========================================================
-    def request_human_input(self, prompt: str, context: dict) -> HumanResponse:
-        """请求作者介入，返回介入结果+记录 AuthorIntervention 事件
+    async def request_human_input(self, prompt: str, context: dict,
+                                  timeout: float = 300.0) -> HumanResponse | None:
+        """请求作者介入（HITL kernel 入口，P5.9 真实现）
 
-        Phase 5（HITL）实现；先抛 NotImplemented。
+        流程：pending 记录落盘（项目目录 hitl_requests.json）→
+        asyncio.Event 注册表等待应答 → 超时/取消标 timeout 返回 None。
+        本期无推送通道：应答由 API 侧（P5.10）经 resolve_human_input 写入。
+        返回类型对齐既有注解 HumanResponse（超时为 None）；async 风格与
+        recall / llm_call 一致。
         """
-        raise NotImplementedError("request_human_input 是 Phase 5 任务（HITL）")
+        request_id = f"hitl-{uuid4().hex[:8]}"
+        self._append_hitl_request({
+            "request_id": request_id,
+            "prompt": prompt,
+            "context": context,
+            "ts": datetime.now().isoformat(timespec="seconds"),
+            "status": "pending",
+        })
+        event = asyncio.Event()
+        self._human_input_events[request_id] = event
+        try:
+            await asyncio.wait_for(event.wait(), timeout)
+        except (asyncio.TimeoutError, asyncio.CancelledError):
+            # 超时/取消 → 标 timeout 落盘 → 返回 None（蓝图简化语义：
+            # 取消不向上传播，调用方拿到的就是「作者未应答」）
+            self._update_hitl_request(request_id, status="timeout")
+            self._human_input_events.pop(request_id, None)
+            self._human_input_answers.pop(request_id, None)
+            return None
+        answer = self._human_input_answers.pop(request_id, None)
+        self._human_input_events.pop(request_id, None)
+        self._update_hitl_request(request_id, status="answered", response=answer)
+        return HumanResponse(
+            accepted=True,
+            payload=answer if isinstance(answer, dict) else {"text": answer},
+            note=f"request {request_id} answered")
+
+    def resolve_human_input(self, request_id: str, response: Any) -> bool:
+        """写入应答并唤醒等待中的 request_human_input（供 P5.10 API 调用）。
+
+        返回 False = 无此 pending 请求（id 错误或已超时）。须与
+        request_human_input 在同一事件循环线程调用（event.set 无跨线程包装）。
+        """
+        event = self._human_input_events.get(request_id)
+        if event is None:
+            return False
+        self._human_input_answers[request_id] = response
+        event.set()
+        return True
+
+    # ---------- hitl_requests.json 读写（审计落盘，失败不阻断主流程） ----------
+    def _hitl_requests_path(self) -> Path:
+        return self.project_dir / "hitl_requests.json"
+
+    def _read_hitl_requests(self) -> list:
+        try:
+            path = self._hitl_requests_path()
+            if path.exists():
+                return json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+        return []
+
+    def _write_hitl_requests(self, records: list) -> None:
+        try:
+            self._hitl_requests_path().write_text(
+                json.dumps(records, ensure_ascii=False, indent=1),
+                encoding="utf-8")
+        except Exception:
+            pass  # 审计落盘失败不阻断 HITL 等待/应答主流程
+
+    def _append_hitl_request(self, record: dict) -> None:
+        records = self._read_hitl_requests()
+        records.append(record)
+        self._write_hitl_requests(records)
+
+    def _update_hitl_request(self, request_id: str, **fields) -> None:
+        records = self._read_hitl_requests()
+        for r in records:
+            if r.get("request_id") == request_id:
+                r.update(fields)
+        self._write_hitl_requests(records)
 
     # =========================================================
     # LLM 调用

@@ -30,7 +30,7 @@ class TestSyscallSignatures(unittest.TestCase):
         self.assertGreaterEqual(len(SYSCALL_NAMES), 14)
 
     def test_phase2_syscalls_raise_not_implemented(self):
-        """branch_timeline / merge_branch / HITL 仍是 Phase 5；recall 已在 Phase 2 实现"""
+        """branch_timeline / merge_branch 仍未实现；recall Phase 2、HITL P5.9 已实现"""
         tmp = tempfile.mkdtemp()
         from story_engine.kernel.embedding import Embedder
         k = Kernel(tmp, plugin_dir=None, embedder=Embedder(mode="dummy"))
@@ -38,8 +38,7 @@ class TestSyscallSignatures(unittest.TestCase):
             k.branch_timeline("xxx", "test")
         with self.assertRaises(NotImplementedError):
             k.merge_branch("xxx")
-        with self.assertRaises(NotImplementedError):
-            k.request_human_input("?", {})
+        # HITL（P5.9 真实现）见 tests/test_hitl_pipeline.py
         # recall 已实现：空库返回 list
         recalled = asyncio.run(k.recall("包拯", "啥"))
         self.assertIsInstance(recalled, list)
