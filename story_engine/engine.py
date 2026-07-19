@@ -1049,6 +1049,29 @@ class StoryEngine:
             self._write_chapters(chapters)
         return self.project_snapshot()
 
+    async def regenerate_current_chapter(self) -> dict:
+        """P5.8：structural 介入后的章级重生成入口（供 InterventionRouter
+        regenerate_fn 注入；router 侧要求无参同步调用，async 接线由调用方包装）。
+
+        前置：InterventionRouter 已把改动点及其下游事件标 rolled_back
+        （kernel.rollback，head 回移）。本入口负责：
+        1. 把 chapters.json 里被回滚的章节记录标 superseded（同 rollback() 口径，
+           否则重生成后新旧两条同章记录并存、且旧记录会因 head 回升显示为未回滚）；
+        2. 按当前 projection 重跑本章（generate_chapter 章号取自
+           state.narrative.chapter + 1，回滚后自然重跑进行中的本章）。
+        与蓝图「从改动点精准重放下游」的简化差：只重跑当前章，不做跨章连锁重放。
+        """
+        head = self.kernel.query_world("head_tick")
+        chapters = self._read_chapters()
+        changed = False
+        for ch in chapters:
+            if ch["tick_range"][1] > head and not ch.get("superseded"):
+                ch["superseded"] = True
+                changed = True
+        if changed:
+            self._write_chapters(chapters)
+        return await self.generate_chapter()
+
     def reset(self) -> dict:
         # 停掉 Actor 循环
         try:
