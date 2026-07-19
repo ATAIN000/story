@@ -12,6 +12,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from ..types import GenreBundle  # 权威定义在 types.py（Phase 3 统一）；此处 re-export 兼容旧 import 路径
+
 
 @dataclass
 class CharacterConfig:
@@ -21,16 +23,6 @@ class CharacterConfig:
     voice_profile: dict[str, Any] = field(default_factory=dict)  # 声音档案
     initial_goals: list[str] = field(default_factory=list)
     context_budget: int = 8192       # 上下文 token 预算
-
-
-@dataclass
-class GenreBundle:
-    """Showrunner/Director Agent 配置"""
-    genre: str                       # 题材插件名
-    culture: str                     # 文化插件名
-    language: str = "zh"
-    target_length: int = 12          # 集数/章数
-    platform: str = "novel"
 
 
 @dataclass

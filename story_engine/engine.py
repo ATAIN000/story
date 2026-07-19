@@ -23,12 +23,13 @@ from pathlib import Path
 from uuid import uuid4
 
 from .kernel import Kernel
-from .kernel.actor import CharacterConfig, GenreBundle
+from .kernel.actor import CharacterConfig
 from .llm import LLMError  # 通过 shim 兼容旧 import 路径
 from .registry import ExtensionRegistry, PluginManifest
 from .showrunner import Showrunner
 from .types import (WorldEvent, WorldState, CharacterMind, Relation,
-                    NarrativeState, ForeshadowTriple, Check, StoryEngineError)
+                    NarrativeState, ForeshadowTriple, Check, StoryEngineError,
+                    GenreBundle)
 from .validator import ConsistencyValidator
 from . import mock_script
 
@@ -74,11 +75,15 @@ class StoryEngine:
         self.registry.validate_combo(genre_name, culture_name)
         self.genre = self.registry.get("story.genre", genre_name)
         self.culture = self.registry.get("story.culture", culture_name)
+        # 权威 GenreBundle 构建一次：Showrunner 决策卡与 spawn_director 共用
+        self.bundle = GenreBundle(
+            genre=genre_name, culture=culture_name,
+            genre_params=self.genre.params, culture_params=self.culture.params)
 
         # 子系统（与原版一致）
         self.validator = ConsistencyValidator(
             world_rules=self.genre.get("world_rules"))
-        self.showrunner = Showrunner(self.genre.params, self.culture.params)
+        self.showrunner = Showrunner(self.bundle)
 
         self.chapters_path = self.project_dir / "chapters.json"
         if not self.chapters_path.exists():
@@ -365,10 +370,7 @@ class StoryEngine:
         if self._actors_ready and self.kernel.scheduler._character_actors:
             return
         if self._director_ref is None:
-            self._director_ref = self.kernel.spawn_director(GenreBundle(
-                genre=self.genre.name,
-                culture=self.culture.name,
-            ))
+            self._director_ref = self.kernel.spawn_director(self.bundle)
         for cid, meta in mock_script.SEED_CHARACTERS.items():
             mind = mock_script.SEED_MINDS.get(cid, {})
             if cid in self.kernel.scheduler._character_actors:

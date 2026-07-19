@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, asdict
 
-from .types import WorldState, ForeshadowTriple
+from .types import WorldState, ForeshadowTriple, GenreBundle
 
 STERNBERG_MODES = ["suspense", "curiosity", "surprise"]
 TODOROV_PHASES = ["equilibrium", "disruption", "recognition", "repair", "new_equilibrium"]
@@ -53,11 +53,11 @@ class DecisionCard:
 
 
 class Showrunner:
-    def __init__(self, genre_params: dict, culture_params: dict):
-        self.genre = genre_params
-        self.culture = culture_params
+    def __init__(self, bundle: GenreBundle):
+        self.genre = bundle.genre_params
+        self.culture = bundle.culture_params
         self.tracks: dict[str, Track] = {}
-        for t in genre_params.get("tracks", []):
+        for t in self.genre.get("tracks", []):
             self.tracks[t["id"]] = Track(**t)
 
     def generate_decision_card(self, episode: int, state: WorldState) -> DecisionCard:

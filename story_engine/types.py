@@ -277,3 +277,18 @@ class Verdict:
     @property
     def failures(self) -> dict[str, str]:
         return {c.name: c.reason for c in self.checks if not c.passed}
+
+
+@dataclass
+class GenreBundle:
+    """Showrunner/Director Agent 配置（权威定义 — Phase 3 自 kernel/actor.py 迁入）
+
+    genre_params / culture_params 是已解析的插件 params（PluginInstance.params）。
+    """
+    genre: str                       # 题材插件名
+    culture: str                     # 文化插件名
+    language: str = "zh"
+    target_length: int = 12          # 集数/章数
+    platform: str = "novel"
+    genre_params: dict[str, Any] = field(default_factory=dict)
+    culture_params: dict[str, Any] = field(default_factory=dict)
