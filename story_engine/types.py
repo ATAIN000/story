@@ -333,15 +333,24 @@ class StateDelta:
             relation_changes=[*self.relation_changes, *other.relation_changes],
         )
 
-    def to_event_effects(self) -> dict:
+    def to_event_effects(self, state_view=None) -> dict:
         """桥接：翻译成现有 effects 协议（set_fluents/unset_fluents/learn/relations），
         使 kernel.commit_event + 7步验证可以直接复用。
 
         持久化形式（决策5）：goal(<id>,<holder>,<status>) / fact(<id>)
         + knows(<cid>,<fact_id>)，fold 复用现有 set/unset/learn 逻辑，不新增事件类型。
-        注：goal_updates 不含 holder，桥接为二元 fluent goal(<id>,<status>)。
+
+        【P3.6 修复 goal fluent arity 并存问题】goal_updates 本身不含 holder：
+        传入 state_view（任何带 .goals 的只读投影，如 creativity.StateView）时按
+        goal_id 查到 holder 与旧 status，产三元 fluent 并 unset 旧状态 fluent
+        （连同可能残留的旧二元形式），保证同一 goal 状态翻转后 projection 里只有
+        最新状态；查不到（或省略 state_view）时退回旧二元 goal(<id>,<status>) 兜底。
         只产出非空键。
         """
+        goals_by_id: dict[str, Goal] = {}
+        if state_view is not None:
+            goals_by_id = {g.id: g for g in getattr(state_view, "goals", ())}
+
         set_fluents: list[str] = []
         unset_fluents: list[str] = []
         learn: dict[str, list[str]] = {}
@@ -350,7 +359,16 @@ class StateDelta:
         for g in self.new_goals:
             set_fluents.append(f"goal({g.id},{g.holder},{g.status})")
         for goal_id, status in self.goal_updates.items():
-            set_fluents.append(f"goal({goal_id},{status})")
+            prev = goals_by_id.get(goal_id)
+            if prev is None:
+                # 无上下文：退回旧二元形式（行为与 P3.5 一致）
+                set_fluents.append(f"goal({goal_id},{status})")
+                continue
+            set_fluents.append(f"goal({goal_id},{prev.holder},{status})")
+            if prev.status != status:
+                unset_fluents.append(f"goal({goal_id},{prev.holder},{prev.status})")
+                # 防御：清掉历史桥接可能留下的二元旧形式（fold 的 pop 容忍不存在）
+                unset_fluents.append(f"goal({goal_id},{prev.status})")
         for f in self.new_facts:
             set_fluents.append(f"fact({f.id})")
             for cid in f.known_by:

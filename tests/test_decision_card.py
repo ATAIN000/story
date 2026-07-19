@@ -88,7 +88,10 @@ def test_decision_card_fields_only_added():
     # 新字段：concreteness_curve/pool_stats 真填；pacing/creative_seeds 仅默认
     assert card.pacing is None
     assert card.creative_seeds == []
-    assert card.plan_goals == []          # Step 1 占位（P3.6 planner 挂载点）
+    # Step 1（P3.6 已接 planner）：plan_goals 挂 goal 轨迹，元素为可序列化 dict
+    assert isinstance(card.plan_goals, list)
+    assert all(isinstance(g, dict) and "id" in g and "status" in g
+               for g in card.plan_goals)
     assert card.queued_foreshadows == []
     assert isinstance(card.concreteness_curve, list)
     assert isinstance(card.pool_stats, dict)

@@ -393,10 +393,13 @@ class StoryEngine:
         banks = self.kernel._ensure_memory_banks()
         advance = "、".join(card.advance) if getattr(card, "advance", None) else ""
         scene = state.narrative.current_scene or "开封府"
+        # P3.6：Actor brief 同步携带 planner 原语序列摘要
+        prim_txt = "、".join(dict.fromkeys(
+            p for b in getattr(card, "beats", []) for p in b.get("primitives", [])))
         brief = (
             f"第{chapter_no}章决策：场景={scene}；推进={advance}；"
             f"情感弧={getattr(card, 'target_arc', '')}；"
-            f"钩子={getattr(card, 'ending_hook', {})}"
+            f"钩子={getattr(card, 'ending_hook', {})}；原语序列={prim_txt or '无'}"
         )
         await banks.add(
             brief, bank="chapter_briefs", agent_id="_global",
@@ -451,6 +454,9 @@ class StoryEngine:
             f"{f.foreshadow_id}：{f.content}（触发：{f.trigger_condition}）" for f in pending)
         track_names = {t.id: t.name for t in self.showrunner.tracks.values()}
         advance_txt = "、".join(track_names.get(t, t) for t in card.advance)
+        # P3.6：planner 原语序列摘要（决策卡 beats[].primitives，按 beat 顺序去重）
+        prim_txt = " → ".join(dict.fromkeys(
+            p for b in card.beats for p in b.get("primitives", [])))
         return (
             f"【CHAPTER={chapter_no}】\n"
             "你是公案小说作者。背景：北宋，包拯开封府断案，当前侦破「玉佩失窃案」。\n"
@@ -458,6 +464,7 @@ class StoryEngine:
             "刘伯（王府管家，恭谨藏怯）、王员外（苦主）。\n\n"
             f"=== 已定稿前情 ===\n{history or '（开篇）'}\n\n"
             f"=== 本章调度 ===\n推进轨道：{advance_txt}\n"
+            f"原语序列：{prim_txt or '无'}\n"
             f"情感弧目标：{card.target_arc}　集末钩子：{card.ending_hook['style']}\n"
             f"待回收伏笔（尽量以自然方式兑现其一）：{pending_txt or '无'}\n\n"
             "=== 硬要求 ===\n"

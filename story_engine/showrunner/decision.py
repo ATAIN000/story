@@ -5,7 +5,8 @@
 
 每集生成前产出决策卡（按蓝图 3.2 顺序的 10 步 control loop，全部规则化）：
   0. 节奏量化闭环（P3.4 — 上一章 PacingScore × pacing_targets → tension 修正）
-  1. HTN 分解（占位 — P3.6 NarrativePlanner 承担，输出挂 DecisionCard.plan_goals）
+  1. HTN 分解（P3.6 NarrativePlanner：Todorov 5 态 → genre phase_beats → 原语序列，
+     输出挂 DecisionCard.plan_goals + beats[].primitives）
   2. 轨道调度（推进/种子/触碰/休眠）
   3. CFPG 伏笔查询（到期 payoff + 池上限 + 债务老化）
   4. Sternberg 三主因错峰（硬约束：同集唯一 / 同轨道连续两集不同）
@@ -24,6 +25,9 @@ from collections.abc import Callable
 from dataclasses import dataclass, field, asdict
 
 from ..types import WorldState, GenreBundle
+from ..creativity import (
+    AuthorIntent, NarrativePlanner, StateView, state_view_from_world,
+)
 from .tracks import Track, ForeshadowPoolManager
 from .pacing import (
     PacingEngine, chapter_events, resolve_targets,
@@ -89,6 +93,8 @@ class Showrunner:
         # P3.4：节奏量化闭环（事件源可选；无源时 pacing 保持 None）
         self._pacing = PacingEngine()
         self._event_source = event_source
+        # P3.6：NarrativePlanner（决策6，纯规则无 LLM），_plan_beats 调用
+        self._planner = NarrativePlanner()
         # Sternberg 历史（{集号: {track_id: 模式}}）：NarrativeState 尚无该历史字段，
         # 最小改动为由 Showrunner 实例自持；历史不可得（首集/重启）时按轮换逻辑即可
         self._sternberg_history: dict[int, dict[str, str]] = {}
@@ -97,8 +103,9 @@ class Showrunner:
         # Step 0（P3.4 决策4）：上一章节奏量化 → PacingScore × pacing_targets → tension 修正
         pacing = self._pacing_feedback(episode)
 
-        # Step 1: HTN 分解 — 由 NarrativePlanner 承担（P3.6），此处仅占位；
-        #         planner 输出经 DecisionCard.plan_goals 挂载，本任务不实现
+        # Step 1: HTN 分解 — 由 NarrativePlanner 承担（P3.6）；章级 intent 依赖
+        #         Step 2 的 advance 轨道，故实际分解在 _plan_beats（Step 5）执行，
+        #         planner 输出的 goal 轨迹在此回填并挂 DecisionCard.plan_goals
         plan_goals: list[dict] = []
 
         # Step 2: 轨道调度 — 主线必推进；副线按激活条件+最久未触碰轮换
@@ -113,8 +120,9 @@ class Showrunner:
         # Step 4: Sternberg 三主因错峰（硬约束：同集唯一；同轨道连续两集不同）
         sternberg = self._sternberg_assign(episode, advance + mid_touch)
 
-        # Step 5: beat 规划（Yorke 分形：macro 幕级 × micro 章级）
-        beats = self._plan_beats(episode, advance)
+        # Step 5: beat 规划（Yorke 分形：macro 幕级 × micro 章级；
+        #         P3.6 叠加 NarrativePlanner 原语序列 → beats/primitives + plan_goals）
+        beats, plan_goals = self._plan_beats(episode, advance, state)
         if pacing:  # P3.4：用上一章节奏偏差修正本章 beat tension 曲线
             beats = apply_tension_adjustment(beats, pacing["tension_adjustment"])
 
@@ -238,7 +246,13 @@ class Showrunner:
                   len(TODOROV_PHASES) - 1)
         return TODOROV_PHASES[idx]
 
-    def _plan_beats(self, episode: int, advance: list[str]) -> list[dict]:
+    def _plan_beats(self, episode: int, advance: list[str],
+                    state: WorldState | None = None) -> tuple[list[dict], list[dict]]:
+        """Yorke 分形 beat（旧逻辑保留）+ P3.6 NarrativePlanner 原语序列。
+
+        返回 (beats, plan_goals)：beat dict 新增 `primitives` 摘要键（按 micro_phase
+        对齐 planner 各 Todorov 态的原语类名）；plan_goals 为 planner 的 goal 轨迹。
+        """
         n_beats = self.genre.get("beats_per_chapter", 4)
         macro = self._macro_phase(episode)
         beats = []
@@ -255,7 +269,22 @@ class Showrunner:
                 "track_name": self.tracks[track].name,
                 "tension": round(0.35 + 0.55 * (i + 1) / n_beats, 2),
             })
-        return beats
+
+        # ---- P3.6 决策6：advance 轨道章级 intent（决策卡步骤 1 构造）→ planner ----
+        intent = AuthorIntent(
+            text=f"第{episode}章推进：{'、'.join(self.tracks[t].name for t in advance)}",
+            metadata={"episode": episode, "macro_phase": macro,
+                      "tracks": list(advance)})
+        view = state_view_from_world(state) if state is not None else StateView()
+        primitives, trace = self._planner.plan_with_trace(
+            intent, self.bundle, state_view=view)
+        names_by_phase: dict[str, list[str]] = {}
+        for p in primitives:
+            names_by_phase.setdefault(getattr(p, "phase", "") or "", []) \
+                .append(p.__class__.__name__)
+        for b in beats:
+            b["primitives"] = names_by_phase.get(b["micro_phase"], [])
+        return beats, trace["goals"]
 
     # ---------- Step 6: CONCOCT ----------
     def _concreteness_curve(self, n_beats: int) -> list[float]:

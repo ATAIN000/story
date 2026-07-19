@@ -63,3 +63,21 @@ params:
 
   # 【v3.0 赌注5修正】critic 维度按类型裁剪 — 悬疑只需 4 维
   active_critics: [plot_coherence, character_motivation, setting_consistency, cliche_detection]
+
+  # 【P3 决策6】phase_beats：Todorov 5 态 → beat 规格列表，beat 带 primitive 提示键
+  # （侦破结构：悬念先行、双次揭示收束，与 romance 的情感弧线序列真实不同）
+  phase_beats:
+    equilibrium:
+      - {id: case_open, desc: "案发前的日常与委托人登场", primitive: GoalFormation}
+    disruption:
+      - {id: crime_surface, desc: "案件浮出：失窃/命案震动一方", primitive: Suspense}
+      - {id: suspect_clash, desc: "嫌疑人互相攻讦，矛盾激化", primitive: Conflict}
+    recognition:
+      - {id: clue_reveal, desc: "关键线索被揭开，指向真凶", primitive: Revelation}
+      - {id: red_herring, desc: "烟雾弹：假线索误导侦破方向", primitive: Betrayal}
+    repair:
+      - {id: culprit_unmask, desc: "对质识破：真凶身份与手法被看穿", primitive: Recognition}
+      - {id: last_gambit, desc: "真凶反扑或灭证，局势逆转", primitive: TurningPoint}
+    new_equilibrium:
+      - {id: justice_served, desc: "真相大白，律法昭彰", primitive: Revelation}
+      - {id: lingering_shadow, desc: "尾声留扣：未解的余波", primitive: Suspense}
