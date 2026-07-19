@@ -11,7 +11,8 @@
   + 插件 prompt 段 style/hard_requirements（P3.8 设施最小复制，见下方注释）
   → `realize()` 恰好 1 次 LLM 调用产文本
 - ChineseRealizer：四字格/文言虚词/三级敬语/对仗模板（蓝图 1366-1375）
-- EnglishRealizer：长句嵌套/法律词汇/头韵/敬语（蓝图 1385-1390，P5.5 测试用）
+- EnglishRealizer：sentence_frames/legal_terms/alliteration/honorifics
+  （长句嵌套/法律词汇/头韵/敬语，蓝图 1385-1390）
 - Narrativizer.narrate(ir, sjuzhet)：realize → humanize（决策5）；
   语言选择 bundle.language（zh→ChineseRealizer，en→EnglishRealizer，
   未知→zh+warning）
@@ -197,10 +198,10 @@ class ChineseRealizer(LanguageRealizer):
             "既", "亦", "乃", "者", "也", "矣", "焉", "之", "其", "而",
             "然", "盖", "夫", "遂", "方",
         ],
-        "敬语体系": {   # 三级敬语
-            "上位": ["大人", "本府", "阁下", "老爷", "明公", "尊驾", "恩相"],
+        "敬语体系": {   # 三级敬语（「本府」为府尹自称非敬称，不入表）
+            "上位": ["大人", "阁下", "老爷", "明公", "尊驾", "恩相"],
             "下位": ["草民", "小人", "在下", "卑职", "晚辈", "小的", "鄙人"],
-            "平级": ["先生", "阁下", "兄长", "贤弟", "仁兄", "足下"],
+            "平级": ["先生", "兄长", "贤弟", "仁兄", "足下"],
         },
         "对仗模板": [
             "山重水复，柳暗花明", "月黑风高，夜深人静", "明枪易躲，暗箭难防",
@@ -216,7 +217,7 @@ class EnglishRealizer(LanguageRealizer):
 
     language = "en"
     LANGUAGE_RESOURCES = {
-        "长句嵌套": [
+        "sentence_frames": [   # 长句嵌套（蓝图 1385-1390）
             "It was not until the ink had dried that he understood what he had signed.",
             "The letter, which she had folded and unfolded a hundred times, lay heavy in her sleeve.",
             "Had the witness spoken sooner, the matter might have ended there.",
@@ -228,17 +229,17 @@ class EnglishRealizer(LanguageRealizer):
             "He who enters this hall leaves his certainties at the door.",
             "That which is hidden in daylight is seldom found by torchlight.",
         ],
-        "法律词汇": [
+        "legal_terms": [   # 法律词汇
             "grievance", "counsel", "evidence", "petitioner", "testimony",
             "verdict", "plaintiff", "deposition", "perjury", "acquittal",
             "indictment", "oath",
         ],
-        "头韵修辞": [
+        "alliteration": [   # 头韵修辞
             "safe and sound", "tried and true", "through thick and thin",
             "part and parcel", "wit and wisdom", "might and main",
             "fair and square", "hale and hearty", "high and dry", "prim and proper",
         ],
-        "敬语": [  # 资源相对贫瘠（蓝图原注）
+        "honorifics": [  # 敬语（资源相对贫瘠，蓝图原注）
             "Your Honor", "sir", "madam", "my lord",
             "Your Majesty", "esquire", "Your Excellency", "the honourable",
         ],
@@ -287,12 +288,12 @@ class EnglishRealizer(LanguageRealizer):
         n_frame = max(1, round(t.sentence_length_distribution[0] / 5))
         lines = [
             f"Alliteration (suggest ~{n_allit}): "
-            f"{', '.join(res['头韵修辞'][:n_allit]) or '(none this chapter)'}",
-            f"Legal register: {', '.join(res['法律词汇'][:6])}",
-            f"Complex sentence frames: {' | '.join(res['长句嵌套'][:n_frame])}",
+            f"{', '.join(res['alliteration'][:n_allit]) or '(none this chapter)'}",
+            f"Legal register: {', '.join(res['legal_terms'][:6])}",
+            f"Complex sentence frames: {' | '.join(res['sentence_frames'][:n_frame])}",
         ]
         if t.honorific_register >= 0.2:
-            lines.append(f"Honorifics: {', '.join(res['敬语'])}")
+            lines.append(f"Honorifics: {', '.join(res['honorifics'])}")
         return "\n".join(lines)
 
     def _craft_rules(self) -> list[str]:

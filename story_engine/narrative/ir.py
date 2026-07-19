@@ -15,7 +15,8 @@ IR 承载两层数据：
   （概念 ID → 本语言表达）；无命中返回概念 ID 本身，调用方可比对
   返回值 == 概念 ID 判断漂移（见 map_to docstring）
 
-（ir_builder / fabula_sjuzhet / realizer / humanize 是后续任务，本文件不建。）
+（子包当前构成：本文件 ir 为分层 IR 类型 + 概念映射表；ir_builder（P5.2）、
+fabula_sjuzhet（P5.3）、realizer + humanize（P5.4）均已建成。）
 """
 from __future__ import annotations
 
