@@ -17,16 +17,23 @@
   9. CFPG 池更新（满池排队 + pool_stats）
   10. 主题 touch（北极星轨道每集必触）
 另有既有补充步骤（不在决策3表内，行为保持不变）：情感弧目标、集末钩子。
+
+P3.7（决策7）：ConceptualBlending 简化版 — env 门控 STORY_ENGINE_BLEND_EVERY
+（默认 0=关闭）。>0 时每 N 章由引擎在决策卡生成后调用 attach_creative_seed
+附 1 个 CreativeSeed（1 次 LLM + embedding/Jaccard novelty/surprise）；
+关闭路径零 LLM/embedding 调用，generate_decision_card 行为完全不变。
 """
 from __future__ import annotations
 
 import itertools
+import os
 from collections.abc import Callable
 from dataclasses import dataclass, field, asdict
 
 from ..types import WorldState, GenreBundle
 from ..creativity import (
     AuthorIntent, NarrativePlanner, StateView, state_view_from_world,
+    ConceptualBlending,
 )
 from .tracks import Track, ForeshadowPoolManager
 from .pacing import (
@@ -79,7 +86,9 @@ class DecisionCard:
 
 class Showrunner:
     def __init__(self, bundle: GenreBundle,
-                 event_source: Callable[[], list[dict]] | None = None):
+                 event_source: Callable[[], list[dict]] | None = None,
+                 blender: ConceptualBlending | None = None,
+                 recent_texts_source: Callable[[], list[str]] | None = None):
         self.bundle = bundle
         self.genre = bundle.genre_params
         self.culture = bundle.culture_params
@@ -95,6 +104,10 @@ class Showrunner:
         self._event_source = event_source
         # P3.6：NarrativePlanner（决策6，纯规则无 LLM），_plan_beats 调用
         self._planner = NarrativePlanner()
+        # P3.7：ConceptualBlending（决策7，env 门控默认关）；recent_texts_source
+        # 供 novelty 比对（引擎注入最近 3 章正文，镜像 P3.4 event_source 模式）
+        self._blender = blender
+        self._recent_texts_source = recent_texts_source
         # Sternberg 历史（{集号: {track_id: 模式}}）：NarrativeState 尚无该历史字段，
         # 最小改动为由 Showrunner 实例自持；历史不可得（首集/重启）时按轮换逻辑即可
         self._sternberg_history: dict[int, dict[str, str]] = {}
@@ -162,6 +175,40 @@ class Showrunner:
             pool_stats=pool_stats, queued_foreshadows=queued,
             pacing=pacing,
         )
+
+    # ---------- P3.7: ConceptualBlending 门控挂载（决策7） ----------
+    async def attach_creative_seed(self, card: DecisionCard,
+                                   episode: int) -> DecisionCard:
+        """env 门控 STORY_ENGINE_BLEND_EVERY（默认 0=关闭）：>0 时每 N 章附 1 个
+        CreativeSeed 到 card.creative_seeds。
+
+        默认关闭 / 无 blender / 非挂载章 → 零 LLM/embedding 调用原样返回；
+        开启路径任何失败（LLM 异常、blend_domains 缺失）→ 不附 seed，不阻塞决策卡。
+        本方法是 generate_decision_card 的可选后续步骤（决策卡主体保持同步生成，
+        异步 LLM/embedding 仅存在于本挂载步）。
+        """
+        try:
+            every = int(os.environ.get("STORY_ENGINE_BLEND_EVERY", "0") or "0")
+        except ValueError:
+            every = 0
+        if every <= 0 or self._blender is None or episode % every != 0:
+            return card
+        try:
+            recent = (self._recent_texts_source()
+                      if self._recent_texts_source else [])
+            # surprise 参照：当前 foreshadow_templates + 本章 beats（计划原文）
+            refs = [str(v) for t in self.genre.get("foreshadow_templates", [])
+                    if isinstance(t, dict)
+                    for v in (t.get("content"), t.get("trigger"), t.get("payoff")) if v]
+            refs += [f"{b.get('track_name', '')}·{b.get('phase', '')}"
+                     for b in card.beats]
+            seed = await self._blender.generate_creative_seed(
+                recent_texts=list(recent)[-3:], reference_texts=refs)
+        except Exception:
+            return card
+        if seed is not None:
+            card.creative_seeds = [asdict(seed)]
+        return card
 
     # ---------- P3.4: 节奏量化闭环（决策4） ----------
     def _pacing_feedback(self, episode: int) -> dict | None:

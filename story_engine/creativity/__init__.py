@@ -10,8 +10,10 @@ from .planner import (
     state_view_from_world, apply_delta_to_view,
     TODOROV_PHASES, DEFAULT_PHASE_BEATS, PRIMITIVE_TABLE,
 )
+from .blending import ConceptualBlending, CreativeSeed
 
 __all__ = [
+    "ConceptualBlending", "CreativeSeed",
     "StateView",
     "Conflict", "Suspense", "TurningPoint", "Revelation",
     "Sacrifice", "Betrayal", "Recognition", "GoalFormation",

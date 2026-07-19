@@ -24,6 +24,7 @@ from uuid import uuid4
 
 from .kernel import Kernel
 from .kernel.actor import CharacterConfig
+from .creativity import ConceptualBlending
 from .llm import LLMError  # 通过 shim 兼容旧 import 路径
 from .registry import ExtensionRegistry, PluginManifest
 from .showrunner import Showrunner
@@ -84,9 +85,19 @@ class StoryEngine:
         self.validator = ConsistencyValidator(
             world_rules=self.genre.get("world_rules"))
         # P3.4：event_source 供 Showrunner 量化上一章节奏（all_events 含 active 标记）
+        # P3.7：ConceptualBlending（决策7，env 门控默认关）；recent_texts_source
+        # 懒读 chapters.json 取最近 3 章正文供 novelty 比对（构造时 chapters_path
+        # 尚未赋值，故用 lambda 延迟求值）
+        blender = ConceptualBlending(
+            self.kernel.llm.call, embedder=self.kernel.embedder,
+            blend_domains=self.genre.get("blend_domains"))
         self.showrunner = Showrunner(
             self.bundle,
-            event_source=lambda: self.kernel.query_world("all_events"))
+            event_source=lambda: self.kernel.query_world("all_events"),
+            blender=blender,
+            recent_texts_source=lambda: [
+                c["final"]["text"] for c in self._read_chapters()
+                if not c.get("superseded")][-3:])
 
         self.chapters_path = self.project_dir / "chapters.json"
         if not self.chapters_path.exists():
@@ -149,6 +160,9 @@ class StoryEngine:
 
         # Step 0: Showrunner 决策卡
         card = self.showrunner.generate_decision_card(chapter_no, state)
+        # P3.7：env 门控默认关；剧本路径（mock_script）不挂 seed，保持原行为
+        if not scripted:
+            card = await self.showrunner.attach_creative_seed(card, chapter_no)
 
         # Step 1: 生成初稿（生成通道 — 不含 WorldState 秘密！）
         draft_text = await self._llm_generate_draft(chapter_no, card, state)
@@ -250,6 +264,8 @@ class StoryEngine:
         Actor 在 SOAR apply 步已 commit_event；本路径不再二次 commit 那些事件。
         """
         card = self.showrunner.generate_decision_card(chapter_no, state)
+        # P3.7：env 门控默认关；开启时每 N 章附 1 个 CreativeSeed（失败不阻塞）
+        card = await self.showrunner.attach_creative_seed(card, chapter_no)
         await self._ensure_character_actors()
 
         # 写入本章 brief，供角色 recall
@@ -457,6 +473,14 @@ class StoryEngine:
         # P3.6：planner 原语序列摘要（决策卡 beats[].primitives，按 beat 顺序去重）
         prim_txt = " → ".join(dict.fromkeys(
             p for b in card.beats for p in b.get("primitives", [])))
+        # P3.7：CreativeSeed → 「可选灵感」段（仅门控开启且挂载成功时非空；
+        # 明示"可参考可忽略"，不进入硬要求，最小侵入既有 prompt）
+        inspire_txt = ""
+        if getattr(card, "creative_seeds", None):
+            s = card.creative_seeds[0]
+            domains = " × ".join(s.get("domains", []))
+            inspire_txt = (
+                f"可选灵感（可参考可忽略）：{domains} —— {s.get('emergent', '')[:200]}\n")
         return (
             f"【CHAPTER={chapter_no}】\n"
             "你是公案小说作者。背景：北宋，包拯开封府断案，当前侦破「玉佩失窃案」。\n"
@@ -465,6 +489,7 @@ class StoryEngine:
             f"=== 已定稿前情 ===\n{history or '（开篇）'}\n\n"
             f"=== 本章调度 ===\n推进轨道：{advance_txt}\n"
             f"原语序列：{prim_txt or '无'}\n"
+            f"{inspire_txt}"
             f"情感弧目标：{card.target_arc}　集末钩子：{card.ending_hook['style']}\n"
             f"待回收伏笔（尽量以自然方式兑现其一）：{pending_txt or '无'}\n\n"
             "=== 硬要求 ===\n"
