@@ -292,3 +292,86 @@ class GenreBundle:
     platform: str = "novel"
     genre_params: dict[str, Any] = field(default_factory=dict)
     culture_params: dict[str, Any] = field(default_factory=dict)
+
+
+# ============ Phase 3 决策5：Goal/Fact/StateDelta + 到事件体系的桥 ============
+
+@dataclass(frozen=True)
+class Goal:
+    id: str
+    holder: str          # character_id 或 "world"
+    desc: str
+    priority: int = 5
+    status: str = "active"   # active / achieved / abandoned
+
+
+@dataclass(frozen=True)
+class Fact:
+    id: str
+    proposition: str
+    known_by: tuple[str, ...] = ()
+
+
+@dataclass
+class StateDelta:
+    """原语产出的小说状态增量 — 不直接写库，经 to_event_effects() 桥接到事件体系"""
+    new_goals: list[Goal] = field(default_factory=list)
+    goal_updates: dict[str, str] = field(default_factory=dict)   # goal_id → new status
+    new_facts: list[Fact] = field(default_factory=list)
+    retracted_facts: list[str] = field(default_factory=list)     # fact_id
+    new_constraints: list[str] = field(default_factory=list)
+    relation_changes: list[dict] = field(default_factory=list)
+
+    def merge(self, other: "StateDelta") -> "StateDelta":
+        """合并两个 delta，返回新对象（原对象不变）；goal_updates 后者覆盖前者"""
+        return StateDelta(
+            new_goals=[*self.new_goals, *other.new_goals],
+            goal_updates={**self.goal_updates, **other.goal_updates},
+            new_facts=[*self.new_facts, *other.new_facts],
+            retracted_facts=[*self.retracted_facts, *other.retracted_facts],
+            new_constraints=[*self.new_constraints, *other.new_constraints],
+            relation_changes=[*self.relation_changes, *other.relation_changes],
+        )
+
+    def to_event_effects(self) -> dict:
+        """桥接：翻译成现有 effects 协议（set_fluents/unset_fluents/learn/relations），
+        使 kernel.commit_event + 7步验证可以直接复用。
+
+        持久化形式（决策5）：goal(<id>,<holder>,<status>) / fact(<id>)
+        + knows(<cid>,<fact_id>)，fold 复用现有 set/unset/learn 逻辑，不新增事件类型。
+        注：goal_updates 不含 holder，桥接为二元 fluent goal(<id>,<status>)。
+        只产出非空键。
+        """
+        set_fluents: list[str] = []
+        unset_fluents: list[str] = []
+        learn: dict[str, list[str]] = {}
+        relations: dict[str, dict] = {}
+
+        for g in self.new_goals:
+            set_fluents.append(f"goal({g.id},{g.holder},{g.status})")
+        for goal_id, status in self.goal_updates.items():
+            set_fluents.append(f"goal({goal_id},{status})")
+        for f in self.new_facts:
+            set_fluents.append(f"fact({f.id})")
+            for cid in f.known_by:
+                learn.setdefault(cid, []).append(f"knows({cid},{f.id})")
+        for fact_id in self.retracted_facts:
+            unset_fluents.append(f"fact({fact_id})")
+        for c in self.new_constraints:
+            set_fluents.append(f"constraint({c})")
+        for rc in self.relation_changes:
+            rel = {"type": rc["type"], "intensity": rc["intensity"]}
+            if rc.get("note"):
+                rel["note"] = rc["note"]
+            relations[rc["key"]] = rel
+
+        effects: dict[str, Any] = {}
+        if set_fluents:
+            effects["set_fluents"] = set_fluents
+        if unset_fluents:
+            effects["unset_fluents"] = unset_fluents
+        if learn:
+            effects["learn"] = learn
+        if relations:
+            effects["relations"] = relations
+        return effects
