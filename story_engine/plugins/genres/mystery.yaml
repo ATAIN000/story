@@ -64,6 +64,18 @@ params:
   # 【v3.0 赌注5修正】critic 维度按类型裁剪 — 悬疑只需 4 维
   active_critics: [plot_coherence, character_motivation, setting_consistency, cliche_detection]
 
+  # 【P3 决策8】prompt 段：role/setting/characters/style/hard_requirements 五键
+  # （文案逐字迁自原 engine.py `_real_generate_prompt` 写死文案，不改写防输出漂移；
+  #   引擎渲染时在 hard_requirements 后追加引擎级约定：章末钩子 + 首行标题格式）
+  prompt:
+    role: "公案小说作者"
+    setting: "北宋，包拯开封府断案，当前侦破「玉佩失窃案」"
+    characters: "包拯（府尹，沉毅寡言）、展昭（护卫，利落）、公孙策（师爷，缜密）、刘伯（王府管家，恭谨藏怯）、王员外（苦主）"
+    style: "800-1200字，文白相间，叙事节奏如评书"
+    hard_requirements:
+      - "包拯断案只依据已经合法确立的证据与证词，绝不可说出未交代来源的信息"
+      - "禁用超自然力量直接破案（梦兆/冤魂只能渲染氛围）"
+
   # 【P3 决策6】phase_beats：Todorov 5 态 → beat 规格列表，beat 带 primitive 提示键
   # （侦破结构：悬念先行、双次揭示收束，与 romance 的情感弧线序列真实不同）
   phase_beats:

@@ -36,6 +36,15 @@ from . import mock_script
 
 PLUGIN_DIR = Path(__file__).parent / "plugins"
 
+# P3.8：题材插件缺 prompt 段（或缺键）时的通用兜底 —— 不含任何具体作品/角色名
+_GENERIC_PROMPT = {
+    "role": "故事作者",
+    "setting": "虚构世界，遵循本题材设定",
+    "characters": "以已定稿前情中登场的角色为准",
+    "style": "800-1200字，叙事连贯",
+    "hard_requirements": [],
+}
+
 
 class StoryEngine:
     def __init__(self, kernel_or_dir, llm_client=None):
@@ -119,7 +128,7 @@ class StoryEngine:
         for key, r in mock_script.SEED_RELATIONS.items():
             state.relationships[key] = Relation(r["type"], r["intensity"], list(r["history"]))
         state.narrative = NarrativeState(
-            act=1, chapter=0, tension=0.3, current_scene="开封府",
+            act=1, chapter=0, tension=0.3, current_scene="开场",
             track_progress={"A": 0, "B": 0, "C": 0, "D": 0, "E": 0},
             causal_links=list(mock_script.SEED_CAUSAL_LINKS),
             last_story_time="第1日·清晨")
@@ -405,15 +414,24 @@ class StoryEngine:
             self.kernel.spawn_character_actor(cfg, persona=persona)
         self._actors_ready = True
 
+    def _prompt_config(self) -> dict:
+        """P3.8：题材插件 params.prompt（五键），缺段/缺键回退通用兜底"""
+        cfg = dict(_GENERIC_PROMPT)
+        cfg.update(self.bundle.genre_params.get("prompt") or {})
+        return cfg
+
     async def _seed_chapter_memory(self, chapter_no: int, card, state: WorldState) -> None:
         banks = self.kernel._ensure_memory_banks()
         advance = "、".join(card.advance) if getattr(card, "advance", None) else ""
-        scene = state.narrative.current_scene or "开封府"
+        scene = state.narrative.current_scene or "开场"
         # P3.6：Actor brief 同步携带 planner 原语序列摘要
         prim_txt = "、".join(dict.fromkeys(
             p for b in getattr(card, "beats", []) for p in b.get("primitives", [])))
+        # P3.8：brief 人物表取自题材插件 prompt.characters（缺段走兜底）
+        characters = self._prompt_config()["characters"]
         brief = (
             f"第{chapter_no}章决策：场景={scene}；推进={advance}；"
+            f"人物={characters}；"
             f"情感弧={getattr(card, 'target_arc', '')}；"
             f"钩子={getattr(card, 'ending_hook', {})}；原语序列={prim_txt or '无'}"
         )
@@ -481,23 +499,25 @@ class StoryEngine:
             domains = " × ".join(s.get("domains", []))
             inspire_txt = (
                 f"可选灵感（可参考可忽略）：{domains} —— {s.get('emergent', '')[:200]}\n")
+        # P3.8：生成文案从题材插件 params.prompt 渲染（缺段/缺键走通用兜底）；
+        # 「章末留钩子 + 首行标题格式」是引擎级约定（标题行由引擎解析），
+        # 统一追加在插件 hard_requirements 之后
+        pcfg = self._prompt_config()
+        hard_reqs = [pcfg["style"], *(pcfg.get("hard_requirements") or []),
+                     "章末留钩子",
+                     "第一行写：标题：XXXX（不超过八字），空一行后接正文"]
+        hard_txt = "\n".join(f"{i}. {req}" for i, req in enumerate(hard_reqs, 1))
         return (
             f"【CHAPTER={chapter_no}】\n"
-            "你是公案小说作者。背景：北宋，包拯开封府断案，当前侦破「玉佩失窃案」。\n"
-            "人物：包拯（府尹，沉毅寡言）、展昭（护卫，利落）、公孙策（师爷，缜密）、"
-            "刘伯（王府管家，恭谨藏怯）、王员外（苦主）。\n\n"
+            f"你是{pcfg['role']}。背景：{pcfg['setting']}。\n"
+            f"人物：{pcfg['characters']}。\n\n"
             f"=== 已定稿前情 ===\n{history or '（开篇）'}\n\n"
             f"=== 本章调度 ===\n推进轨道：{advance_txt}\n"
             f"原语序列：{prim_txt or '无'}\n"
             f"{inspire_txt}"
             f"情感弧目标：{card.target_arc}　集末钩子：{card.ending_hook['style']}\n"
             f"待回收伏笔（尽量以自然方式兑现其一）：{pending_txt or '无'}\n\n"
-            "=== 硬要求 ===\n"
-            "1. 800-1200字，文白相间，叙事节奏如评书\n"
-            "2. 包拯断案只依据已经合法确立的证据与证词，绝不可说出未交代来源的信息\n"
-            "3. 禁用超自然力量直接破案（梦兆/冤魂只能渲染氛围）\n"
-            "4. 章末留钩子\n"
-            "5. 第一行写：标题：XXXX（不超过八字），空一行后接正文")
+            f"=== 硬要求 ===\n{hard_txt}")
 
     async def _llm_extract_events(self, chapter_no: int, text: str) -> list[dict]:
         if self._scripted(chapter_no):
@@ -515,6 +535,10 @@ class StoryEngine:
         knows = "; ".join(
             f"{cid}知道[{', '.join(f for f, v in m.beliefs.items() if v)}]"
             for cid, m in state.minds.items())
+        # P3.8：实体名册与活跃目标改从 WorldState 动态取（题材无关，不再写死）
+        roster = "/".join(state.characters) or "（无）"
+        goals = " ".join(
+            f"{cid}[{','.join(m.goals)}]" for cid, m in state.minds.items())
         return (
             f"【CHAPTER={chapter_no}】\n"
             "从下面的章节文本抽取「世界事件序列」，只输出 JSON 数组。每个事件：\n"
@@ -524,18 +548,17 @@ class StoryEngine:
             '- physical_preconditions: ["at(人,地)"]（该行动发生所需的位置前提）\n'
             '- effects: {"set_fluents": ["at(人,地)"], "unset_fluents": [...], "learn": {"角色": ["事实"]}}\n'
             '- requires_knowing: ["事实"]（角色说出/使用该信息，前提是他已经知道）\n'
-            '- motivation: "玉佩失窃"（动机须能追溯到这个已确立前因）\n'
+            '- motivation（该行动的动机，须能追溯到已确立的前因）\n'
             '- serves_goal（从各角色活跃目标里选）\n'
             '- has_supernatural: true/false（是否出现超自然）\n'
             '- is_resolution: true/false（该事件是否直接解决案件）\n'
             "每个事件开头通常先有一个 world_change 推进故事时间；"
             "位置变化必须有对应事件（人不可能瞬移）。\n\n"
-            f"实体名册：包拯/展昭/公孙策/刘伯/王员外/张三\n"
+            f"实体名册：{roster}\n"
             f"当前位置事实：{', '.join(at_fluents)}\n"
             f"当前故事时间：{state.narrative.last_story_time}\n"
             f"各角色已确立的认知：{knows}\n"
-            f"角色活跃目标：包拯[查明玉佩案真相,维护律法公正] 展昭[护卫包拯,查访线索] "
-            f"公孙策[辅佐断案] 刘伯[保住管家之位,掩盖赌债] 王员外[寻回玉佩]\n\n"
+            f"角色活跃目标：{goals}\n\n"
             f"=== 章节文本 ===\n{text[:3000]}\n\n只输出 JSON 数组，不要解释。")
 
     async def _llm_correct(self, chapter_no: int, draft_text: str,
@@ -644,7 +667,7 @@ class StoryEngine:
             ch["rolled_back"] = bool(ch.get("superseded")) or ch["tick_range"][1] > head
         return {
             "meta": {
-                "project": "包青天·玉佩案",
+                "project": self.project_dir.name,
                 "genre": self.genre.name, "culture": self.culture.name,
                 "language": "zh",
                 "llm_mode": "mock" if self.llm.is_mock else "openai",
