@@ -1,0 +1,30 @@
+# 文化插件：中国公案文化（蓝图 Module 0.3 示例的可运行版）
+manifest_version: 1
+name: confucian_officialdom
+extension_point: story.culture
+activation_events: ["on_culture:confucian_officialdom"]
+
+params:
+  # Hofstede 6维（可微调先验，参考 Akaliyski 2025 修订）
+  power_distance: 80
+  individualism: 20
+  masculinity: 66
+  uncertainty_avoidance: 30
+  long_term_orientation: 87
+  indulgence: 24
+
+  # 叙事专用维度
+  narrative_restraint: 0.7
+  social_critique: 0.3
+  supernatural_tolerance: 0.4
+
+  # 原型映射
+  archetype_mapping:
+    detective: judge_official
+    victim: commoner
+    suspect: official_or_outsider
+    mentor: elder_statesman
+
+  # 集末钩子（评书扣子四类轮换 — 中国叙事传统工程化）
+  cliffhanger_cycle: ["明扣", "暗扣", "留扣", "拴马扣"]
+  pacing_preference: "评书扣子四比"

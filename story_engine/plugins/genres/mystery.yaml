@@ -1,0 +1,65 @@
+# 题材插件：悬疑侦破（蓝图 Module 0.3 示例的可运行版）
+manifest_version: 1
+name: mystery
+extension_point: story.genre
+activation_events: ["on_genre:mystery"]
+
+# 【v3.0 赌注2修正】culture_bound 标记：false=可自由组合任意 Culture
+culture_bound: false
+allowed_cultures: ["*"]
+
+params:
+  pacing_curve: slow_burn
+  emotion_arcs: [man_in_hole, cinderella, icarus]
+  information_distribution: fair_play
+  max_red_herrings: 3
+  resolution_pattern: "真相揭示+正义"
+  main_track: A
+  theme_track: E
+  payoff_window: 2
+  beats_per_chapter: 4
+
+  # 五轨道（Showrunner 调度对象）
+  tracks:
+    - {id: A, name: "主线·玉佩案侦破", arc_type: Serialized, archetype: Quest,   progress: 0.0, last_touched: 0}
+    - {id: B, name: "刘伯弧·管家秘密", arc_type: Serialized, archetype: Tragedy, progress: 0.0, last_touched: 0}
+    - {id: C, name: "展昭弧·侠与法",   arc_type: Serialized, archetype: Rebirth, progress: 0.0, last_touched: 0}
+    - {id: D, name: "单元剧·案中案",   arc_type: Anthology,  archetype: Monster, progress: 0.0, last_touched: 0, min_main_progress: 0.7}
+    - {id: E, name: "主题·律法与情",   arc_type: Serialized, archetype: Quest,   progress: 0.0, last_touched: 0}
+
+  # 世界规则（Z3 SMT 硬约束 — 赌注1验证通过）
+  world_rules:
+    - id: sanderson_1
+      kind: bool
+      desc: "Sanderson第一律：鬼神介入不解决剧情"
+      expr: "not(has_supernatural and is_resolution)"
+    - id: fair_play
+      kind: bool
+      desc: "Fair Play：叙述者不可为凶手"
+      expr: "not(narrator_is_killer)"
+    - id: case_aging
+      kind: arith
+      desc: "案件时效：结案不超过365天"
+      expr: "case_age_days <= 365"
+
+  # 伏笔模板（Showrunner 种子计划用）
+  foreshadow_templates:
+    - {content: "目击者的矛盾证词", trigger: "交叉质询", payoff: "证词破绽指向真凶"}
+    - {content: "案发现场的异常物件", trigger: "复勘现场", payoff: "物件归属揭示嫌疑人"}
+    - {content: "受害者的未了心事", trigger: "家属回忆", payoff: "动机链条补全"}
+
+  taboo_list:
+    - "不允许超自然解"
+    - "不允许凶手=叙述者(除非fair play)"
+
+  evaluation_weights:
+    情节连贯: 0.20
+    角色动机: 0.15
+    设定一致性: 0.25
+    对话真实度: 0.10
+    感官细节: 0.10
+    套路检测: 0.10
+    主题深度: 0.10
+
+  # 【v3.0 赌注5修正】critic 维度按类型裁剪 — 悬疑只需 4 维
+  active_critics: [plot_coherence, character_motivation, setting_consistency, cliche_detection]

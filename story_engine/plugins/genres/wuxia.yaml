@@ -1,0 +1,40 @@
+# 题材插件：武侠 —【v3.0 赌注2修正】Culture-bound genre 示例
+# 验证证明：武侠的"江湖规则"嵌入中国文化，无法完全正交分解
+# 处理：标记 culture_bound=true，预绑定 Culture 白名单，不允许自由组合
+manifest_version: 1
+name: wuxia
+extension_point: story.genre
+activation_events: ["on_genre:wuxia"]
+
+culture_bound: true
+allowed_cultures: [confucian_officialdom, taoist_chinese]
+
+params:
+  pacing_curve: "隐忍→寻师→历练→恩怨→对决"
+  power_system: martial_arts
+  social_space: jianghu
+  conflict_types:
+    - {type: relational, weight: 0.4}
+    - {type: physical, weight: 0.4}
+    - {type: cognitive, weight: 0.2}
+  resolution_pattern: "恩怨了结/归隐/传承"
+  main_track: A
+  theme_track: E
+  payoff_window: 3
+  beats_per_chapter: 4
+  emotion_arcs: [rise, fall_rise, oedipus]
+  tracks:
+    - {id: A, name: "主线·恩怨", arc_type: Serialized, archetype: Quest, progress: 0.0, last_touched: 0}
+    - {id: B, name: "师徒弧·传承", arc_type: Serialized, archetype: Rebirth, progress: 0.0, last_touched: 0}
+    - {id: E, name: "主题·侠与规矩", arc_type: Serialized, archetype: Quest, progress: 0.0, last_touched: 0}
+  world_rules:
+    - id: sanderson_1
+      kind: bool
+      desc: "Sanderson第一律：鬼神介入不解决剧情"
+      expr: "not(has_supernatural and is_resolution)"
+  taboo_list:
+    - "不允许现代武器"
+    - "武功不能超出设定上限"
+  foreshadow_templates:
+    - {content: "师父的欲言又止", trigger: "身份揭晓", payoff: "身世之谜"}
+  active_critics: [character_motivation, setting_consistency, plot_coherence, emotion_arc]
