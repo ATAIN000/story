@@ -1,0 +1,102 @@
+# 题材插件：古代言情（蓝图 Module 0.3 的可运行版，结构对齐 mystery.yaml）
+manifest_version: 1
+name: romance
+extension_point: story.genre
+activation_events: ["on_genre:romance"]
+
+# culture_bound 标记：false=可自由组合任意 Culture（复用 confucian_officialdom）
+culture_bound: false
+allowed_cultures: ["*"]
+
+params:
+  pacing_curve: wave_rise
+  emotion_arcs: [rags_to_riches, cinderella, man_in_hole]
+  information_distribution: dramatic_irony
+  max_red_herrings: 2
+  resolution_pattern: "有情人终成眷属"
+  main_track: A
+  theme_track: D
+  payoff_window: 3
+  beats_per_chapter: 5
+
+  # 四轨道（Showrunner 调度对象 — 蓝图 3.1：追求/障碍/情敌/成长）
+  tracks:
+    - {id: A, name: "主线·追求", arc_type: Serialized, archetype: Quest,   progress: 0.0, last_touched: 0}
+    - {id: B, name: "副线·障碍", arc_type: Serialized, archetype: Monster,  progress: 0.0, last_touched: 0}
+    - {id: C, name: "副线·情敌", arc_type: Serialized, archetype: Tragedy,  progress: 0.0, last_touched: 0}
+    - {id: D, name: "主题·成长", arc_type: Serialized, archetype: Rebirth,  progress: 0.0, last_touched: 0}
+
+  # 世界规则（Z3 SMT 硬约束）
+  world_rules:
+    - id: mutual_consent
+      kind: bool
+      desc: "两情相悦律：姻缘圆满不得依赖强迫手段"
+      expr: "not(forced_union and is_resolution)"
+    - id: rival_fairness
+      kind: bool
+      desc: "情敌公平竞争：主角胜出不得靠情敌暴毙等机械降神"
+      expr: "not(rival_deus_ex_machina)"
+    - id: misunderstanding_aging
+      kind: arith
+      desc: "误会时效：核心误会须在结局前解开"
+      expr: "misunderstanding_cleared_chapter <= final_chapter"
+
+  # 伏笔模板（Showrunner 种子计划用）
+  foreshadow_templates:
+    - {content: "定情信物的来历", trigger: "信物遗失或重现", payoff: "信物牵出真实身份"}
+    - {content: "初见时的误会", trigger: "旧事重提", payoff: "误会冰释，情意转深"}
+    - {content: "长辈欲言又止的婚约", trigger: "家族议事", payoff: "婚约对象正是心上人"}
+
+  taboo_list:
+    - "不允许强迫成婚作为圆满结局"
+    - "不允许情敌无端暴毙成全主角"
+
+  evaluation_weights:
+    情节连贯: 0.15
+    角色动机: 0.20
+    设定一致性: 0.15
+    对话真实度: 0.15
+    感官细节: 0.10
+    套路检测: 0.10
+    主题深度: 0.15
+
+  # critic 维度按类型裁剪 — 言情侧重动机与情感弧
+  active_critics: [plot_coherence, character_motivation, emotion_arc, cliche_detection]
+
+  # 【P3 决策8】prompt 段：role/setting/characters/style/hard_requirements 五键
+  prompt:
+    role: "古代言情小说作者"
+    setting: "架空古代，江南水乡，杏林世家与书香门第之间的一段情缘"
+    characters: "沈砚清（医药世家独女，通医理，外柔内刚）、顾明璋（书香门第公子，正直隐忍）、柳含烟（戏曲名伶，情敌，工于心计）"
+    style: "800-1200字，婉约细腻，白描与抒情相间"
+    hard_requirements:
+      - "感情推进须有具体事件支撑，禁止一见倾心直达圆满"
+      - "误会须在前文埋下伏笔，解开须合乎情理"
+      - "禁用超自然力量直接撮合姻缘"
+
+  # 【P3 决策6】phase_beats：Todorov 5 态 → beat 规格列表，beat 带 primitive 提示键
+  phase_beats:
+    equilibrium:
+      - {id: status_quo, desc: "日常际遇：主角身份与生活环境铺垫", primitive: GoalFormation}
+    disruption:
+      - {id: fated_meeting, desc: "命定初遇或因误会结怨", primitive: TurningPoint}
+      - {id: obstacle_emerge, desc: "门第之见或既有婚约等障碍浮现", primitive: Conflict}
+    recognition:
+      - {id: affection_aware, desc: "意识到真心所属", primitive: Recognition}
+      - {id: rival_intervene, desc: "情敌介入搅局，暗施离间", primitive: Betrayal}
+    repair:
+      - {id: sacrifice_choice, desc: "为对方牺牲或退让的关键抉择", primitive: Sacrifice}
+      - {id: truth_reveal, desc: "误会与身份真相揭晓", primitive: Revelation}
+    new_equilibrium:
+      - {id: union, desc: "有情人终成眷属（或释然各自安好）", primitive: Recognition}
+      - {id: closing_hook, desc: "尾声留扣：新风波的伏笔", primitive: Suspense}
+
+  # 【P3 决策7】blend_domains：跨域融合的领域池
+  blend_domains: ["戏曲", "医药", "园林"]
+
+  # 【P3 决策4】pacing_targets：键名对齐 PacingScore 四字段，值为 [min, max] 区间
+  pacing_targets:
+    reversal_density: [0.2, 0.4]
+    avg_reversal_magnitude: [0.3, 0.6]
+    pacing_consistency: [0.6, 0.9]
+    cliffhanger_strength: [0.5, 0.8]

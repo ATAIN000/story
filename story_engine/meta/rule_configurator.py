@@ -12,6 +12,7 @@ from ..types_meta import StoryConfig, UserIntent
 GENRE_KEYWORDS = {
     "mystery":  ["悬疑", "破案", "侦探", "推理", "凶杀", "案件", "公案"],
     "wuxia":    ["江湖", "武林", "武侠", "侠客", "门派", "恩怨"],
+    "romance":  ["言情", "爱情", "恋爱", "romance", "才子佳人"],
 }
 
 # 文化提示词 → culture 插件名
@@ -24,7 +25,7 @@ CULTURE_HINTS = {
 def _match_genre(theme: str) -> str:
     theme_lower = theme.lower()
     for genre, kws in GENRE_KEYWORDS.items():
-        if any(kw in theme for kw in kws):
+        if any(kw.lower() in theme_lower for kw in kws):
             return genre
     return "mystery"  # 默认
 
