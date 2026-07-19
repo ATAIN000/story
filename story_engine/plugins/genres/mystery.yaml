@@ -93,3 +93,14 @@ params:
     new_equilibrium:
       - {id: justice_served, desc: "真相大白，律法昭彰", primitive: Revelation}
       - {id: lingering_shadow, desc: "尾声留扣：未解的余波", primitive: Suspense}
+
+  # 【P3 决策7】blend_domains：跨域融合的领域池
+  blend_domains: ["科举", "玉器行当", "漕运"]
+
+  # 【P3 决策4】pacing_targets：键名对齐 PacingScore 四字段，值为 [min, max] 区间
+  # （侦破类型反转密度与钩子强度高于言情，一致性与言情持平）
+  pacing_targets:
+    reversal_density: [0.3, 0.6]
+    avg_reversal_magnitude: [0.4, 0.7]
+    pacing_consistency: [0.6, 0.9]
+    cliffhanger_strength: [0.6, 0.9]
