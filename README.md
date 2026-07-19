@@ -85,7 +85,7 @@ cd frontend && npm install && npm run dev
 ### 运行测试
 
 ```bash
-python -m pytest tests/ -q    # 12 个测试：赌注1（Z3 硬约束）× 赌注4（事件溯源）× 核心循环
+python -m pytest tests/ -q    # 100+ 测试：赌注/核心循环/内核/角色/元生成 + Phase 3（genre 插件/决策卡/pacing/原语/planner/概念整合/换题材验收）
 ```
 
 ## 架构（与蓝图 Module 对应）
@@ -98,11 +98,13 @@ story_engine/                ← 纯 Python 核心包（不依赖 Web 框架）
 │                            时序TKG → 物理EC → 认知Epistemic → 因果DAG → 意图IPOCL → Z3 SMT → 软判定
 ├── registry.py              Module 0.2 扩展点注册表（8 扩展点，YAML manifest 懒加载）
 ├── llm.py                   Module 0.4 LLMClient（mock / openai 兼容双模式，调用留痕）
-├── showrunner.py            Module 3  多轨道调度器（10 步 control loop → 决策卡）
+├── showrunner/              Module 3  多轨道调度器子包（10 步 control loop → 决策卡；tracks/decision/pacing）
 ├── engine.py                核心循环编排器（生成/检查/修正三通道分离 — worldstate_paradox）
 ├── mock_script.py           《玉佩案》3 章剧本（含三类违规的教科书式演示）
 └── plugins/
-    ├── genres/mystery.yaml              题材插件（五轨道/世界规则/评估权重/禁忌）
+    ├── genres/mystery.yaml              题材插件·悬疑公案（五轨道/世界规则/评估权重/禁忌）
+    ├── genres/romance.yaml              题材插件·古代言情（四轨道/phase_beats/pacing_targets，Phase 3 新增）
+    ├── genres/wuxia.yaml                题材插件·武侠（culture_bound 组合校验示例）
     └── cultures/confucian_officialdom.yaml  文化插件（Hofstede 6维/评书扣子/原型映射）
 
 backend/main.py              FastAPI：/api/project、generate、rollback、reset、config
