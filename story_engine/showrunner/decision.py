@@ -4,6 +4,7 @@
 维护在显式数据结构里，不靠 LLM 注意力。
 
 每集生成前产出决策卡（按蓝图 3.2 顺序的 10 步 control loop，全部规则化）：
+  0. 节奏量化闭环（P3.4 — 上一章 PacingScore × pacing_targets → tension 修正）
   1. HTN 分解（占位 — P3.6 NarrativePlanner 承担，输出挂 DecisionCard.plan_goals）
   2. 轨道调度（推进/种子/触碰/休眠）
   3. CFPG 伏笔查询（到期 payoff + 池上限 + 债务老化）
@@ -19,10 +20,15 @@
 from __future__ import annotations
 
 import itertools
+from collections.abc import Callable
 from dataclasses import dataclass, field, asdict
 
 from ..types import WorldState, GenreBundle
 from .tracks import Track, ForeshadowPoolManager
+from .pacing import (
+    PacingEngine, chapter_events, resolve_targets,
+    suggest_tension_adjustment, apply_tension_adjustment,
+)
 
 STERNBERG_MODES = ["suspense", "curiosity", "surprise"]
 TODOROV_PHASES = ["equilibrium", "disruption", "recognition", "repair", "new_equilibrium"]
@@ -68,7 +74,8 @@ class DecisionCard:
 
 
 class Showrunner:
-    def __init__(self, bundle: GenreBundle):
+    def __init__(self, bundle: GenreBundle,
+                 event_source: Callable[[], list[dict]] | None = None):
         self.bundle = bundle
         self.genre = bundle.genre_params
         self.culture = bundle.culture_params
@@ -79,11 +86,17 @@ class Showrunner:
         self.pool = ForeshadowPoolManager(
             pool_max=self.genre.get("foreshadow_pool_max", 8),
             payoff_window=self.genre.get("payoff_window", 2))
+        # P3.4：节奏量化闭环（事件源可选；无源时 pacing 保持 None）
+        self._pacing = PacingEngine()
+        self._event_source = event_source
         # Sternberg 历史（{集号: {track_id: 模式}}）：NarrativeState 尚无该历史字段，
         # 最小改动为由 Showrunner 实例自持；历史不可得（首集/重启）时按轮换逻辑即可
         self._sternberg_history: dict[int, dict[str, str]] = {}
 
     def generate_decision_card(self, episode: int, state: WorldState) -> DecisionCard:
+        # Step 0（P3.4 决策4）：上一章节奏量化 → PacingScore × pacing_targets → tension 修正
+        pacing = self._pacing_feedback(episode)
+
         # Step 1: HTN 分解 — 由 NarrativePlanner 承担（P3.6），此处仅占位；
         #         planner 输出经 DecisionCard.plan_goals 挂载，本任务不实现
         plan_goals: list[dict] = []
@@ -102,6 +115,8 @@ class Showrunner:
 
         # Step 5: beat 规划（Yorke 分形：macro 幕级 × micro 章级）
         beats = self._plan_beats(episode, advance)
+        if pacing:  # P3.4：用上一章节奏偏差修正本章 beat tension 曲线
+            beats = apply_tension_adjustment(beats, pacing["tension_adjustment"])
 
         # Step 6: CONCOCT — 每 beat 一个 0-1 具体度目标
         concreteness_curve = self._concreteness_curve(len(beats))
@@ -137,7 +152,36 @@ class Showrunner:
             new_foreshadows=new_foreshadows,
             plan_goals=plan_goals, concreteness_curve=concreteness_curve,
             pool_stats=pool_stats, queued_foreshadows=queued,
+            pacing=pacing,
         )
+
+    # ---------- P3.4: 节奏量化闭环（决策4） ----------
+    def _pacing_feedback(self, episode: int) -> dict | None:
+        """上一章 PacingScore × pacing_targets → 本章 tension 修正参数。
+        首集 / 无事件源 / 空事件流时返回 None（DecisionCard.pacing 保持 None）"""
+        if episode <= 1 or self._event_source is None:
+            return None
+        # all_events 含已回滚时间线，只取 active 事件
+        events = [e for e in self._event_source() if e.get("active", True)]
+        prev_events = chapter_events(events, episode)
+        if not prev_events:
+            return None
+        report = self._pacing.analyze(prev_events)
+        if report is None:
+            return None
+        targets = resolve_targets(self.genre.get("pacing_targets"))
+        adjustment = suggest_tension_adjustment(report["score"], targets)
+        return {
+            "measured_episode": episode - 1,
+            "score": report["score"].to_dict(),
+            "metrics": report["metrics"],
+            "targets": {k: [lo, hi] for k, (lo, hi) in targets.items()},
+            "deviations": adjustment["deviations"],
+            "tension_adjustment": {
+                "variance_scale": adjustment["variance_scale"],
+                "ending_boost": adjustment["ending_boost"],
+            },
+        }
 
     # ---------- Step 2: 轨道调度 ----------
     def _schedule(self, episode: int, main_prog: float):

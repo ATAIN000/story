@@ -83,7 +83,10 @@ class StoryEngine:
         # 子系统（与原版一致）
         self.validator = ConsistencyValidator(
             world_rules=self.genre.get("world_rules"))
-        self.showrunner = Showrunner(self.bundle)
+        # P3.4：event_source 供 Showrunner 量化上一章节奏（all_events 含 active 标记）
+        self.showrunner = Showrunner(
+            self.bundle,
+            event_source=lambda: self.kernel.query_world("all_events"))
 
         self.chapters_path = self.project_dir / "chapters.json"
         if not self.chapters_path.exists():

@@ -6,14 +6,17 @@
   Track                 — 叙事轨道
   ForeshadowPoolManager — CFPG 伏笔池管理（容量/老化/排队）
   STERNBERG_MODES / TODOROV_PHASES — 理论常量
+  PacingEngine / PacingScore    — P3.4 节奏量化（Module 3.3 五信息论指标）
 """
 from .tracks import Track, ForeshadowPoolManager
 from .decision import (
     DecisionCard, Showrunner,
     STERNBERG_MODES, TODOROV_PHASES, GAP_TEMPLATES,
 )
+from .pacing import PacingEngine, PacingScore
 
 __all__ = [
     "Showrunner", "DecisionCard", "Track", "ForeshadowPoolManager",
     "STERNBERG_MODES", "TODOROV_PHASES", "GAP_TEMPLATES",
+    "PacingEngine", "PacingScore",
 ]
