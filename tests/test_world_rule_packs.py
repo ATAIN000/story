@@ -61,7 +61,7 @@ def test_invalid_expr_rules_rejected(tmp_path, monkeypatch, caplog):
     (pack_dir / "broken-rules.yaml").write_text(
         "manifest_version: 1\n"
         "name: broken-rules\n"
-        "extension_point: world.rule\n"
+        "extension_point: story.world.rule\n"
         "params:\n"
         "  rules:\n"
         "    - id: good_extra\n"
