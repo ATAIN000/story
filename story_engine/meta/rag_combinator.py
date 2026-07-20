@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+from ..types import PluginNotFoundError
 from ..types_meta import StoryConfig, UserIntent
 
 
@@ -49,7 +50,12 @@ class RAGCombinator:
         best_genre = None
         best_score = -1.0
         for genre_name in plugins:
-            manifest = self.kernel.registry.get_manifest("story.genre", genre_name)
+            try:
+                manifest = self.kernel.registry.get_manifest("story.genre", genre_name)
+            except PluginNotFoundError:
+                # P7.1 起 list_plugins 合并 _packs 桶（素材包），其名字不在 _plugins，
+                # get_manifest 会抛 PluginNotFoundError —— 素材包不是可加载题材，跳过
+                continue
             # 把 manifest 关键字段拼起来当文档
             doc_parts = [genre_name, manifest.name]
             doc_parts.extend(manifest.params.get("taboo_list", []))
