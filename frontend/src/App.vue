@@ -1,137 +1,135 @@
 <script setup>
+// StoryOS App 骨架 —— nav（7 项）+ topbar + 状态机视图切换（不引 vue-router）。
+// 布局/样式迁移自 story.html :41-73 / :432-464；视图占位 stub 由 P6.6-P6.10 填充。
 import { ref, computed, onMounted } from 'vue'
-import { api } from './api'
-import CoreLoopView from './views/CoreLoopView.vue'
-import WorldStateView from './views/WorldStateView.vue'
+import { api } from './api/api'
+import { toProjectVM } from './api/adapters'
+import { useTheme } from './composables/useTheme'
+import { useToast } from './composables/useToast'
+import { useGeneration } from './composables/useGeneration'
+import AppIcon from './components/AppIcon.vue'
+import { NAV_ICONS } from './components/icons'
+import ToastHost from './components/ToastHost.vue'
+import WriteView from './views/WriteView.vue'
+import CharsView from './views/CharsView.vue'
+import WorldView from './views/WorldView.vue'
 import TimelineView from './views/TimelineView.vue'
-import DecisionCardView from './views/DecisionCardView.vue'
+import ThreadsView from './views/ThreadsView.vue'
+import PluginsView from './views/PluginsView.vue'
+import SettingsView from './views/SettingsView.vue'
 
-const project = ref(null)
-const config = ref(null)
-const tab = ref('core')
-const loading = ref(false)
-const error = ref('')
+const { theme, toggleTheme } = useTheme()
+const { toastError } = useToast()
+const { generating, stage } = useGeneration()
 
-const tabs = [
-  { id: 'core', name: '核心循环', desc: '生成→检查→修正' },
-  { id: 'world', name: '世界状态', desc: '四层结构 + 角色心智' },
-  { id: 'timeline', name: '事件时间线', desc: '事件溯源 + 伏笔池' },
-  { id: 'card', name: '决策卡', desc: 'Showrunner 10步产物' },
+const VIEWS = { write: WriteView, chars: CharsView, world: WorldView, timeline: TimelineView, threads: ThreadsView, plugins: PluginsView, settings: SettingsView }
+const NAV = [
+  { sec: '创作', items: [{ id: 'write', name: '写作台' }] },
+  { sec: '故事资产', items: [
+    { id: 'chars', name: '人物' },
+    { id: 'world', name: '世界观' },
+    { id: 'timeline', name: '时间线' },
+    { id: 'threads', name: '伏笔账' },
+  ] },
+  { sec: '系统', items: [
+    { id: 'plugins', name: '插件' },
+    { id: 'settings', name: '设置' },
+  ] },
 ]
 
-async function refresh() {
-  project.value = await api.project()
+const view = ref('write')
+const project = ref(null)   // toProjectVM 后的视图模型
+const config = ref(null)
+const pluginCount = ref(0)
+
+const activeView = computed(() => VIEWS[view.value] || WriteView)
+const meta = computed(() => project.value?.meta || {})
+
+// nav 计数徽标：只展示后端可核实的真实计数（8.2-#7/8 不用内存态冒充）
+function navCount(id) {
+  if (!project.value) return ''
+  if (id === 'write') return meta.value.chapterCount ? `第${meta.value.chapterCount}章` : ''
+  if (id === 'chars') return String(project.value.world?.minds.length || '')
+  if (id === 'threads') return String(project.value.world?.foreshadows.length || '')
+  if (id === 'plugins') return String(pluginCount.value || '')
+  return ''
 }
 
-async function generate() {
-  loading.value = true
-  error.value = ''
+async function refresh() {
   try {
-    await api.generate()
-    await refresh()
-    tab.value = 'core'
+    project.value = toProjectVM(await api.project())
   } catch (e) {
-    error.value = e.message
-    await refresh()
-  } finally {
-    loading.value = false
+    toastError(`加载项目失败：${e.message}`)
   }
 }
 
-async function reset() {
-  if (!confirm('重置项目？所有章节与事件将清空。')) return
-  loading.value = true
-  error.value = ''
-  try { await api.reset(); await refresh() } finally { loading.value = false }
-}
-
-async function onRollback(tick) {
-  loading.value = true
-  error.value = ''
-  try { await api.rollback(tick); await refresh() }
-  catch (e) { error.value = e.message }
-  finally { loading.value = false }
-}
-
-const meta = computed(() => project.value?.meta || {})
-const chapters = computed(() => project.value?.chapters || [])
-
 onMounted(async () => {
-  config.value = await api.config()
+  try {
+    config.value = await api.config()
+    // list_plugins() 返回 {挂载点: [名称...]}，计数=各挂载点插件数之和
+    pluginCount.value = Object.values(config.value.plugins || {})
+      .reduce((n, names) => n + (Array.isArray(names) ? names.length : 0), 0)
+  } catch (e) {
+    toastError(`后端未连接：${e.message}`)
+  }
   await refresh()
 })
 </script>
 
 <template>
-  <div class="min-h-screen flex flex-col">
-    <!-- 顶栏 -->
-    <header class="border-b border-zinc-800 bg-zinc-900/60 backdrop-blur sticky top-0 z-10">
-      <div class="max-w-7xl mx-auto px-4 py-3 flex items-center gap-3 flex-wrap">
-        <div class="flex items-baseline gap-2">
-          <h1 class="text-lg font-bold text-amber-400 tracking-wide">故事引擎</h1>
-          <span class="text-xs text-zinc-500 font-mono">STORY OS v0.1</span>
-        </div>
-        <span class="text-sm text-zinc-400">《{{ meta.project || '加载中' }}》</span>
-
-        <div class="flex items-center gap-1.5 text-[11px] font-mono">
-          <span class="px-2 py-0.5 rounded bg-zinc-800 text-sky-300">{{ meta.genre }}</span>
-          <span class="text-zinc-600">×</span>
-          <span class="px-2 py-0.5 rounded bg-zinc-800 text-violet-300">{{ meta.culture }}</span>
-          <span class="text-zinc-600">×</span>
-          <span class="px-2 py-0.5 rounded bg-zinc-800 text-emerald-300">{{ meta.language }}</span>
-        </div>
-
-        <span class="text-[11px] px-2 py-0.5 rounded font-mono"
-              :class="meta.llm_mode === 'mock' ? 'bg-amber-950 text-amber-300 border border-amber-800' : 'bg-emerald-950 text-emerald-300 border border-emerald-800'">
-          {{ meta.llm_mode === 'mock' ? 'MOCK LLM' : 'OPENAI ' + meta.llm_model }}
-        </span>
-
-        <div class="ml-auto flex items-center gap-3">
-          <span class="text-xs text-zinc-500 font-mono">tick {{ meta.head_tick }} · 第 {{ meta.chapter_count }} 章</span>
-          <button @click="generate" :disabled="loading"
-                  class="px-4 py-1.5 rounded bg-amber-500 hover:bg-amber-400 text-zinc-950 text-sm font-semibold disabled:opacity-40 transition">
-            {{ loading ? '运转中…' : '生成下一章' }}
-          </button>
-          <button @click="reset" :disabled="loading"
-                  class="px-3 py-1.5 rounded border border-zinc-700 hover:border-red-500 hover:text-red-400 text-sm text-zinc-400 disabled:opacity-40 transition">
-            重置
-          </button>
-        </div>
+  <div class="app">
+    <!-- 左侧导航（story.html :432-448） -->
+    <nav class="nav" aria-label="主导航">
+      <div class="nav-logo">
+        <div class="lg" aria-hidden="true">書</div>
+        <div><div class="t1">StoryOS</div><div class="t2">故事工作台</div></div>
       </div>
-
-      <!-- 标签导航 -->
-      <nav class="max-w-7xl mx-auto px-4 flex gap-1">
-        <button v-for="t in tabs" :key="t.id" @click="tab = t.id"
-                class="px-4 py-2 text-sm rounded-t-lg transition border-b-2 -mb-px"
-                :class="tab === t.id
-                  ? 'text-amber-300 border-amber-400 bg-zinc-900'
-                  : 'text-zinc-500 border-transparent hover:text-zinc-300'">
-          {{ t.name }}<span class="ml-1.5 text-[10px] text-zinc-600">{{ t.desc }}</span>
+      <template v-for="group in NAV" :key="group.sec">
+        <div class="nav-sec">{{ group.sec }}</div>
+        <button v-for="item in group.items" :key="item.id" class="nav-item"
+                :class="{ active: view === item.id }"
+                :aria-current="view === item.id ? 'page' : undefined"
+                :aria-label="item.name"
+                @click="view = item.id">
+          <span class="ic"><AppIcon :name="NAV_ICONS[item.id]" :size="16" /></span>
+          {{ item.name }}<span class="cnt">{{ navCount(item.id) }}</span>
         </button>
-      </nav>
-    </header>
-
-    <!-- 错误提示 -->
-    <div v-if="error" class="max-w-7xl mx-auto px-4 mt-3 w-full">
-      <div class="px-4 py-2.5 rounded-lg bg-amber-950/50 border border-amber-800 text-amber-200 text-sm">
-        {{ error }}
+      </template>
+      <div class="nav-foot">
+        {{ meta.genre || '—' }} × {{ meta.culture || '—' }} × {{ meta.language || 'zh' }}<br>
+        editorial · 双主题
       </div>
+    </nav>
+
+    <div class="main">
+      <!-- 顶栏（story.html :450-464） -->
+      <header class="topbar">
+        <span class="proj">《{{ meta.name || '加载中' }}》</span>
+        <span class="crumb">{{ meta.genre }} × {{ meta.culture }}</span>
+        <span v-if="meta.llmMode" class="tb-badge llm" :class="{ mock: meta.llmMode === 'mock' }">
+          {{ meta.llmMode === 'mock' ? 'MOCK 剧本' : meta.llmModel }}
+        </span>
+        <div class="right">
+          <span class="tb-badge">tick {{ meta.headTick ?? 0 }} · 第 {{ meta.chapterCount ?? 0 }} 章</span>
+          <span v-if="generating" class="stage-pill" role="status">
+            <span class="dot" aria-hidden="true"></span>{{ stage || '生成中' }}
+          </span>
+          <div class="theme-ctl">
+            <button @click="toggleTheme" :aria-label="theme === 'night' ? '切换到日间模式' : '切换到夜读模式'"
+                    :title="theme === 'night' ? '切换到日间模式' : '切换到夜读模式'">
+              <AppIcon :name="theme === 'night' ? 'sun' : 'moon'" :size="13" />
+              {{ theme === 'night' ? '日间' : '夜读' }}
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <!-- 视图区（状态机切换；组件只消费 adapter 视图模型） -->
+      <main class="view" role="main" :aria-label="`视图：${view}`">
+        <component :is="activeView" :project="project" :config="config" />
+      </main>
     </div>
 
-    <!-- 主视图 -->
-    <main class="flex-1 max-w-7xl mx-auto px-4 py-5 w-full" v-if="project">
-      <CoreLoopView v-if="tab === 'core'" :chapters="chapters" />
-      <WorldStateView v-else-if="tab === 'world'" :world="project.world_state" :chapters="chapters" />
-      <TimelineView v-else-if="tab === 'timeline'"
-                    :events="project.events" :foreshadows="project.world_state.foreshadows"
-                    :snapshots="project.snapshots" :head-tick="meta.head_tick"
-                    @rollback="onRollback" />
-      <DecisionCardView v-else :chapters="chapters" />
-    </main>
-
-    <footer class="border-t border-zinc-900 py-3 text-center text-[11px] text-zinc-600">
-      核心循环已经 20 章实测验证（7/7 伏笔守住） · 硬约束：Z3 SMT + Epistemic EC + Event Calculus ·
-      修正回路 = 100% 价值来源（深度验证报告）
-    </footer>
+    <ToastHost />
   </div>
 </template>

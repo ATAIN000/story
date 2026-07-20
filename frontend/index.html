@@ -3,9 +3,24 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>故事引擎 Story OS · 控制台</title>
+    <title>StoryOS · 故事工作台</title>
+    <script>
+      // 首屏防闪：JS bundle 加载前先落主题（与 useTheme 同一 STORAGE_KEY 口径）
+      (function () {
+        var t
+        try { t = localStorage.getItem('storyos-theme') } catch (e) {}
+        if (t !== 'day' && t !== 'night') {
+          t = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+            ? 'night' : 'day'
+        }
+        document.body && (document.body.dataset.theme = t)
+        document.addEventListener('DOMContentLoaded', function () {
+          document.body.dataset.theme = t
+        })
+      })()
+    </script>
   </head>
-  <body>
+  <body data-theme="day">
     <div id="app"></div>
     <script type="module" src="/src/main.js"></script>
   </body>

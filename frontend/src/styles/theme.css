@@ -1,0 +1,190 @@
+/* ==========================================================================
+   StoryOS editorial 设计系统 · 双主题
+   迁移自 docs/story.html（唯一视觉权威）：CSS 变量 :7-30、字体栈 :31-34、
+   布局骨架 :41-73、toast :424-426、基础组件类按需。
+   与 story.html 的差异（评审 §8.4 工艺瑕疵修复，均已记录）：
+   1. 夜读 --faint #8a8069 → #9a9078（对比度 8.4-#6 / 8.3-#9）
+   2. 字号下限 10px（8.4-#1）：原 9px/9.5px 一律上调到 10px
+   3. 补 a11y（8.4-#2 / D7）：:focus-visible 可见焦点、color-scheme、
+      prefers-reduced-motion 降级
+   ========================================================================== */
+
+/* ===== 双主题 CSS 变量全套（story.html :9-30） ===== */
+body[data-theme="day"] {
+  --bg: #faf8f3; --s1: #f3efe6; --s2: #fffdf8; --s3: #ece7db;
+  --line: #e5dfd2; --line2: #d4ccbb;
+  --ink: #2b2722; --ink2: #5c554a; --faint: #6f6757;
+  --primary: #b4541e; --primary-hover: #9c4517; --accent: #3f6f5f;
+  --gov: #3f6f5f; --wang: #8a7a9e; --suspect: #b4541e; --item: #a0522d;
+  --danger: #a63d2f; --violet: #8a7a9e; --sky: #4a7a9e; --green: #3f6f5f;
+  --shadow: none;
+  --fs-story: #b4541e; --edge: #5c554a44;
+  --primary-tint: #b4541e12;
+  color-scheme: light;
+}
+body[data-theme="night"] {
+  --bg: #201d19; --s1: #28241f; --s2: #2e2a23; --s3: #3a352c;
+  --line: #3a352c; --line2: #4a4437;
+  --ink: #e6dfd1; --ink2: #b3a894; --faint: #9a9078; /* 提亮一档（8.4-#6） */
+  --primary: #d97a3f; --primary-hover: #e08c55; --accent: #5f9a85;
+  --gov: #6faa92; --wang: #a394c2; --suspect: #d97a3f; --item: #c98a5a;
+  --danger: #d97a6d; --violet: #a394c2; --sky: #7fa3c2; --green: #6faa92;
+  --shadow: none;
+  --fs-story: #d97a3f; --edge: #8a806944;
+  --primary-tint: #d97a3f1c;
+  color-scheme: dark;
+}
+
+/* ===== 字体栈（story.html :31-34） ===== */
+:root {
+  --serif: "Noto Serif SC", "Source Han Serif SC", STSong, SimSun, serif;
+  --sans: "Inter", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+/* ===== 复位与全局（story.html :35-39） ===== */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink);
+  font: 14px/1.6 var(--sans); overflow: hidden;
+  transition: background .25s, color .25s;
+}
+button { font: inherit; cursor: pointer; border: none; background: none; color: inherit; }
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-thumb { background: var(--line2); border-radius: 3px; }
+
+/* a11y（D7）：可见焦点态 —— editorial 风不用默认蓝框，用主题主色描边 */
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+/* a11y：减弱动效偏好时关闭全部过渡/动画（设计动效纪律 ≤0.25s，此处整体降级） */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}
+
+/* ===== 布局骨架（story.html :41-73） ===== */
+.app { display: flex; height: 100vh; }
+
+/* 左侧导航（纸面） */
+.nav {
+  width: 208px; flex-shrink: 0; background: var(--s1);
+  border-right: 1px solid var(--line); display: flex; flex-direction: column;
+  padding: 18px 12px; transition: background .25s;
+}
+.nav-logo { display: flex; align-items: center; gap: 9px; padding: 0 10px 16px; border-bottom: 1px solid var(--line); }
+.nav-logo .lg { font: 700 19px var(--serif); color: var(--primary); }
+.nav-logo .t1 { font: 700 15px var(--serif); letter-spacing: .5px; }
+.nav-logo .t2 { font-size: 10px; color: var(--faint); }
+.nav-sec { font-size: 10.5px; color: var(--faint); padding: 14px 12px 6px; letter-spacing: 1.5px; }
+.nav-item {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 8px 12px; border-radius: 6px; color: var(--ink2);
+  font-size: 13px; margin-bottom: 1px; transition: .12s; position: relative;
+  text-align: left;
+}
+.nav-item:hover { color: var(--ink); background: var(--s3); }
+.nav-item.active { color: var(--primary); background: var(--primary-tint); }
+.nav-item .ic { width: 18px; text-align: center; display: inline-flex; }
+.nav-item .cnt { margin-left: auto; font-size: 10px; color: var(--faint); }
+.nav-item.active .cnt { color: var(--primary); }
+.nav-foot {
+  margin-top: auto; padding: 12px 10px 0; border-top: 1px solid var(--line);
+  font-size: 10.5px; color: var(--faint); line-height: 1.8;
+}
+
+/* 主区 */
+.main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.topbar {
+  height: 50px; flex-shrink: 0; display: flex; align-items: center; gap: 12px;
+  padding: 0 22px; border-bottom: 1px solid var(--line);
+  background: var(--bg); transition: background .25s;
+}
+.topbar .proj { font: 700 15px var(--serif); }
+.topbar .crumb { font-size: 12px; color: var(--faint); }
+.tb-badge { font-size: 11px; padding: 2px 8px; color: var(--faint); border: 1px solid var(--line); border-radius: 4px; }
+.tb-badge.llm { color: var(--accent); border-color: var(--accent); }
+.tb-badge.llm.mock { color: var(--primary); border-color: var(--primary); }
+.topbar .right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.stage-pill { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--primary); }
+.stage-pill .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--primary); animation: p 1.6s infinite; }
+@keyframes p { 0%, 100% { opacity: 1; } 50% { opacity: .2; } }
+.theme-ctl { display: flex; gap: 2px; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.theme-ctl button { font-size: 12px; padding: 4px 9px; color: var(--ink2); display: inline-flex; align-items: center; gap: 4px; }
+.theme-ctl button:hover { background: var(--s3); color: var(--ink); }
+.view { flex: 1; overflow-y: auto; background: var(--bg); transition: background .25s; }
+
+/* ===== SVG 线性图标（story.html :207-209，Lucide 风格 currentColor） ===== */
+.ic svg, .ico { width: 15px; height: 15px; vertical-align: -2.5px; }
+.nav-item .ic svg { width: 16px; height: 16px; }
+
+/* ===== 基础组件类（story.html 按需迁移） ===== */
+/* 按钮（:234-237, :203-204） */
+.btn-main {
+  background: var(--primary); color: #fffdf8; font-size: 13px;
+  font-weight: 600; padding: 9px 20px; border-radius: 7px;
+}
+.btn-main:hover { background: var(--primary-hover); }
+.btn-main:disabled { opacity: .45; cursor: not-allowed; }
+.btn-line {
+  border: 1px solid var(--line); color: var(--ink2);
+  font-size: 12px; padding: 8px 16px; border-radius: 7px;
+}
+.btn-line:hover { border-color: var(--primary); color: var(--primary); }
+.btn-line:disabled { opacity: .45; cursor: not-allowed; }
+.mini-btn {
+  font-size: 11px; padding: 3px 10px; border-radius: 4px;
+  border: 1px solid var(--line); color: var(--ink2); background: var(--s2);
+}
+.mini-btn:hover { color: var(--primary); border-color: var(--primary); }
+
+/* 标签 / 统计（:126-131） */
+.tag {
+  display: inline-block; font-size: 11.5px; padding: 2px 8px; border-radius: 4px;
+  margin: 0 5px 5px 0; border: 1px solid var(--line); color: var(--ink2); background: var(--s2);
+}
+.tag.k { color: var(--accent); border-color: var(--accent); }
+.tag.s { color: var(--violet); border-color: var(--violet); }
+.tag.g { color: var(--sky); border-color: var(--sky); }
+.mini-stat {
+  display: flex; justify-content: space-between; font-size: 12px;
+  color: var(--ink2); padding: 4px 0; border-bottom: 1px dashed var(--line);
+}
+.mini-stat b { color: var(--accent); font-family: Menlo, monospace; }
+
+/* 开关（:300-303） */
+.tgl { position: relative; width: 34px; height: 19px; border-radius: 10px; background: var(--line2); transition: .15s; cursor: pointer; flex-shrink: 0; }
+.tgl.on { background: var(--primary); }
+.tgl::after {
+  content: ''; position: absolute; top: 2px; left: 2px;
+  width: 15px; height: 15px; border-radius: 50%; background: #fffdf8; transition: .15s;
+}
+.tgl.on::after { left: 17px; }
+
+/* toast（:424-426 + err 变体：生成失败错误路径 8.3-#2） */
+#toast { position: fixed; right: 20px; bottom: 20px; z-index: 99; display: flex; flex-direction: column; gap: 8px; }
+.toast {
+  background: var(--s2); border: 1px solid var(--primary); color: var(--primary);
+  font-size: 12px; padding: 10px 16px; border-radius: 6px; animation: pop .25s;
+}
+.toast.err { border-color: var(--danger); color: var(--danger); }
+@keyframes pop { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; } }
+
+/* ===== 空态（零章冷启动 8.3-#1；story.html 无对应物，按 editorial 风新设） ===== */
+.empty-state {
+  max-width: 420px; margin: 80px auto; text-align: center; color: var(--faint);
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+}
+.empty-state .es-ic { color: var(--line2); }
+.empty-state .es-t { font: 700 16px var(--serif); color: var(--ink2); }
+.empty-state .es-d { font-size: 12px; line-height: 1.8; }
+.empty-state .es-act { margin-top: 8px; }
+
+/* ===== 占位 stub（P6.6-P6.10 填充前的视图占位） ===== */
+.stub { padding: 30px 34px; }
+.stub h2 { font: 700 22px var(--serif); margin-bottom: 4px; }
+.stub .stub-sub { font-size: 12px; color: var(--faint); }
