@@ -160,6 +160,9 @@ class StoryEngine:
         # P5.6：本章 IR-first 产出的 narrative_ir 摘要（每章生成前重置；
         # 仅 IR-first 成功时非 None，mock/剧本/回退 → None）
         self._chapter_narrative_ir = None
+        # P6.2：两阶段生成 — plan 端点缓存的待批准决策卡（DecisionCard | None）；
+        # generate(mode="confirm") 优先消费并清除，rollback/reset 时作废
+        self._pending_plan = None
 
     # ============ 创世（seed 世界） ============
     @staticmethod
@@ -182,7 +185,7 @@ class StoryEngine:
         return state
 
     # ============ 核心循环：生成一章 ============
-    async def generate_chapter(self) -> dict:
+    async def generate_chapter(self, mode: str = "auto") -> dict:
         t0 = time.perf_counter()
         state = self.kernel.query_world("current_state")
         chapter_no = state.narrative.chapter + 1
@@ -191,7 +194,7 @@ class StoryEngine:
         # 剧本路径：完全保留 Phase 1 行为
         if scripted:
             return await self._generate_chapter_llm_path(
-                chapter_no, state, t0, scripted=True)
+                chapter_no, state, t0, scripted=True, mode=mode)
 
         # SCRIPTED_DEMO=1 且 Mock 剧本已完：保持旧行为提示切换 LLM
         demo_on = os.environ.get("STORY_ENGINE_SCRIPTED_DEMO", "1") == "1"
@@ -203,10 +206,46 @@ class StoryEngine:
                 "或在时间线面板回滚到任意快照重新生成。")
 
         # Actor 路径（STORY_ENGINE_SCRIPTED_DEMO=0）
-        return await self._generate_chapter_actor_path(chapter_no, state, t0)
+        return await self._generate_chapter_actor_path(
+            chapter_no, state, t0, mode=mode)
+
+    # ============ P6.2：两阶段生成（plan + confirm） ============
+    def plan_chapter(self) -> dict:
+        """两阶段生成第一步：只产决策卡不生成章节，缓存供 confirm 复用。
+
+        决策卡是纯规则产物（Showrunner.generate_decision_card 零 LLM 调用），
+        剧本/真实路径通用。副作用说明（P6.2 调查结论）：
+        generate_decision_card 只写 Showrunner 自持状态 —— _sternberg_history
+        与 tracks.last_touched，两者对同集幂等（decision.py「同集重复生成时
+        仍对齐上一集，幂等」，tests/test_decision_card.py 已有同集重产卡
+        幂等用例）；世界状态的伏笔池只在生成时的 _apply_foreshadow_script
+        改动 —— 故 plan 不污染世界状态，confirm 复用缓存卡也不会二次生效。
+        """
+        state = self.kernel.query_world("current_state")
+        chapter_no = state.narrative.chapter + 1
+        card = self.showrunner.generate_decision_card(chapter_no, state)
+        self._pending_plan = card
+        return card.to_dict()
+
+    def discard_plan(self) -> None:
+        """P6.2：作废缓存的待批准决策卡（DELETE /api/project/plan）"""
+        self._pending_plan = None
+
+    def _resolve_decision_card(self, chapter_no: int, state: WorldState,
+                               mode: str):
+        """P6.2：confirm 模式优先消费 plan 缓存的决策卡（消费即清除）；
+        auto / 无缓存 / 缓存章号不匹配 → 现场产卡（现状逐字不变）。
+        章号匹配的缓存在任何模式下都清除：本章一生成，旧方案即失效。"""
+        pending = self._pending_plan
+        if pending is not None and pending.episode == chapter_no:
+            self._pending_plan = None
+            if mode == "confirm":
+                return pending
+        return self.showrunner.generate_decision_card(chapter_no, state)
 
     async def _generate_chapter_llm_path(
-        self, chapter_no: int, state: WorldState, t0: float, *, scripted: bool
+        self, chapter_no: int, state: WorldState, t0: float, *, scripted: bool,
+        mode: str = "auto"
     ) -> dict:
         if self.llm.is_mock and not scripted:
             raise StoryEngineMockEnded(
@@ -214,8 +253,8 @@ class StoryEngine:
                 "配置 STORY_ENGINE_LLM_API_KEY 后切换真实 LLM 继续生成，"
                 "或在时间线面板回滚到任意快照重新生成。")
 
-        # Step 0: Showrunner 决策卡
-        card = self.showrunner.generate_decision_card(chapter_no, state)
+        # Step 0: Showrunner 决策卡（P6.2：confirm 模式复用 plan 缓存卡）
+        card = self._resolve_decision_card(chapter_no, state, mode)
         # P3.7：env 门控默认关；剧本路径（mock_script）不挂 seed，保持原行为
         if not scripted:
             card = await self.showrunner.attach_creative_seed(card, chapter_no)
@@ -626,13 +665,15 @@ class StoryEngine:
         }
 
     async def _generate_chapter_actor_path(
-        self, chapter_no: int, state: WorldState, t0: float
+        self, chapter_no: int, state: WorldState, t0: float, *,
+        mode: str = "auto"
     ) -> dict:
         """Phase 2：Director spawn → tick×N → Showrunner 汇总 → 验证报告 → snapshot
 
         Actor 在 SOAR apply 步已 commit_event；本路径不再二次 commit 那些事件。
         """
-        card = self.showrunner.generate_decision_card(chapter_no, state)
+        # P6.2：confirm 模式复用 plan 缓存卡
+        card = self._resolve_decision_card(chapter_no, state, mode)
         # P3.7：env 门控默认关；开启时每 N 章附 1 个 CreativeSeed（失败不阻塞）
         card = await self.showrunner.attach_creative_seed(card, chapter_no)
         await self._ensure_character_actors()
@@ -1087,10 +1128,15 @@ class StoryEngine:
             "snapshots": self.kernel.query_world("snapshots"),
             "chapters": chapters,
             "call_log": self.llm.call_log[-30:],
+            # P6.2：待批准决策卡（两阶段生成第一步缓存；无 → None），只增不改
+            "pending_plan": (self._pending_plan.to_dict()
+                             if self._pending_plan is not None else None),
         }
 
     def rollback(self, to_tick: int) -> dict:
         self.kernel.rollback(to_tick)
+        # P6.2：时间线改动作废待批准方案（缓存卡对应旧时间线的下一章）
+        self._pending_plan = None
         chapters = self._read_chapters()
         changed = False
         for ch in chapters:
@@ -1195,6 +1241,7 @@ class StoryEngine:
         self.kernel.embedder = fresh_embedder
         self.store = self.kernel.store
         self._write_chapters([])
+        self._pending_plan = None  # P6.2：重置作废待批准方案
         return self.project_snapshot()
 
     # ============ 展示层辅助 ============

@@ -1,8 +1,10 @@
 """Story Engine Demo — FastAPI 后端
 
 API：
-  GET  /api/project            项目完整快照（世界状态/事件/伏笔/章节/决策卡）
-  POST /api/project/generate   生成下一章（核心循环）
+  GET  /api/project            项目完整快照（世界状态/事件/伏笔/章节/决策卡/pending_plan）
+  POST /api/project/generate   生成下一章（核心循环；body 可选 mode: auto|confirm，P6.2）
+  POST /api/project/plan       【P6.2 新增】只产决策卡（两阶段生成第一步）
+  DELETE /api/project/plan     【P6.2 新增】作废待批准方案
   POST /api/project/rollback   回滚到指定 tick
   POST /api/project/reset      重置项目
   GET  /api/config             运行配置（LLM 模式/插件）
@@ -21,7 +23,7 @@ import sys
 import tempfile
 from dataclasses import asdict
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -96,6 +98,12 @@ class RollbackReq(BaseModel):
     tick: int
 
 
+class GenerateReq(BaseModel):
+    """generate 可选 body（P6.2）：mode 缺省 auto —— 无 body/旧调用逐字不变；
+    confirm 复用 plan 缓存的决策卡（无缓存时等同 auto，宽容策略见 engine）"""
+    mode: Literal["auto", "confirm"] = "auto"
+
+
 class UserIntentReq(BaseModel):
     theme: str = ""
     culture_hint: str = ""
@@ -139,15 +147,31 @@ def get_project():
 
 
 @app.post("/api/project/generate")
-async def generate():
+async def generate(req: GenerateReq | None = None):
     try:
-        return await engine.generate_chapter()
+        return await engine.generate_chapter(
+            mode=req.mode if req is not None else "auto")
     except StoryEngineMockEnded as e:
         raise HTTPException(status_code=409, detail=str(e))
     except LLMError as e:
         raise HTTPException(status_code=502, detail=str(e))
     except StoryEngineError as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ---------- 两阶段生成（P6.2 B3：plan → confirm，支撑「看方案→生成」工作流） ----------
+@app.post("/api/project/plan")
+def plan():
+    """【P6.2】只产决策卡不生成章节，缓存为 pending_plan 供 confirm 复用。
+    决策卡是纯规则产物（零 LLM），剧本/真实路径通用；不触碰世界状态。"""
+    return engine.plan_chapter()
+
+
+@app.delete("/api/project/plan")
+def discard_plan():
+    """【P6.2】作废待批准方案（清缓存；无缓存时幂等 ok）"""
+    engine.discard_plan()
+    return {"ok": True, "pending_plan": None}
 
 
 @app.post("/api/project/rollback")
