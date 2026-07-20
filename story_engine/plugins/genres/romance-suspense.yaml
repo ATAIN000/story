@@ -1,0 +1,116 @@
+# 题材插件：都市情缘×心理疑云（romance × psychological_thriller，value_inversion 融合）
+# 结构对齐 mystery.yaml / romance.yaml；内容自本包 fusion 元数据派生
+manifest_version: 1
+name: romance-suspense
+extension_point: story.genre
+activation_events: ["on_genre:romance-suspense"]
+fusion:
+  type: value_inversion
+  parent_genres: [romance, psychological_thriller]
+  core_conflict: "信任（爱情的基石） vs 怀疑（推理的引擎）——你最爱的人可能是凶手/间谍/骗子"
+  fusion_formula: "情感线 + 悬疑推理 + '信任/怀疑'的持续拉扯"
+
+culture_bound: false
+allowed_cultures: ["*"]
+
+params:
+  pacing_curve: "相遇相知→疑点初现→信任动摇→真相逼近→终极抉择（爱还是揭穿）"
+  power_system: "psychological"               # 心理博弈为主
+  emotion_arcs: [icarus, oedipus]             # 升起后坠落
+  conflict_types:
+    - {type: relational, weight: 0.4}        # 情感信任线
+    - {type: cognitive, weight: 0.35}        # 解谜线
+    - {type: internal, weight: 0.25}         # 爱vs怀疑的内心战
+  information_distribution: unreliable_beloved # 爱人可能是不可靠叙述者
+  max_red_herrings: 3
+  resolution_pattern: "真相揭晓——爱人确实有秘密，但秘密的性质出人意料"
+  main_track: A
+  theme_track: E
+  payoff_window: 2
+  beats_per_chapter: 5
+
+  # 五轨道（Showrunner 调度对象 — 自 core_conflict/fusion_formula 推导：
+  # 爱与疑主线 + 秘密拼图 + 被掩埋的旧事 + 身边人各怀心事单元 + 信任本质主题）
+  tracks:
+    - {id: A, name: "主线·爱与疑的同步升级", arc_type: Serialized, archetype: Quest,   progress: 0.0, last_touched: 0}
+    - {id: B, name: "副线·爱人的秘密拼图",   arc_type: Serialized, archetype: Monster,  progress: 0.0, last_touched: 0}
+    - {id: C, name: "副线·一段被掩埋的旧事", arc_type: Serialized, archetype: Tragedy, progress: 0.0, last_touched: 0}
+    - {id: D, name: "单元剧·身边人各怀心事", arc_type: Anthology,  archetype: Quest,    progress: 0.0, last_touched: 0, min_main_progress: 0.4}
+    - {id: E, name: "主题·信任是选择还是证据", arc_type: Serialized, archetype: Rebirth, progress: 0.0, last_touched: 0}
+
+  rule_packs: [romance-taboo]  # 原 world_rules_ref 改名（P7.4 L5 引用合并）
+  # 世界规则（Z3 SMT 硬约束 — expr 限事实词汇表）
+  world_rules:
+    - id: secret_payoff_earned
+      kind: bool
+      desc: "秘密兑现律：爱人的秘密不得靠终局凭空新线索揭晓，必须前文有铺垫"
+      expr: "not(is_resolution and introduces_new_key_clue)"
+    - id: no_supernatural_solve
+      kind: bool
+      desc: "心证非神启律：真相不得靠托梦通灵等超自然手段直接揭开"
+      expr: "not(has_supernatural and is_resolution)"
+
+  # 伏笔模板（Showrunner 种子计划用）
+  foreshadow_templates:
+    - {content: "他说漏嘴的时间线",       trigger: "旧照片或票据对上日期", payoff: "时间线撒谎的位置，正是秘密的入口"}
+    - {content: "她手机里没存备注的号码", trigger: "号码在深夜再次亮起",   payoff: "号码另一端的人牵出被掩埋的旧事"}
+    - {content: "礼物与旧物对不上的年份", trigger: "他无意中说起的过往",   payoff: "年份错位指向一段被改写的身份"}
+
+  taboo_list:
+    - "疑云线不能压过情感线——读者必须真的希望两人在一起"
+    - "不允许情感线无悬念——'他/她是不是在骗我'的拉扯必须始终在线"
+    - "反转不能廉价——爱人的秘密必须落在道德灰色地带，不是单纯的'是坏人'"
+
+  evaluation_weights:
+    角色动机: 0.25
+    情感弧: 0.20
+    情节连贯: 0.20
+    对话真实度: 0.15                           # 情侣间的潜台词
+    套路检测: 0.10
+    主题深度: 0.05
+    感官细节: 0.05
+
+  active_critics: [character_motivation, emotion_arc, plot_coherence, dialogue_authenticity]
+
+  fusion_specific_rules:
+    push_pull_truth: "每次情感靠近都伴随一个疑点——亲密感和怀疑感同步升级"
+    secret_quality: "爱人的秘密必须是'道德灰色地带'的——不是纯善或纯恶"
+
+  # prompt 段：role/setting/characters/style/hard_requirements 五键
+  prompt:
+    role: "都市情感心理小说作者"
+    setting: "当代都市：专做婚姻背景调查的调查师，接下一单匿名委托，调查对象竟是自己刚爱上的男人"
+    characters: "温荔（调查师，职业习惯怀疑一切，唯独这一次想信人）、周既白（建筑设计师，温柔体面，履历干净得反常）、匿名委托人（步步紧逼，似乎比温荔更了解周既白）"
+    style: "800-1200字，克制紧绷，对白潜台词密集，亲密戏里藏着倒计时"
+    hard_requirements:
+      - "每次情感靠近必须伴随一个新疑点：亲密感与怀疑感同步升级"
+      - "爱人的秘密必须落在道德灰色地带——有苦衷、有代价，不是单纯的坏"
+      - "真相揭晓全靠前文铺过的细节兑现，禁止靠偶然撞破或超自然手段"
+      - "结局必须让读者理解：揭穿或信下去，都是真的有理由的选择"
+
+  # phase_beats：Todorov 5 态（相知—动摇—抉择结构，primitive 限八种原语）
+  phase_beats:
+    equilibrium:
+      - {id: wary_heart, desc: "相遇：职业习惯怀疑的人，偏偏想信这一次", primitive: GoalFormation}
+    disruption:
+      - {id: first_crack, desc: "疑点初现：一个对不上的细节", primitive: Suspense}
+      - {id: closeness_breeds_doubt, desc: "越靠近越不安：亲密与怀疑同步升温", primitive: Conflict}
+    recognition:
+      - {id: half_truth, desc: "半个真相：他确实有秘密，但性质出人意料", primitive: Revelation}
+      - {id: trust_wavers, desc: "信任动摇：证据与心动各执一词", primitive: TurningPoint}
+    repair:
+      - {id: final_stake, desc: "终极抉择：爱下去，还是揭穿到底", primitive: Sacrifice}
+      - {id: truth_in_full, desc: "全部真相：灰色地带的秘密摊开", primitive: Revelation}
+    new_equilibrium:
+      - {id: chosen_trust, desc: "知情之后的信任：把怀疑亲手放下", primitive: Recognition}
+      - {id: unasked_hook, desc: "尾声留扣：最后一个没问出口的问题", primitive: Suspense}
+
+  # blend_domains：跨域融合的领域池
+  blend_domains: ["婚姻调查行当", "都市心理诊疗生态", "社交媒体时代的痕迹学"]
+
+  # pacing_targets：键名对齐 PacingScore 四字段，值为 [min, max] 区间
+  pacing_targets:
+    reversal_density: [0.3, 0.6]
+    avg_reversal_magnitude: [0.4, 0.7]
+    pacing_consistency: [0.5, 0.8]
+    cliffhanger_strength: [0.6, 0.9]

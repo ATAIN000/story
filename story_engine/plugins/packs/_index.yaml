@@ -345,42 +345,6 @@
   status: active
   source: hermes
   collected_at: "2026-07-20"
-- pack: meta-isekai-dual
-  extension_point: story.genre
-  version: "0.1"
-  status: active
-  source: hermes
-  collected_at: "2026-07-20"
-- pack: political-cultivation
-  extension_point: story.genre
-  version: "0.1"
-  status: active
-  source: hermes
-  collected_at: "2026-07-20"
-- pack: reborn-business-era
-  extension_point: story.genre
-  version: "0.1"
-  status: active
-  source: hermes
-  collected_at: "2026-07-20"
-- pack: romance-suspense
-  extension_point: story.genre
-  version: "0.1"
-  status: active
-  source: hermes
-  collected_at: "2026-07-20"
-- pack: romantasy
-  extension_point: story.genre
-  version: "0.1"
-  status: active
-  source: hermes
-  collected_at: "2026-07-20"
-- pack: sci-fi-horror
-  extension_point: story.genre
-  version: "0.1"
-  status: active
-  source: hermes
-  collected_at: "2026-07-20"
 - pack: sequence-pathway
   extension_point: story.genre
   version: "0.1"

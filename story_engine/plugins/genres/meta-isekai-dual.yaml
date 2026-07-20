@@ -1,0 +1,116 @@
+# 题材插件：双穿书·信息差博弈（isekai × book_transmigration，perspective_misalignment 融合）
+# 结构对齐 mystery.yaml / romance.yaml；内容自本包 fusion 元数据派生
+manifest_version: 1
+name: meta-isekai-dual
+extension_point: story.genre
+activation_events: ["on_genre:meta-isekai-dual"]
+fusion:
+  type: perspective_misalignment
+  parent_genres: [isekai, book_transmigration]
+  core_conflict: "两人都穿进同一本书，但信息差制造信任/背叛——谁是'角色'谁是'读者'？"
+  fusion_formula: "穿书设定 + 双视角信息差 + 剧情操控博弈"
+
+culture_bound: false
+allowed_cultures: ["*"]
+
+params:
+  pacing_curve: "各自穿越→发现对方→试探合作→信息差博弈→联手or对决"
+  power_system: "meta_knowledge"             # 剧情预知=核心能力
+  emotion_arcs: [man_in_hole, cinderella]
+  conflict_types:
+    - {type: cognitive, weight: 0.4}         # 信息差博弈
+    - {type: relational, weight: 0.3}        # 信任/背叛
+    - {type: political, weight: 0.2}         # 改变剧情的连锁
+    - {type: internal, weight: 0.1}          # 自我定位
+  information_distribution: asymmetric_split # 双视角各自知道不同的事
+  max_red_herrings: 3
+  resolution_pattern: "信息差消除 + 共同选择改写结局"
+  main_track: A
+  theme_track: E
+  payoff_window: 2
+  beats_per_chapter: 5
+
+  # 五轨道（Showrunner 调度对象 — 自 core_conflict/fusion_formula 推导：
+  # 信息差博弈主线 + 原著修正力反噬 + 信任与背叛拉锯 + 名场面改写单元 + 角色还是读者主题）
+  tracks:
+    - {id: A, name: "主线·双穿者的信息差博弈", arc_type: Serialized, archetype: Quest,   progress: 0.0, last_touched: 0}
+    - {id: B, name: "副线·原著修正力的反噬",   arc_type: Serialized, archetype: Monster,  progress: 0.0, last_touched: 0}
+    - {id: C, name: "副线·信任与背叛的拉锯",   arc_type: Serialized, archetype: Tragedy, progress: 0.0, last_touched: 0}
+    - {id: D, name: "单元剧·名场面改写",       arc_type: Anthology,  archetype: Quest,    progress: 0.0, last_touched: 0, min_main_progress: 0.3}
+    - {id: E, name: "主题·角色还是读者",       arc_type: Serialized, archetype: Rebirth,  progress: 0.0, last_touched: 0}
+
+  # 世界规则（Z3 SMT 硬约束 — expr 限事实词汇表）
+  world_rules:
+    - id: no_meta_omniscience
+      kind: bool
+      desc: "预知非全能律：剧情预知不得作为超自然外挂直接锁定终局"
+      expr: "not(has_supernatural and is_resolution)"
+    - id: divergence_foreshadowed
+      kind: bool
+      desc: "改写有铺垫：终局不得凭空抛出前文未铺垫的原著设定反转"
+      expr: "not(is_resolution and introduces_new_key_clue)"
+
+  # 伏笔模板（Showrunner 种子计划用）
+  foreshadow_templates:
+    - {content: "原著台词的微妙出入",   trigger: "角色说出与记忆不符的话", payoff: "剧情早已偏离，双方底牌都不可靠"}
+    - {content: "对方脱口而出的剧透",   trigger: "当事人还未经历该情节",   payoff: "对方读者身份曝光，博弈摆上台面"}
+    - {content: "修正力的细小反噬",     trigger: "被改写的情节自行回补",   payoff: "偏离原著的代价在终局集中结算"}
+
+  taboo_list:
+    - "至少一个穿书者必须有合理理由不提前暴露身份"
+    - "原著剧情不能被随意改动而不产生后果"
+    - "不允许一方纯碾压——信息差必须双向"
+
+  evaluation_weights:
+    情节连贯: 0.25
+    角色动机: 0.20
+    对话真实度: 0.15
+    设定一致性: 0.15
+    套路检测: 0.10
+    主题深度: 0.10
+    感官细节: 0.05
+
+  active_critics: [plot_coherence, character_motivation, dialogue_authenticity]
+
+  fusion_specific_rules:
+    reveal_timing: "双方互相发现的时机是关键反转点（建议中段）"
+    canon_divergence: "每次偏离原著剧情，'世界修正力'会制造新障碍"
+
+  # prompt 段：role/setting/characters/style/hard_requirements 五键
+  prompt:
+    role: "双穿书题材小说作者"
+    setting: "一本连载中的古风权谋小说世界：沈照穿来三年，已把自己活成书中不起眼却要紧的配角；温叙昨夜刚到，手里攥着比沈照多四十章的原著"
+    characters: "沈照（先穿者，谨小慎微，靠半截记忆在书中谋生）、温叙（后穿者，掌握更多后续剧情，藏锋不露）、书中原定反派宁王（越来越不像原著描写的那个人）"
+    style: "800-1200字，机锋暗藏，双视角信息差制造张力，留白比摊牌多"
+    hard_requirements:
+      - "信息差必须双向：双方各知对方不知道的事，禁止一方全程碾压"
+      - "每次偏离原著剧情，必须以'世界修正力'制造对应的新障碍"
+      - "双方互相发现穿书者身份的时刻安排在中段，作为关键反转"
+      - "禁止靠剧情预知直接锁定胜局——预知只能提供筹码，不提供答案"
+
+  # phase_beats：Todorov 5 态（落地—相认—改写结构，primitive 限八种原语）
+  phase_beats:
+    equilibrium:
+      - {id: solo_foothold, desc: "落地与蛰伏：先穿者已在局中站稳脚跟", primitive: GoalFormation}
+    disruption:
+      - {id: second_reader, desc: "第二读者现身：原著情节开始莫名跑偏", primitive: TurningPoint}
+      - {id: probe_each_other, desc: "互相试探底牌，谁都不敢先亮明身份", primitive: Suspense}
+    recognition:
+      - {id: info_gap_reveal, desc: "信息差曝光：两人各知的剧情并不一样", primitive: Revelation}
+      - {id: canon_backlash, desc: "修正力反噬：偏离原著的代价显形", primitive: Conflict}
+    repair:
+      - {id: trust_gamble, desc: "摊牌或背叛：把底牌交给对方的豪赌", primitive: Betrayal}
+      - {id: joint_rewrite, desc: "联手改写关键情节，代价共担", primitive: Sacrifice}
+    new_equilibrium:
+      - {id: ending_chosen, desc: "结局由两人共同选择，而非原著给定", primitive: Recognition}
+      - {id: new_canon_hook, desc: "尾声留扣：被改写的世界长出新的'原著'", primitive: Suspense}
+
+  # blend_domains：跨域融合的领域池
+  blend_domains: ["连载网文生态", "读者评论与考据文化", "书中书叙事结构"]
+
+  # pacing_targets：键名对齐 PacingScore 四字段，值为 [min, max] 区间
+  pacing_targets:
+    reversal_density: [0.3, 0.6]
+    avg_reversal_magnitude: [0.4, 0.7]
+    pacing_consistency: [0.5, 0.8]
+    cliffhanger_strength: [0.6, 0.9]

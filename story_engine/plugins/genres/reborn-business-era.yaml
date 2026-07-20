@@ -1,0 +1,116 @@
+# 题材插件：重生年代商战（rebirth × business_strategy × period_drama，rule_collision 融合）
+# 结构对齐 mystery.yaml / romance.yaml；内容自本包 fusion 元数据派生
+manifest_version: 1
+name: reborn-business-era
+extension_point: story.genre
+activation_events: ["on_genre:reborn-business-era"]
+fusion:
+  type: rule_collision
+  parent_genres: [rebirth, business_strategy, period_drama]
+  core_conflict: "知道未来（信息优势） vs 不能改变大趋势（历史惯性）；个人暴富 vs 时代变迁"
+  fusion_formula: "未来记忆 + 时代风口 + 商业博弈 + 怀旧情感"
+
+culture_bound: false
+allowed_cultures: ["*"]
+
+params:
+  pacing_curve: "重生节点→第一桶金→站稳脚跟→时代风口→商业帝国→回首人生"
+  power_system: "future_memory"              # 未来记忆=唯一金手指
+  emotion_arcs: [rags_to_riches, cinderella]
+  conflict_types:
+    - {type: cognitive, weight: 0.35}        # 商业策略/信息差
+    - {type: political, weight: 0.25}        # 政商关系
+    - {type: relational, weight: 0.25}       # 人脉/家庭
+    - {type: resource, weight: 0.15}         # 资本博弈
+  information_distribution: asymmetric
+  max_red_herrings: 2
+  resolution_pattern: "商业成功 + 弥补前世遗憾（亲情/爱情线收束）"
+  main_track: A
+  theme_track: E
+  payoff_window: 3
+  beats_per_chapter: 5
+
+  # 五轨道（Showrunner 调度对象 — 自 core_conflict/fusion_formula 推导：
+  # 商海风口主线 + 对手围剿与时代阻力 + 前世遗憾弥补 + 年代风口纪事单元 + 财富之外主题）
+  tracks:
+    - {id: A, name: "主线·商海沉浮与时代风口", arc_type: Serialized, archetype: Quest,   progress: 0.0, last_touched: 0}
+    - {id: B, name: "副线·对手围剿与时代阻力", arc_type: Serialized, archetype: Monster,  progress: 0.0, last_touched: 0}
+    - {id: C, name: "副线·前世遗憾的弥补",     arc_type: Serialized, archetype: Rebirth,  progress: 0.0, last_touched: 0}
+    - {id: D, name: "单元剧·年代风口纪事",     arc_type: Anthology,  archetype: Quest,    progress: 0.0, last_touched: 0, min_main_progress: 0.3}
+    - {id: E, name: "主题·财富之外的人生重选", arc_type: Serialized, archetype: Rebirth,  progress: 0.0, last_touched: 0}
+
+  # 世界规则（Z3 SMT 硬约束 — expr 限事实词汇表）
+  world_rules:
+    - id: memory_not_oracle
+      kind: bool
+      desc: "记忆非神谕律：终局不得靠未卜先知式的超自然信息直接锁定胜局"
+      expr: "not(has_supernatural and is_resolution)"
+    - id: era_payoff_earned
+      kind: bool
+      desc: "风口兑现律：终局翻盘不得依赖前文未铺垫的政策或行情"
+      expr: "not(is_resolution and introduces_new_key_clue)"
+
+  # 伏笔模板（Showrunner 种子计划用）
+  foreshadow_templates:
+    - {content: "一张旧报纸上的日期",     trigger: "日期将近，风向初露",   payoff: "前世记忆的大事如期而至，先手兑现"}
+    - {content: "收音机里的政策风声",     trigger: "风声在坊间传开",       payoff: "早半步布局的人吃下整段行情"}
+    - {content: "记忆里对不上的细节",     trigger: "当事人说出另一个版本", payoff: "记忆偏差暴露，先手优势反成陷阱"}
+
+  taboo_list:
+    - "未来记忆不能百分百准确——必须有模糊/偏差"
+    - "商业操作必须贴合时代背景——不能超前使用不存在的工具"
+    - "不允许无脑碾压——必须有商业对手和时代阻力"
+
+  evaluation_weights:
+    设定一致性: 0.25                           # 时代考据
+    情节连贯: 0.20
+    角色动机: 0.15
+    对话真实度: 0.15
+    主题深度: 0.10                             # 时代怀旧
+    感官细节: 0.10
+    套路检测: 0.05
+
+  active_critics: [setting_consistency, plot_coherence, character_motivation, dialogue_authenticity]
+
+  fusion_specific_rules:
+    memory_decay: "重生时间越久，未来记忆越模糊（远期事件比近期清晰）"
+    era_anchors: "必须嵌入真实时代符号（流行歌/品牌/事件）增强代入感"
+
+  # prompt 段：role/setting/characters/style/hard_requirements 五键
+  prompt:
+    role: "重生年代商战小说作者"
+    setting: "一九八五年，南方县城：个体户牌照刚放开，票证还没退出生活，街角的供销社和新兴的交易市场隔街相望"
+    characters: "陈劲秋（重生者，带着半生记忆回到命运岔路口，记得大势却记不清细节）、许曼（百货公司会计，算盘打得比谁都精，敢辞职下海的少数派）、赵广发（第一批倒腾电器的对手，路子野，消息灵）"
+    style: "800-1200字，扎实的年代质感，算盘声里有机锋，市声烟火中带怀旧暖意"
+    hard_requirements:
+      - "未来记忆必须有模糊与偏差：远期比近期清晰，关键细节允许记错"
+      - "商业操作不得超越年代条件：支付、物流、信息渠道都要是当时存在的"
+      - "每章至少嵌入一个真实时代符号（流行歌、老品牌、街景或事件）"
+      - "对手与时代阻力必须真实有效——禁止靠记忆一路无脑碾压"
+
+  # phase_beats：Todorov 5 态（重来—借势—回望结构，primitive 限八种原语）
+  phase_beats:
+    equilibrium:
+      - {id: rebirth_node, desc: "重生节点：回到命运岔路口，家徒四壁", primitive: GoalFormation}
+    disruption:
+      - {id: first_pot_of_gold, desc: "第一桶金：靠模糊记忆抓住的第一个机会", primitive: TurningPoint}
+      - {id: memory_slips, desc: "记忆出现偏差：前世记得的事没有发生", primitive: Suspense}
+    recognition:
+      - {id: era_wind_seen, desc: "看清时代风口：比个人记忆更大的势", primitive: Revelation}
+      - {id: rival_squeeze, desc: "对手围剿：资本与人情的双重挤压", primitive: Conflict}
+    repair:
+      - {id: all_in_choice, desc: "押上全部身家的抉择", primitive: Sacrifice}
+      - {id: turning_battle, desc: "商战翻盘：借势而起的关键一战", primitive: Conflict}
+    new_equilibrium:
+      - {id: empire_settled, desc: "商业版图落定，前世遗憾逐一了却", primitive: Recognition}
+      - {id: next_decade_hook, desc: "尾声留扣：下一个十年风口的隐约轮廓", primitive: Suspense}
+
+  # blend_domains：跨域融合的领域池
+  blend_domains: ["八十年代个体经济", "票证与供销社体系", "南下打工潮与特区建设"]
+
+  # pacing_targets：键名对齐 PacingScore 四字段，值为 [min, max] 区间
+  pacing_targets:
+    reversal_density: [0.3, 0.5]
+    avg_reversal_magnitude: [0.3, 0.6]
+    pacing_consistency: [0.6, 0.9]
+    cliffhanger_strength: [0.4, 0.7]

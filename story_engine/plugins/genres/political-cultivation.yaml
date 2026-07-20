@@ -1,0 +1,117 @@
+# 题材插件：权谋修仙（political_thriller × xianxia，rule_collision 融合）
+# 结构对齐 mystery.yaml / romance.yaml；内容自本包 fusion 元数据派生
+manifest_version: 1
+name: political-cultivation
+extension_point: story.genre
+activation_events: ["on_genre:political-cultivation"]
+fusion:
+  type: rule_collision
+  parent_genres: [political_thriller, xianxia]
+  core_conflict: "权力的游戏（阴谋制衡利益交换） vs 修仙（个人实力至上）——个人武力能否碾压制度？"
+  fusion_formula: "政治权谋 + 修真实力体系 + 宗门政治 + '实力vs权术'博弈"
+
+culture_bound: false
+allowed_cultures: ["*"]
+
+params:
+  pacing_curve: "入门宗门→实力初显→卷入权斗→实力与权术的博弈→巅峰对决"
+  power_system: "cultivation_political"      # 修为=政治资本
+  emotion_arcs: [man_in_hole, oedipus]
+  conflict_types:
+    - {type: political, weight: 0.4}         # 宗门/朝堂权谋
+    - {type: physical, weight: 0.25}         # 修为对决
+    - {type: cognitive, weight: 0.2}         # 阴谋识破
+    - {type: relational, weight: 0.15}       # 盟友/棋子
+  information_distribution: layered_scheme   # 多层阴谋
+  max_red_herrings: 4
+  resolution_pattern: "实力+权术的双赢 or 认清'最高权力在天道不在人间'"
+  main_track: A
+  theme_track: E
+  payoff_window: 3
+  beats_per_chapter: 4
+
+  # 五轨道（Showrunner 调度对象 — 自 core_conflict/fusion_formula 推导：
+  # 实力vs权术主线 + 派系倾轧 + 高修为低地位张力 + 朝堂宗门局单元 + 权力归属主题）
+  tracks:
+    - {id: A, name: "主线·实力与权术的博弈", arc_type: Serialized, archetype: Quest,   progress: 0.0, last_touched: 0}
+    - {id: B, name: "副线·宗派倾轧的罗网",   arc_type: Serialized, archetype: Monster,  progress: 0.0, last_touched: 0}
+    - {id: C, name: "副线·高修为低地位之困", arc_type: Serialized, archetype: Tragedy, progress: 0.0, last_touched: 0}
+    - {id: D, name: "单元剧·朝堂与宗门的局", arc_type: Anthology,  archetype: Quest,    progress: 0.0, last_touched: 0, min_main_progress: 0.3}
+    - {id: E, name: "主题·权力在天道还是人间", arc_type: Serialized, archetype: Rebirth, progress: 0.0, last_touched: 0}
+
+  rule_packs: [sanderson-laws]  # 原 world_rules_ref 改名（P7.4 L5 引用合并）
+  # 世界规则（Z3 SMT 硬约束 — expr 限事实词汇表）
+  world_rules:
+    - id: no_brute_force_finale
+      kind: bool
+      desc: "制度制约律：终局不得靠神通武力一次性碾压了结政治死结"
+      expr: "not(has_supernatural and is_resolution)"
+    - id: scheme_foreshadowed
+      kind: bool
+      desc: "权谋兑现律：终局的翻盘不得凭空引入前文未铺垫的阴谋"
+      expr: "not(is_resolution and introduces_new_key_clue)"
+
+  # 伏笔模板（Showrunner 种子计划用）
+  foreshadow_templates:
+    - {content: "一句不合身份的敬语", trigger: "说话人再次登场",   payoff: "敬语指向其真实站队与背后主使"}
+    - {content: "资源分配的微末倾斜", trigger: "月底功过簿核对",   payoff: "倾斜连成线，牵出派系暗账"}
+    - {content: "议事时缺席的空位",   trigger: "空位主人终于露面", payoff: "缺席者正是局中真正的执棋人"}
+
+  taboo_list:
+    - "不允许纯实力碾压解决政治问题——制度有制约机制"
+    - "权谋必须有真实利益逻辑——不是为阴谋而阴谋"
+    - "修为不能与政治地位划等号——必须存在'高修为低地位'的张力"
+
+  evaluation_weights:
+    情节连贯: 0.25
+    角色动机: 0.20
+    设定一致性: 0.20
+    主题深度: 0.15                             # 权力本质
+    对话真实度: 0.10
+    套路检测: 0.05
+    感官细节: 0.05
+
+  active_critics: [plot_coherence, character_motivation, setting_consistency]
+
+  fusion_specific_rules:
+    power_check: "每次用武力解决问题，后续必须产生政治后果（被忌惮/被围剿）"
+    sect_as_faction: "宗门=政党——有派系、有资源、有意识形态"
+
+  # prompt 段：role/setting/characters/style/hard_requirements 五键
+  prompt:
+    role: "权谋修仙小说作者"
+    setting: "架空王朝与修行宗门并立：朝堂以俸禄与册封笼络宗门，宗门以战力与声望要挟朝堂，新晋弟子的每一次破境都在改写筹码"
+    characters: "裴玄度（寒门出身的内门新锐，剑骨天成却不懂站队）、萧执（监国世子，以天下为棋局，擅长把恩情做成枷锁）、苍梧宗主（闭关多年，态度成谜的定盘星）"
+    style: "800-1200字，冷峻密实，机锋藏在礼数与座次里，打戏短促而代价沉重"
+    hard_requirements:
+      - "每次以武力破局，后续章节必须兑现政治后果（被忌惮、被围剿或被收编）"
+      - "权谋须有真实利益逻辑：每方的所求都能用资源、名分或安全解释"
+      - "保持'高修为低地位'张力：主角战力领先，话语权长期落后"
+      - "禁止纯实力碾压收尾——制度的制约机制必须真实运转"
+
+  # phase_beats：Todorov 5 态（立足—入彀—清算结构，primitive 限八种原语）
+  phase_beats:
+    equilibrium:
+      - {id: sect_foothold, desc: "入门立足：修为初显，派系格局铺陈", primitive: GoalFormation}
+    disruption:
+      - {id: drawn_into_game, desc: "被卷入权斗：一纸调令或一桩悬缺砸到头上", primitive: TurningPoint}
+      - {id: faction_courting, desc: "各方拉拢：恩情与枷锁同时递到", primitive: Conflict}
+    recognition:
+      - {id: plot_seen_through, desc: "识破局中局：谁在以他为刀", primitive: Revelation}
+      - {id: power_price_due, desc: "动用武力的政治后果找上门", primitive: Suspense}
+    repair:
+      - {id: alliance_gamble, desc: "押注结盟：以自身为筹码换一次翻盘", primitive: Sacrifice}
+      - {id: final_showdown, desc: "巅峰对决：实力与权术的总清算", primitive: Conflict}
+    new_equilibrium:
+      - {id: new_order_dealt, desc: "新秩序落子：赢家重新定义规矩", primitive: Recognition}
+      - {id: heavenly_hook, desc: "尾声留扣：天道之上还有更高的一手", primitive: Suspense}
+
+  # blend_domains：跨域融合的领域池
+  blend_domains: ["宗门资源与职司体系", "朝堂礼制与官僚生态", "军功与俸禄经济"]
+
+  # pacing_targets：键名对齐 PacingScore 四字段，值为 [min, max] 区间
+  pacing_targets:
+    reversal_density: [0.3, 0.6]
+    avg_reversal_magnitude: [0.4, 0.7]
+    pacing_consistency: [0.5, 0.8]
+    cliffhanger_strength: [0.6, 0.9]

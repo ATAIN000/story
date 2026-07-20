@@ -1,0 +1,119 @@
+# 题材插件：深空幽闭恐怖（science_fiction × horror，promise_subversion 融合）
+# 结构对齐 mystery.yaml / romance.yaml；内容自本包 fusion 元数据派生
+manifest_version: 1
+name: sci-fi-horror
+extension_point: story.genre
+activation_events: ["on_genre:sci-fi-horror"]
+fusion:
+  type: promise_subversion
+  parent_genres: [science_fiction, horror]
+  core_conflict: "科技的可控性承诺 vs 宇宙的不可知恐惧——密闭科技环境+技术失控/外星生物=无处可逃"
+  fusion_formula: "密闭科技环境 + 技术失控/外星生物 + '无处可逃'的幽闭感"
+
+culture_bound: false
+allowed_cultures: ["*"]
+
+params:
+  pacing_curve: "任务出发→异常初现→失控蔓延→孤立无援→终极恐惧→毁灭or逃生"
+  power_system: "failing_technology"         # 科技逐步失效
+  emotion_arcs: [riches_to_rags, man_in_hole]
+  conflict_types:
+    - {type: cosmic, weight: 0.4}            # 不可知威胁
+    - {type: physical, weight: 0.3}          # 生存/逃亡
+    - {type: cognitive, weight: 0.2}         # 理解威胁本质
+    - {type: internal, weight: 0.1}          # 理智崩溃
+  information_distribution: fragmentary       # 信息碎片化，永远不完整
+  max_red_herrings: 2
+  resolution_pattern: "极少人生还 + 威胁未被真正解决（留余韵）"
+  main_track: A
+  theme_track: E
+  payoff_window: 2
+  beats_per_chapter: 4
+
+  # 五轨道（Showrunner 调度对象 — 自 core_conflict/fusion_formula 推导：
+  # 威胁溯源主线 + 科技失效侵蚀 + 船员理智崩解 + 舱段怪谈单元 + 人类位置主题）
+  tracks:
+    - {id: A, name: "主线·密闭舱内的威胁溯源", arc_type: Serialized, archetype: Quest,   progress: 0.0, last_touched: 0}
+    - {id: B, name: "副线·逐步失效的科技",     arc_type: Serialized, archetype: Monster,  progress: 0.0, last_touched: 0}
+    - {id: C, name: "副线·船员的理智崩解",     arc_type: Serialized, archetype: Tragedy, progress: 0.0, last_touched: 0}
+    - {id: D, name: "单元剧·日志与舱段怪谈",   arc_type: Anthology,  archetype: Monster,  progress: 0.0, last_touched: 0, min_main_progress: 0.4}
+    - {id: E, name: "主题·人类在宇宙中的位置", arc_type: Serialized, archetype: Rebirth,  progress: 0.0, last_touched: 0}
+
+  # 世界规则（Z3 SMT 硬约束 — expr 限事实词汇表）
+  world_rules:
+    - id: threat_unknowable
+      kind: bool
+      desc: "不可知律：威胁不得被神器神力式的手段正面消灭——只能逃离或共存"
+      expr: "not(has_supernatural and is_resolution)"
+    - id: omen_before_horror
+      kind: bool
+      desc: "征兆先验律：终极恐怖的轮廓揭晓前，必须有层层异常征兆铺垫"
+      expr: "not(is_resolution and introduces_new_key_clue)"
+
+  # 伏笔模板（Showrunner 种子计划用）
+  foreshadow_templates:
+    - {content: "日志里被涂黑的一页",   trigger: "紫外线灯扫过纸面",   payoff: "涂黑字迹显形：上一班船员最后的警告"}
+    - {content: "循环播放的求救信号",   trigger: "信号里听出自己的声音", payoff: "求救者就是收信人——时间或认知已经出错"}
+    - {content: "舱壁上不该存在的划痕", trigger: "划痕比昨天多了一道",   payoff: "划痕的走向拼出威胁活动的路线"}
+
+  taboo_list:
+    - "威胁不能被轻易理解或击败——保持不可知"
+    - "不允许科技万能解围——设备必须失灵"
+    - "幸存者不能太多——维持绝望感"
+
+  evaluation_weights:
+    感官细节: 0.30                             # 幽闭恐惧氛围
+    情节连贯: 0.20
+    设定一致性: 0.15
+    主题深度: 0.15                             # 人类在宇宙中的渺小
+    角色动机: 0.10
+    对话真实度: 0.05
+    套路检测: 0.05
+
+  active_critics: [sensory_detail, plot_coherence, setting_consistency]
+
+  fusion_specific_rules:
+    enclosed_space: "核心场景必须密闭（飞船/深海站/隔离舱）——强化无处可逃"
+    tech_decay: "通讯/武器/光源逐步失效——资源焦虑驱动节奏"
+
+  # prompt 段：role/setting/characters/style/hard_requirements 五键
+  prompt:
+    role: "太空幽闭恐怖小说作者"
+    setting: "深空补给船'远灯号'：七名船员，返航途中截获一段来自已废弃矿星的求救信号，自此仪表一个接一个地说谎"
+    characters: "岑雾（大副，临危代理船长，冷静到近乎冷血）、老轨（轮机长，经验与迷信参半，最早察觉不对劲）、船载智能'舵手'（越来越答非所问的AI）"
+    style: "800-1200字，冷峻窒息，仪表读数与耳鸣般的静默交替，恐惧藏在工程细节里"
+    hard_requirements:
+      - "核心场景保持密闭：船舱、矿道、隔离舱——永远无处可逃"
+      - "科技必须逐步失效：通讯、光源、武器按节奏一项项垮掉"
+      - "威胁保持不可知：只给轮廓与后果，不给解释与图鉴"
+      - "幸存者必须稀少，且威胁在结尾未被真正解决"
+
+  # phase_beats：Todorov 5 态（日常—失控—余韵结构，primitive 限八种原语）
+  phase_beats:
+    equilibrium:
+      - {id: mission_routine, desc: "任务日常：轮值、仪表、甲板下的低鸣", primitive: GoalFormation}
+    disruption:
+      - {id: first_anomaly, desc: "异常初现：信号、读数或舱段的微小不对", primitive: Suspense}
+      - {id: systems_failing, desc: "失控蔓延：通讯与照明开始逐一失效", primitive: TurningPoint}
+    recognition:
+      - {id: threat_glimpse, desc: "威胁的一线轮廓：仍无法理解，但已无法否认", primitive: Revelation}
+      - {id: crew_fracture, desc: "船员间的信任崩裂，理智开始计价", primitive: Betrayal}
+    repair:
+      - {id: desperate_plan, desc: "孤注一掷的逃生方案，代价是留下的人", primitive: Sacrifice}
+      - {id: final_dark, desc: "终极恐惧显形：黑暗里最后的对峙", primitive: Conflict}
+    new_equilibrium:
+      - {id: few_survive, desc: "极少人生还，威胁并未被真正解决", primitive: Recognition}
+      - {id: signal_loop_hook, desc: "尾声留扣：仍在深空里循环的信号", primitive: Suspense}
+
+  # blend_domains：跨域融合的领域池
+  blend_domains: ["深空航运规程", "舱段生态与生命维持", "射电天文与信号学"]
+
+  # pacing_targets：键名对齐 PacingScore 四字段，值为 [min, max] 区间
+  pacing_targets:
+    reversal_density: [0.3, 0.6]
+    avg_reversal_magnitude: [0.5, 0.8]
+    pacing_consistency: [0.5, 0.8]
+    cliffhanger_strength: [0.7, 1.0]
+
+  # CONCOCT：恐怖在具体细节处顶到峰值（仪表读数/舱壁划痕的放大）
+  concreteness_shape: peak
