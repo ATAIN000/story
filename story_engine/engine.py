@@ -391,6 +391,13 @@ class StoryEngine:
             kernel = (_ChapterClosingKernelView(self.kernel, chapter_no)
                       if close_chapter else self.kernel)
             ir = IRBuilder(kernel, self.bundle).build(card, chapter_no)
+            # P5.11 评审传导5：close_chapter 追加的虚拟闭合 narrative_beat 只是
+            # 章切片右界标记，不该进 IR 事件列表（who=world 的合成 EventIR 是
+            # Realizer prompt 噪声）；真实闭合 beat 要等本章收尾才提交，此刻切片
+            # 内的 narrative_beat 必为合成标记，过滤不误伤真实事件
+            ir.events = [e for e in ir.events
+                         if not (e.who == "world"
+                                 and e.did == "act:narrative_beat")]
             active = [e for e in self.kernel.query_world("all_events")
                       if e.get("active", True)]
             fabula = FabulaBuilder().build(active)
@@ -401,11 +408,21 @@ class StoryEngine:
                 f"P5.6 IR-first 链路异常（{exc!r}），回退旧文本产出路径",
                 stacklevel=2)
             return None, None
-        if not text.strip():
+        # P5.11 评审传导4：text=None（Narrativizer 异常路径返回值）时
+        # text.strip() 会 AttributeError 逃逸兜底，一行防御
+        if not (text or "").strip():
             warnings.warn(
                 "P5.6 IR-first 产出空稿（Realizer LLM 故障），回退旧文本产出路径",
                 stacklevel=2)
             return None, None
+        # P5.11 评审传导1：Realizer 只输出正文（不产标题行），而 L5 gate 与引擎
+        # 标题解析（本文件 import re as _re 两处）均约定首行「标题：XXX」——
+        # 此处补上（LLM 首行已带标题则保留），否则真实 IR-first 路径 L5
+        # title_format 恒 FAIL、每章保底多烧一轮修正
+        import re as _re
+        first_line = text.lstrip().splitlines()[0] if text.strip() else ""
+        if not _re.match(r"^标题[:：]\S", first_line):
+            text = f"标题：第{chapter_no}章\n\n{text}"
         # 摘要（扁平小对象，非全量 IR —— 快照体积控制）：
         # beats/events/dialogue 计数 + texture 8 字段值 + 语言 + sjuzhet pov/order
         texture = asdict(ir.texture)

@@ -9,33 +9,17 @@
    （P5.9 textual→pipeline 接线缺口的端到端闭环验证）
 """
 import json
-import os
-import sys
-import tempfile
 import time
 import unittest
-from pathlib import Path
 
-# 必须在 import backend.main 之前生效：后端模块级单例按环境变量定项目目录，
-# 指到临时目录，避免测试事件写入真实项目 data/projects/yupei
-_TMP = tempfile.mkdtemp(prefix="hitl_api_")
+from fastapi.testclient import TestClient
 
-# backend.main 导入时会 _load_dotenv()（.env 含真实 LLM key 等），
-# os.environ.setdefault 会污染同进程其他测试（实测：key 泄漏使 LLMPool.is_mock
-# 变 False，test_engine 的 StoryEngineMockEnded 断言失败）。导入前快照、导入后
-# 还原：backend 单例在导入时已捕获所需配置，还原不影响本文件对 backend 的使用。
-_saved_env = dict(os.environ)
-os.environ["STORY_ENGINE_PROJECT_DIR"] = _TMP
+# P5.11：导入隔离样板（临时项目目录 + env 快照/还原）抽成 conftest 共享
+# helper；kernel 单例的 close 由 conftest 挂 atexit 统一处理（本文件不再
+# 自行 close——单例共享，先收尾会波及字母序靠后的 backend 使用方）
+from conftest import import_backend_main
 
-ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))
-
-from fastapi.testclient import TestClient  # noqa: E402
-
-import backend.main as backend  # noqa: E402
-
-os.environ.clear()
-os.environ.update(_saved_env)
+backend = import_backend_main()
 
 
 class TestHitlApi(unittest.TestCase):
@@ -47,10 +31,8 @@ class TestHitlApi(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls._ctx.__exit__(None, None, None)
-        try:
-            backend.kernel.close()
-        except Exception:
-            pass
+        # kernel.close 不在此处做：backend 单例与 test_ir_first_integration
+        # 等文件共享，由 conftest 的 atexit 统一收尾
 
     def test_1_three_endpoints_walkthrough(self):
         # POST /api/intervene（intent 类）→ 200 + ok=True
@@ -116,7 +98,8 @@ class TestHitlApi(unittest.TestCase):
         self.assertTrue(r.json()["ok"])
         self.assertFalse(r.json()["regenerated"])  # textual 恒不重生成
 
-        style_path = Path(_TMP) / "training_data" / "style.jsonl"
+        style_path = (backend.kernel.project_dir
+                      / "training_data" / "style.jsonl")
         self.assertTrue(style_path.exists())
         rows = [json.loads(line) for line in
                 style_path.read_text(encoding="utf-8").splitlines()
