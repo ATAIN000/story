@@ -297,3 +297,98 @@ button { font: inherit; cursor: pointer; border: none; background: none; color: 
 .gc-viol { margin-top: 6px; display: flex; flex-direction: column; gap: 4px; }
 .gc-viol .v { font-size: 11px; color: var(--ink2); border-left: 2px solid var(--danger); padding-left: 8px; line-height: 1.6; }
 .gc-viol .v b { color: var(--danger); font-weight: 600; }
+
+/* ==========================================================================
+   写作台 II（P6.7）—— 段落四操作 + rail 三区。迁移自 story.html：
+   fab 浮动条 :101-105 / :668-682，行内编辑器 :256-273 / :693-723，
+   重写面板 :265-273 / :727-771，记一笔面板 :780-809，诊断抽屉 :106-116 / :811-880，
+   rail flow-item :121-125 / :882-911。
+   评审口径（docs/前端对接评审与实施路径.md §8）：
+   - 8.2-#1：fab 贴附段落右上角（spec 原稿是底部居中浮条，改贴附）
+   - 8.2-#2：诊断抽屉降级为静态展示 evaluation.critiques（不再 mock DIAG_SCRIPTS）
+   - 8.2-#3：重写面板加 loading 态 + 重写次数提示（≥2 次显示「本段已重写 N 次」）
+   - 8.1-#3 / 意见 6：记一笔文案改实（不写「进 CFPG 池」，写「下章决策卡生效」）
+   ========================================================================== */
+
+/* fab 浮动条（贴附段落右上角，评审 8.2-#1） */
+.fab { position: absolute; top: -14px; right: 6px; z-index: 20;
+  display: flex; gap: 2px; background: var(--s2); border: 1px solid var(--line2);
+  border-radius: 6px; padding: 3px; animation: pop .13s; box-shadow: 0 2px 6px rgba(0,0,0,.08); }
+.fab button { font-size: 12px; padding: 5px 11px; border-radius: 4px; color: var(--ink2);
+  display: inline-flex; align-items: center; gap: 4px; }
+.fab button:hover { background: var(--s3); color: var(--primary); }
+.fab button[disabled] { opacity: .45; cursor: not-allowed; }
+.fab .fab-lock { font-size: 10px; color: var(--faint); padding: 5px 8px; }  /* 生成锁提示 */
+
+/* 段落选中态为本组件让出右上角 */
+.para.sel { padding-right: 12px; }
+/* 已改定视觉标记（行内编辑 / 重写采用 后 session 内记住，spec .fixed 下划线） */
+.para .fixed { border-bottom: 2px solid var(--accent); padding: 0 1px; }
+.para.editing { cursor: default; background: var(--s2) !important;
+  box-shadow: 0 0 0 1px var(--primary); border-radius: 6px; }
+
+/* 行内编辑器（spec :256-273） */
+.ie-ta { width: 100%; background: transparent; border: none; color: var(--ink);
+  font: 17px/1.9 var(--serif); resize: none; outline: none; padding: 0; }
+.ie-bar { display: flex; gap: 8px; align-items: center; margin-top: 8px;
+  padding-top: 8px; border-top: 1px dashed var(--line); flex-wrap: wrap; }
+.ie-hint { font-size: 10px; color: var(--faint); margin-right: auto; }
+.ie-ok { background: var(--primary); color: #fffdf8; font-size: 12px; font-weight: 600;
+  padding: 5px 14px; border-radius: 5px; }
+.ie-ok:hover { background: var(--primary-hover); }
+.ie-ok[disabled] { opacity: .5; cursor: not-allowed; }
+.ie-cancel { border: 1px solid var(--line); color: var(--ink2); font-size: 12px;
+  padding: 5px 12px; border-radius: 5px; }
+.ie-cancel:hover { border-color: var(--primary); color: var(--primary); }
+
+/* 重写 / 记一笔 / 诊断 共用的内联面板（spec .diag） */
+.diag { margin: 8px 0 12px; border-left: 2px solid var(--sky);
+  padding: 4px 0 4px 16px; animation: pop .18s; }
+.diag .d-t { font: 700 15px var(--serif); color: var(--sky); }
+.diag .d-b { font-size: 13px; line-height: 1.95; margin-top: 6px; color: var(--ink); }
+.diag .d-sys { font-size: 10px; color: var(--faint); margin-top: 8px; font-family: Menlo, monospace; }
+.diag .d-ask { font-size: 12px; color: var(--violet); margin-top: 10px; }
+.diag .d-opts { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.d-opt { text-align: left; border: 1px solid var(--line); border-radius: 6px;
+  padding: 9px 13px; font-size: 12.5px; transition: .12s; background: var(--s2); }
+.d-opt:hover { border-color: var(--primary); }
+.d-opt b { color: var(--primary); font-weight: 600; }
+.d-opt span { display: block; font-size: 11px; color: var(--faint); margin-top: 2px; }
+
+/* 重写面板：方向输入 + chips + diff 预览（spec :265-273） */
+.rw-ta { width: 100%; background: var(--s2); border: 1px solid var(--line);
+  border-radius: 6px; color: var(--ink); padding: 9px 12px; font: 13px/1.7 var(--sans);
+  resize: vertical; margin-top: 8px; }
+.rw-ta:focus { outline: 1px solid var(--primary); }
+.rw-chips { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0; }
+.rw-chip { font-size: 11px; padding: 3px 10px; border-radius: 5px; border: 1px solid var(--line);
+  color: var(--ink2); cursor: pointer; background: var(--s2); }
+.rw-chip:hover { border-color: var(--primary); color: var(--primary); }
+.rw-chip.on { border-color: var(--primary); color: var(--primary); background: var(--primary-tint); }
+.rw-diff { margin-top: 10px; padding: 11px 13px; border-left: 2px solid var(--accent);
+  background: var(--s2); font: 14px/2 var(--serif); }
+.rw-diff .del { color: var(--danger); text-decoration: line-through; opacity: .7; }
+.rw-diff .add { color: var(--accent); margin-top: 6px; }
+.rw-empty { margin-top: 10px; padding: 10px 13px; border-left: 2px solid var(--faint);
+  background: var(--s2); font-size: 12.5px; color: var(--ink2); }
+.rw-count { font-size: 10px; color: var(--faint); }    /* 重写次数提示（评审 8.1-#3） */
+.rw-count.warn { color: var(--primary); }
+.rw-loading { display: inline-flex; align-items: center; gap: 6px; font-size: 12px;
+  color: var(--primary); }    /* 重写生成中（评审 8.2-#3） */
+
+/* rail 介入流 flow-item（spec :121-125） */
+.flow-item { border: 1px solid var(--line); border-radius: 6px; background: var(--s2);
+  padding: 8px 10px; font-size: 11px; margin-bottom: 7px; animation: pop .2s; }
+.flow-item .fh { display: flex; gap: 6px; align-items: center; }
+.flow-item .ft { font-size: 10px; padding: 1px 6px; border-radius: 3px; font-weight: 700;
+  background: var(--s3); }
+.flow-item .fm { margin-left: auto; font-size: 10px; color: var(--faint); font-family: Menlo, monospace; }
+.flow-item .fb { color: var(--ink2); margin-top: 4px; line-height: 1.6; }
+.flow-empty { font-size: 11px; color: var(--faint); line-height: 1.7; }
+/* CFPG 本章关联：回收 / 种下 tag */
+.ctx-row { font-size: 11.5px; color: var(--ink2); line-height: 1.7; margin: 4px 0; }
+.ctx-row b { color: var(--ink); }
+.ctx-fs { font-size: 11px; color: var(--ink2); padding: 6px 8px; border-left: 2px solid var(--accent);
+  background: var(--s2); margin: 4px 0; line-height: 1.6; }
+.ctx-fs.overdue { border-left-color: var(--danger); }
+.ctx-empty { font-size: 11px; color: var(--faint); line-height: 1.7; }

@@ -32,16 +32,30 @@ export function toCardVM(card) {
     midTouch: card.mid_touch ?? [],        // 中触轨道
     dormant: card.dormant ?? [],           // 休眠轨道
     sternberg: card.sternberg_distribution ?? {},
-    activePayoffs: card.active_payoffs ?? [],
+    // CFPG 到期回收（rail「本章关联·回收中」）：源 ForeshadowPool.due_payoffs
+    activePayoffs: (card.active_payoffs ?? []).map(p => ({
+      id: p.foreshadow_id ?? '',
+      content: p.content ?? '',
+      payoff: p.payoff ?? '',
+      trigger: p.trigger ?? '',
+      plantedChapter: p.planted_chapter ?? 0,
+      overdue: !!p.overdue,                // 老化债（priority 升级）
+    })),
     beats: card.beats ?? [],               // [{scene, primitives, ...}]
     snyder: card.snyder_coverage ?? {},
     targetArc: card.target_arc ?? '',
     gaps: card.gaps ?? [],
     endingHook: card.ending_hook ?? null,
     themeTouch: card.theme_touch ?? false,
-    newForeshadows: card.new_foreshadows ?? [],
+    // 本章种下的伏笔计划（rail「本章关联·本章种下」）
+    newForeshadows: (card.new_foreshadows ?? []).map(f => ({
+      track: f.track ?? '',
+      content: f.content ?? '',
+      trigger: f.trigger ?? '',
+      payoff: f.payoff ?? '',
+    })),
     planGoals: card.plan_goals ?? [],
-    poolStats: card.pool_stats ?? {},
+    poolStats: card.pool_stats ?? {},      // {active, overdue, queued}
     pacing: card.pacing ?? null,
     trackNames: card.track_names ?? {},    // {轨道id: 展示名}（P3.10）
   }
@@ -213,6 +227,93 @@ export function toGenReportVM(rec) {
       order: ir.order ?? '',
     } : null,
     fellBack: !ir && mode !== '' && mode !== 'scripted',
+  }
+}
+
+/* ===== 介入事件（GET /api/interventions → VM，rail 介入流） =====
+ * 源：event_store 中 event_type=author_intervention 的 WorldEvent。
+ * 后端原样返回 {event_id, event_type, timestamp, world_tick, branch_id, payload}；
+ * payload 形如 {type, reason, chapter?, before?, after?, goal_update?, ...}。
+ * 这里只挑展示字段，类型色由 rail 模板按 ivType 查表。 */
+const IV_LABEL = {
+  textual: '改字',
+  structural: '诊断',
+  character: '人物',
+  intent: '记一笔',
+  evaluation: '诊断',
+}
+
+export function toInterventionVM(e) {
+  if (!e) return null
+  const p = e.payload ?? {}
+  const type = p.type ?? ''
+  const ivLabel = IV_LABEL[type] ?? type
+  /* 摘要：按类型取最具识别度的字段，超过 48 字截断 */
+  let body = ''
+  if (type === 'textual') {
+    const no = p.chapter ?? '?'
+    const before = String(p.before ?? '').slice(0, 22)
+    const after = String(p.after ?? '').slice(0, 22)
+    body = `第${no}章 ¶ ${before || '…'} → ${after || '…'}`
+  } else if (type === 'intent') {
+    const note = p.goal_update || p.constraint || p.reason || ''
+    body = String(note).slice(0, 48) || '作者意图已记录'
+  } else if (type === 'evaluation') {
+    body = `第${p.chapter ?? '?'}章 · ${String(p.note ?? p.quality ?? '').slice(0, 40) || '质量标注'}`
+  } else if (type === 'structural') {
+    body = `第${p.chapter ?? '?'}章 · ${p.action ?? '结构介入'}`
+  } else if (type === 'character') {
+    body = `${p.character ?? '?'} · ${p.belief ?? p.forget ?? '人物介入'}`
+  } else {
+    body = String(p.reason ?? type ?? '介入').slice(0, 48)
+  }
+  return {
+    id: e.event_id ?? '',
+    tick: e.world_tick ?? 0,
+    timestamp: e.timestamp ?? '',
+    ivType: type,
+    ivLabel,
+    body,
+    reason: p.reason ?? '',
+  }
+}
+
+/* ===== 训练统计（GET /api/training/stats → VM，rail 训练信号） =====
+ * 源：backend/main.py training_stats_snapshot：{skills, preferences, style, recent_skills}。
+ * 只取三个计数 + recent_skills 首条名（供技能结晶 hover 展示）。 */
+export function toTrainingStatsVM(s) {
+  if (!s) return null
+  return {
+    skills: s.skills ?? 0,
+    preferences: s.preferences ?? 0,
+    style: s.style ?? 0,
+    recent: (s.recent_skills ?? []).map(r => ({
+      name: r.name ?? '',
+      source: r.source_intervention ?? '',
+      createdAt: r.created_at ?? '',
+    })),
+  }
+}
+
+/* ===== 本章关联（chapter VM + card VM → rail「本章关联」VM，CFPG） =====
+ * 消费 chapter.card（决策卡 VM）+ chapter.foreshadowUpdates。决策卡 VM 已在
+ * toCardVM 里铺好 activePayoffs/newForeshadows/poolStats（P6.7 段落任务里继承
+ * 的 CFPG 字段展开）。这里只是整合成 rail 友好的三段视图。 */
+export function toChapterContextVM(chapter) {
+  if (!chapter) return null
+  const card = chapter.card ?? {}
+  const fs = Array.isArray(chapter.foreshadowUpdates)
+    ? { planted: [], payedOff: [] }
+    : (chapter.foreshadowUpdates ?? {})
+  return {
+    /* 到期回收中（CFPG due_payoffs） */
+    payoffs: card.activePayoffs ?? [],
+    /* 本章种下（决策卡 new_foreshadows + 实际 planted） */
+    newSeeds: card.newForeshadows ?? [],
+    plantedCount: fs.planted?.length ?? 0,
+    payedCount: fs.payed_off?.length ?? 0,
+    /* 池状态 */
+    pool: card.poolStats ?? {},
   }
 }
 

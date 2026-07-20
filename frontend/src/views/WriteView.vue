@@ -13,6 +13,7 @@ import EmptyState from '../components/EmptyState.vue'
 import ChapterBinder from '../components/write/ChapterBinder.vue'
 import ManuscriptPanel from '../components/write/ManuscriptPanel.vue'
 import GenConsole from '../components/write/GenConsole.vue'
+import ContextRail from '../components/write/ContextRail.vue'
 
 const props = defineProps({
   project: { type: Object, default: null },
@@ -226,6 +227,30 @@ const chFs = computed(() => {
   const payed = (f.payed_off ?? []).length
   return planted || payed ? { planted, payed } : null
 })
+
+/* ---- rail 三区数据（P6.7）：介入流 + 训练信号；本章关联取 activeChapter ---- */
+const interventions = ref([])
+const trainingStats = ref(null)
+
+async function refreshRail() {
+  /* 并发拉两份数据；任一失败不阻塞另一份（rail 为辅助显示，容错优先） */
+  const tasks = [
+    api.interventions().then(d => { interventions.value = d }).catch(() => {}),
+    api.trainingStats().then(d => { trainingStats.value = d }).catch(() => {}),
+  ]
+  await Promise.all(tasks)
+}
+
+/* 项目快照变化（含介入后 emit('refresh')）→ 刷新 rail */
+watch(() => props.project, () => { refreshRail() }, { immediate: true })
+
+/* 段落介入/文本更新后立即同步 rail（不等下次 refresh） */
+function onParagraphIntervened() {
+  emit('refresh')   // 触发父组件重拉项目快照 → watch(props.project) 再刷 rail
+}
+function onParagraphTextUpdated() {
+  emit('refresh')   // textual 回写后刷新本章正文
+}
 </script>
 
 <template>
@@ -261,13 +286,16 @@ const chFs = computed(() => {
                   @rollback-confirm="doRollback" />
 
       <ManuscriptPanel v-if="activeChapter" :key="activeChapter.no + '@' + activeChapter.timestamp" :chapter="activeChapter"
-                       :reviewing="reviewing.has(activeChapter.no)" :fs-size="fsSize" />
+                       :reviewing="reviewing.has(activeChapter.no)" :fs-size="fsSize" :generating="generating"
+                       @intervened="onParagraphIntervened" @text-updated="onParagraphTextUpdated" />
       <EmptyState v-else icon="pen" title="还没有章节"
         desc="批准方案后，第一章手稿会出现在这里。" />
     </div>
 
-    <!-- 右栏：本章档案（chapter VM 真值） -->
+    <!-- 右栏：rail 三区（介入流 / 训练信号 / 本章关联 CFPG） + 本章档案 -->
     <aside class="rail">
+      <ContextRail :interventions="interventions" :training-stats="trainingStats"
+                   :chapter="activeChapter" />
       <div v-if="activeChapter" class="rail-sec">
         <div class="rail-t">本章档案</div>
         <div class="mini-stat"><span>篇幅</span><b>{{ activeChapter.paraCount }} 段 · {{ chChars }} 字</b></div>
