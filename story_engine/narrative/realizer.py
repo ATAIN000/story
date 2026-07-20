@@ -21,6 +21,9 @@ burstiness / show-not-tell 不做二次 LLM：句长波动与 show-not-tell 写�
 指令（`_texture_block` / `_craft_rules`），由这 1 次生成调用承担（决策5）。
 LLM 设施：callable 注入（P4.2 critic_parliament 同款签名），生产取
 kernel.llm_call；无设施/异常 → 返回 ""（不阻塞，同 critic 兜底哲学）。
+
+P6.3：`rewrite_paragraph()` 单段重写（写作台核心卖点）——本章骨架摘要 +
+前后段衔接上下文 + 作者方向，恰好 1 次 LLM 调用，只产文本不回写。
 """
 from __future__ import annotations
 
@@ -88,6 +91,60 @@ class LanguageRealizer:
             return (getattr(resp, "text", "") or "").strip()
         except Exception:
             return ""
+
+    # ---------- P6.3：单段重写（写作台核心卖点，恰好 1 次 LLM 调用） ----------
+    async def rewrite_paragraph(self, *, ir_context: str, original: str,
+                                prev_para: str | None = None,
+                                next_para: str | None = None,
+                                direction: str = "", bundle=None) -> str:
+        """单段重写：本章骨架摘要 + 前后段衔接上下文 + 作者方向 → 重写段文本。
+
+        无设施/异常 → ""（同 realize 兜底哲学，由调用方转 note 说明）。
+        P6.3 简化决策（成本/延迟）：单段重写不接 critic 自评迭代（章级质量
+        门禁仍在 generate 路径）；本方法只产文本不回写——正文回写由前端
+        「采用」走 textual 介入通道（P6.1 engine.update_chapter_text）。
+        """
+        prompt = self._paragraph_prompt(
+            ir_context=ir_context, original=original, prev_para=prev_para,
+            next_para=next_para, direction=direction, bundle=bundle)
+        if self._llm_call is None:
+            return ""
+        try:
+            resp = await self._llm_call(
+                prompt, purpose="rewrite_paragraph", temperature=0.7,
+                max_tokens=2048)
+            return (getattr(resp, "text", "") or "").strip()
+        except Exception:
+            return ""
+
+    def _paragraph_prompt(self, *, ir_context: str, original: str,
+                          prev_para: str | None, next_para: str | None,
+                          direction: str, bundle) -> str:
+        """单段重写 prompt（中文模板；英文由 EnglishRealizer 覆盖）。
+
+        风格要求按 P6.3 落地要点简化为「字数与原段相当 + 插件 style/
+        hard_requirements」，不搬整章 texture 8 参数（段级任务用不上全套）。
+        """
+        pcfg = _plugin_prompt_config(bundle)
+        hard_reqs = [
+            "只输出重写后的该段正文本身（不含标题行、不含前后段）",
+            f"字数与原段相当（原段约 {len(original)} 字）",
+            pcfg["style"],
+            *(pcfg.get("hard_requirements") or []),
+        ]
+        hard_txt = "\n".join(f"{i}. {r}" for i, r in enumerate(hard_reqs, 1))
+        return (
+            f"你是{pcfg['role']}。背景：{pcfg['setting']}。\n"
+            f"人物：{pcfg['characters']}。\n\n"
+            f"=== 本章故事骨架（IR 概念级摘要，把握走向与衔接） ===\n"
+            f"{ir_context}\n\n"
+            f"=== 待重写段落（仅重写此段） ===\n{original}\n\n"
+            f"=== 前一段（衔接参考，不要改动） ===\n"
+            f"{prev_para or '（本章首段，无前文）'}\n\n"
+            f"=== 后一段（衔接参考，不要改动） ===\n"
+            f"{next_para or '（本章末段，无后文）'}\n\n"
+            f"=== 作者方向 ===\n{direction or '保持情节与视角不变，优化表达'}\n\n"
+            f"=== 硬要求 ===\n{hard_txt}")
 
     # ---------- prompt 组装 ----------
     def _render_prompt(self, ir: NarrativeIR, sjuzhet=None, bundle=None,
@@ -282,6 +339,36 @@ class EnglishRealizer(LanguageRealizer):
             f"=== Hard requirements ===\n{hard_txt}\n\n"
             "Re-create the chapter in English from this skeleton and these "
             "texture targets. Output the prose only.")
+
+    def _paragraph_prompt(self, *, ir_context: str, original: str,
+                          prev_para: str | None, next_para: str | None,
+                          direction: str, bundle) -> str:
+        """P6.3 single-paragraph rewrite prompt (English template). Style rules
+        simplified per task brief: match the original length + plugin style/
+        hard_requirements (full texture params not needed at paragraph level)."""
+        pcfg = _plugin_prompt_config(bundle)
+        hard_reqs = [
+            "Output only the rewritten paragraph itself (no title line, no "
+            "neighboring paragraphs)",
+            f"Match the original length (~{len(original)} characters)",
+            pcfg["style"],
+            *(pcfg.get("hard_requirements") or []),
+        ]
+        hard_txt = "\n".join(f"{i}. {r}" for i, r in enumerate(hard_reqs, 1))
+        return (
+            f"You are {pcfg['role']}. Setting: {pcfg['setting']}.\n"
+            f"Characters: {pcfg['characters']}.\n\n"
+            f"=== Chapter skeleton (concept-level IR summary — for direction "
+            f"and continuity) ===\n{ir_context}\n\n"
+            f"=== Paragraph to rewrite (rewrite this one only) ===\n"
+            f"{original}\n\n"
+            f"=== Previous paragraph (continuity reference, do not change) "
+            f"===\n{prev_para or '(first paragraph of the chapter)'}\n\n"
+            f"=== Next paragraph (continuity reference, do not change) ===\n"
+            f"{next_para or '(last paragraph of the chapter)'}\n\n"
+            f"=== Author's direction ===\n"
+            f"{direction or 'Keep plot and POV unchanged; polish the prose'}\n\n"
+            f"=== Hard requirements ===\n{hard_txt}")
 
     def _texture_block(self, t: TextureParams) -> str:
         mean, var = t.sentence_length_distribution

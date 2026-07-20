@@ -1204,6 +1204,93 @@ class StoryEngine:
         self._write_chapters(chapters)
         return "updated"
 
+    # ============ P6.3：段落重写（B2，写作台核心卖点） ============
+    @staticmethod
+    def _split_paragraphs(text: str) -> list[str]:
+        """段落协议（P6.3，与前端写作台工具函数约定一致，接口文档注明）：
+        final.text 按 \\n\\n 切分，剔除空白块；首块若为标题行（^标题[:：]）
+        不计入段序号——para_index 从正文第一段起 0 基。"""
+        import re as _re
+        paras = [p.strip() for p in text.split("\n\n")]
+        paras = [p for p in paras if p]
+        if paras and _re.match(r"^标题[:：]", paras[0]):
+            paras = paras[1:]
+        return paras
+
+    @staticmethod
+    def _chapter_ir_context(rec: dict) -> str:
+        """单段重写的本章骨架摘要 —— 复用 chapters.json 既有记录：决策卡
+        beats + narrative_ir 摘要（pov/order/计数，仅 IR-first 章有）。
+        比 realizer._ir_summary 简化：不重建全量 IR（chapters.json 只存
+        摘要；重跑 IRBuilder 切章事件成本高，段级任务用不上）。"""
+        lines = []
+        for b in (rec.get("decision_card") or {}).get("beats") or []:
+            prims = ",".join(str(p) for p in (b.get("primitives") or [])) or "-"
+            lines.append(
+                f"[{b.get('beat_id', '?')}] phase={b.get('phase', '?')} "
+                f"tension={b.get('tension', '?')} "
+                f"track={b.get('track_name', '')} primitives={prims}")
+        ir = rec.get("narrative_ir")
+        if ir:
+            lines.append(
+                f"[ir] pov={ir.get('pov')} order={ir.get('order')} "
+                f"beats={ir.get('beats')} events={ir.get('events')} "
+                f"dialogue={ir.get('dialogue')}")
+        return "\n".join(lines) or "（无骨架记录）"
+
+    async def rewrite_paragraph(self, chapter: int, para_index: int,
+                                direction: str = "", *, llm_call=None) -> dict:
+        """P6.3(B2)：段落重写 —— Realizer 单段渲染（IR 摘要 + 方向 +
+        前后段上下文），返回 {original, rewritten} diff 对。
+
+        - 只读不写：本方法不回写正文；前端「采用」时走 textual 介入通道
+          （P6.1 update_chapter_text，before=original 首现处替换）。
+        - 成本：恰好 1 次 LLM 调用（realizer.rewrite_paragraph）；不接
+          critic 自评迭代（本阶段简化：单段重写不过议会，注释见 realizer）。
+        - llm_call：测试 fake 注入点（critic/realizer 同款 callable 风格）；
+          None → kernel.llm_call。
+        返回 dict：
+          status="ok"           {chapter, para_index, original, rewritten, note}
+                                rewritten="" 时 note 说明（LLM 空稿/异常兜底，
+                                不抛错，前端统一按空重写处理）
+          status="not_found"    无此章号记录 → 端点 404
+          status="rolled_back"  命中章全部已 rolled_back（判据同
+                                update_chapter_text / project_snapshot）→ 409
+          status="out_of_range" para_index 越界（含负数），带 para_count → 404
+        """
+        chapters = self._read_chapters()
+        head = self.kernel.query_world("head_tick")
+        matches = [ch for ch in chapters
+                   if str(ch.get("chapter")) == str(chapter)]
+        if not matches:
+            return {"status": "not_found"}
+        active = [ch for ch in matches
+                  if not ch.get("superseded") and ch["tick_range"][1] <= head]
+        if not active:
+            return {"status": "rolled_back"}
+        target = active[-1]
+        paras = self._split_paragraphs(
+            (target.get("final") or {}).get("text") or "")
+        if para_index < 0 or para_index >= len(paras):
+            return {"status": "out_of_range", "para_count": len(paras)}
+        realizer = Narrativizer(
+            self.kernel, self.bundle, llm_call=llm_call
+        ).select_realizer(self.bundle.language)
+        rewritten = await realizer.rewrite_paragraph(
+            ir_context=self._chapter_ir_context(target),
+            original=paras[para_index],
+            prev_para=paras[para_index - 1] if para_index > 0 else None,
+            next_para=(paras[para_index + 1]
+                       if para_index + 1 < len(paras) else None),
+            direction=direction, bundle=self.bundle)
+        note = None
+        if not rewritten:
+            note = ("LLM 空稿或调用异常（mock/未配置/网络故障），本次未产出"
+                    "重写文本；原段未改动，可重试")
+        return {"status": "ok", "chapter": target["chapter"],
+                "para_index": para_index, "original": paras[para_index],
+                "rewritten": rewritten, "note": note}
+
     def reset(self) -> dict:
         # 停掉 Actor 循环
         try:

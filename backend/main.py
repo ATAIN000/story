@@ -13,6 +13,7 @@ API：
   GET  /api/interventions      【v0.5 新增】介入历史（author_intervention 事件流）
   POST /api/hitl/respond       【v0.5 新增】应答 pending 的 HITL 请求
   GET  /api/training/stats     【P6.1 新增】训练信号计数（skills/preferences/style）
+  POST /api/paragraph/rewrite  【P6.3 新增】段落重写（Realizer 单段渲染，只读不写）
 静态：/ → frontend/dist（Vue SPA）
 """
 from __future__ import annotations
@@ -123,6 +124,13 @@ class HitlRespondReq(BaseModel):
     """HITL 应答 body（response 可为任意 JSON：选项/文本/结构化对象）"""
     request_id: str
     response: Any = None
+
+
+class ParagraphRewriteReq(BaseModel):
+    """段落重写 body（P6.3 契约）；direction 可空（引擎给默认润色方向）"""
+    chapter: int
+    para_index: int
+    direction: str = ""
 
 
 @app.get("/api/config")
@@ -270,6 +278,37 @@ def training_stats_snapshot(registry, training_dir: Path) -> dict:
 def training_stats():
     """【P6.1 B5】训练信号计数：{skills, preferences, style, recent_skills}"""
     return training_stats_snapshot(kernel.registry, training_pipeline.training_dir)
+
+
+# ---------- 段落重写（P6.3 B2，写作台核心卖点：Realizer 单段渲染） ----------
+@app.post("/api/paragraph/rewrite")
+async def paragraph_rewrite(req: ParagraphRewriteReq):
+    """【P6.3】单段重写 {chapter, para_index, direction} → {original, rewritten}。
+
+    段落协议：final.text 按 \\n\\n 切分、剔除空白块，首块标题行（^标题[:：]）
+    不计入段序号，para_index 从正文第一段起 0 基（与前端工具函数一致）。
+    只读不写：前端「采用」时走 textual 介入回写（P6.1 /api/intervene）。
+    成本：每次重写恰好 1 次 LLM 调用，不接自评迭代（本阶段简化）。
+    兜底：LLM 空稿/异常 → 200 + rewritten="" + note（不 500）；
+    章节不存在/段序号越界 → 404；rolled_back 章 → 409。
+    """
+    result = await engine.rewrite_paragraph(
+        req.chapter, req.para_index, req.direction)
+    status = result["status"]
+    if status == "not_found":
+        raise HTTPException(
+            status_code=404, detail=f"无此章节：第{req.chapter}章")
+    if status == "rolled_back":
+        raise HTTPException(
+            status_code=409,
+            detail=f"第{req.chapter}章已 rolled_back，不可重写（可回滚恢复后重试）")
+    if status == "out_of_range":
+        raise HTTPException(
+            status_code=404,
+            detail=f"段序号越界：para_index={req.para_index}"
+                   f"（本章共 {result.get('para_count', 0)} 段）")
+    return {k: result[k]
+            for k in ("chapter", "para_index", "original", "rewritten", "note")}
 
 
 @app.post("/api/hitl/respond")
