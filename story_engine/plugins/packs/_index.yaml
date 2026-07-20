@@ -345,48 +345,6 @@
   status: active
   source: hermes
   collected_at: "2026-07-20"
-- pack: game-reality-invasion
-  extension_point: story.genre
-  version: "0.1"
-  status: active
-  source: hermes
-  collected_at: "2026-07-20"
-- pack: historical-isekai
-  extension_point: story.genre
-  version: "0.1"
-  status: active
-  source: hermes
-  collected_at: "2026-07-20"
-- pack: historical-system
-  extension_point: story.genre
-  version: "0.1"
-  status: active
-  source: hermes
-  collected_at: "2026-07-20"
-- pack: horror-comedy
-  extension_point: story.genre
-  version: "0.1"
-  status: active
-  source: hermes
-  collected_at: "2026-07-20"
-- pack: infinite-dungeon
-  extension_point: story.genre
-  version: "0.1"
-  status: active
-  source: hermes
-  collected_at: "2026-07-20"
-- pack: isekai-detective
-  extension_point: story.genre
-  version: "0.1"
-  status: active
-  source: hermes
-  collected_at: "2026-07-20"
-- pack: isekai-romance
-  extension_point: story.genre
-  version: "0.1"
-  status: active
-  source: hermes
-  collected_at: "2026-07-20"
 - pack: meta-isekai-dual
   extension_point: story.genre
   version: "0.1"

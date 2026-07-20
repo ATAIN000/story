@@ -1,0 +1,114 @@
+# 题材插件：历史穿越（isekai × historical_fiction × political_thriller，value_inversion 融合）
+# 结构对齐 mystery.yaml / romance.yaml；内容自本包 fusion 元数据派生
+manifest_version: 1
+name: historical-isekai
+extension_point: story.genre
+activation_events: ["on_genre:historical-isekai"]
+fusion:
+  type: value_inversion            # 价值倒置
+  parent_genres: [isekai, historical_fiction, political_thriller]
+  core_conflict: "现代平等观念 vs 古代等级制度；现代知识外挂 vs 历史惯性的不可逆"
+  fusion_formula: "现代知识 + 古代权谋 + 历史进程的不可违抗性"
+
+culture_bound: false
+allowed_cultures: ["*"]
+
+params:
+  pacing_curve: "穿越落地→适应规则→利用知识→卷入权谋→改变or顺应历史"
+  power_system: "modern_knowledge"           # 现代知识是唯一"金手指"
+  emotion_arcs: [man_in_hole, cinderella]
+  conflict_types:
+    - {type: political, weight: 0.4}         # 朝堂权谋
+    - {type: cognitive, weight: 0.3}         # 信息差利用
+    - {type: relational, weight: 0.2}        # 人脉经营
+    - {type: physical, weight: 0.1}          # 战争/暗杀
+  information_distribution: asymmetric       # 主角知道历史走向，他人不知道
+  max_red_herrings: 3
+  resolution_pattern: "改变历史节点 + 承担蝴蝶效应后果"
+  main_track: A
+  theme_track: E
+  payoff_window: 3
+  beats_per_chapter: 4
+
+  # 五轨道（Showrunner 调度对象 — 自 core_conflict/fusion_formula 推导：
+  # 朝堂立足主线 + 门阀压制 + 理念传播 + 地方治理单元 + 历史惯性主题）
+  tracks:
+    - {id: A, name: "主线·寒门立足与历史节点", arc_type: Serialized, archetype: Quest,   progress: 0.0, last_touched: 0}
+    - {id: B, name: "副线·门阀世族的压制",     arc_type: Serialized, archetype: Monster,  progress: 0.0, last_touched: 0}
+    - {id: C, name: "副线·现代理念的传播",     arc_type: Serialized, archetype: Rebirth,  progress: 0.0, last_touched: 0}
+    - {id: D, name: "单元剧·地方治理见闻",     arc_type: Anthology,  archetype: Quest,    progress: 0.0, last_touched: 0, min_main_progress: 0.3}
+    - {id: E, name: "主题·历史惯性与个人选择", arc_type: Serialized, archetype: Tragedy,  progress: 0.0, last_touched: 0}
+
+  # 世界规则（Z3 SMT 硬约束 — expr 限事实词汇表）
+  world_rules:
+    - id: knowledge_no_miracle
+      kind: bool
+      desc: "知识非神迹：现代知识不得以超自然方式直接化解危局作为收束"
+      expr: "not(has_supernatural and is_resolution)"
+    - id: inertia_seeded
+      kind: bool
+      desc: "历史惯性：结局章不得凭空引入未铺垫的关键转机"
+      expr: "not(is_resolution and introduces_new_key_clue)"
+
+  # 伏笔模板（Showrunner 种子计划用）
+  foreshadow_templates:
+    - {content: "随口说出的现代常识",     trigger: "被有心人暗中记下",     payoff: "常识成为政敌攻讦的把柄或助力"}
+    - {content: "被改变小事的史书记载",   trigger: "对照记忆发现出入",     payoff: "蝴蝶效应显现，历史已悄然偏航"}
+    - {content: "某位历史人物的早逝记载", trigger: "史载节点日益临近",     payoff: "救与不救的抉择压到眼前"}
+
+  taboo_list:
+    - "不允许现代知识万能——必须有时代局限性（技术无法落地）"
+    - "不允许随意改变重大历史走向而不付出代价"
+    - "古代角色不能太容易被现代思维说服——必须有文化惯性阻力"
+
+  evaluation_weights:
+    设定一致性: 0.25                           # 历史考据
+    角色动机: 0.20
+    情节连贯: 0.20
+    主题深度: 0.15                             # 历史观探讨
+    对话真实度: 0.10
+    感官细节: 0.05
+    套路检测: 0.05
+
+  active_critics: [setting_consistency, character_motivation, plot_coherence, dialogue_authenticity]
+
+  fusion_specific_rules:
+    butterfly_effect: "每次改变历史都有连锁反应，必须在后续章节体现"
+    knowledge_decay: "主角记忆的历史细节随时间推移可能失效（记忆模糊）"
+
+  # prompt 段：role/setting/characters/style/hard_requirements 五键
+  prompt:
+    role: "历史穿越小说作者"
+    setting: "架空王朝（类宋），现代人魂穿为寒门小官之子，熟知历史走向，却受困于时代的技术条件与等级秩序"
+    characters: "沈知行（穿越者，寒门书生，谨慎藏拙）、裴垣（世家嫡子，亦敌亦友，门第观念根深蒂固）、老县尊（圆滑官僚，深谙生存之道）"
+    style: "800-1200字，考据感强，朝堂与市井双线质感，克制不悬浮"
+    hard_requirements:
+      - "现代知识落地必须受时代条件限制（材料/工艺/观念），禁止万能"
+      - "改变历史节点必须付出可见代价，连锁反应须在后续章节兑现"
+      - "古代人物各有立场逻辑，不被三言两语的现代思维说服"
+
+  # phase_beats：Todorov 5 态（立足—惯性结构，primitive 限八种原语）
+  phase_beats:
+    equilibrium:
+      - {id: settle_in, desc: "落地生存：适应身份、规矩与生计", primitive: GoalFormation}
+    disruption:
+      - {id: knowledge_noticed, desc: "现代知识初次动用即引来注视", primitive: TurningPoint}
+    recognition:
+      - {id: history_deviates, desc: "察觉史书记载与现实出现偏差", primitive: Revelation}
+      - {id: clan_suppress, desc: "世族察觉威胁，出手压制", primitive: Conflict}
+    repair:
+      - {id: ride_the_node, desc: "借历史节点之势翻盘", primitive: Conflict}
+      - {id: strategic_retreat, desc: "为长久之计忍痛退让", primitive: Sacrifice}
+    new_equilibrium:
+      - {id: foothold_won, desc: "立足一方，历史已悄然偏航", primitive: Recognition}
+      - {id: next_node_looms, desc: "尾声留扣：下一个历史节点的阴影", primitive: Suspense}
+
+  # blend_domains：跨域融合的领域池
+  blend_domains: ["科举官僚体系", "古代工艺技术", "漕运与钱粮"]
+
+  # pacing_targets：键名对齐 PacingScore 四字段，值为 [min, max] 区间
+  pacing_targets:
+    reversal_density: [0.2, 0.5]
+    avg_reversal_magnitude: [0.3, 0.6]
+    pacing_consistency: [0.6, 0.9]
+    cliffhanger_strength: [0.4, 0.7]

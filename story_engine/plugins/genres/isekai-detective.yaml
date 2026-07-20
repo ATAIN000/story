@@ -1,0 +1,120 @@
+# 题材插件：穿越法医/异世勘验（isekai × mystery × forensic，perspective_misalignment 融合）
+# 结构对齐 mystery.yaml / romance.yaml；内容自本包 fusion 元数据派生
+# 注：pacing_curve 用「断案」不用「破案」，避免 RAG Jaccard 抢占 mystery 路由（B1 教训）
+manifest_version: 1
+name: isekai-detective
+extension_point: story.genre
+activation_events: ["on_genre:isekai-detective"]
+fusion:
+  type: perspective_misalignment     # 视角错位
+  parent_genres: [isekai, mystery, forensic]
+  core_conflict: "现代逻辑/科学方法 vs 古代的迷信和权力结构——'权力大于真相'"
+  fusion_formula: "现代专业知识 + 古代社会规则 + 真相vs权力的博弈"
+
+culture_bound: false
+allowed_cultures: ["*"]
+
+params:
+  pacing_curve: "穿越落地→展示专长→接案→科学断案→权力阻挠→真相与正义的抉择"
+  power_system: "modern_forensics"           # 法医/刑侦/化学知识
+  emotion_arcs: [man_in_hole, cinderella]
+  conflict_types:
+    - {type: cognitive, weight: 0.4}         # 推理主导
+    - {type: political, weight: 0.3}         # 权力vs真相
+    - {type: relational, weight: 0.2}        # 建立信任/势力
+    - {type: physical, weight: 0.1}          # 人身危险
+  information_distribution: fair_play
+  max_red_herrings: 3
+  resolution_pattern: "科学断案 + 在权力结构中找到推行正义的缝隙"
+  main_track: A
+  theme_track: E
+  payoff_window: 2
+  beats_per_chapter: 4
+
+  # 五轨道（Showrunner 调度对象 — 自 core_conflict/fusion_formula 推导：
+  # 勘验主线 + 权力网络压制 + 班底信任 + 州县诡案单元 + 真相与正义主题）
+  tracks:
+    - {id: A, name: "主线·奇案勘验与仕途",   arc_type: Serialized, archetype: Quest,   progress: 0.0, last_touched: 0}
+    - {id: B, name: "副线·权力网络的压制",   arc_type: Serialized, archetype: Monster,  progress: 0.0, last_touched: 0}
+    - {id: C, name: "副线·建立班底与信任",   arc_type: Serialized, archetype: Rebirth,  progress: 0.0, last_touched: 0}
+    - {id: D, name: "单元剧·州县诡案录",     arc_type: Anthology,  archetype: Quest,    progress: 0.0, last_touched: 0, min_main_progress: 0.3}
+    - {id: E, name: "主题·真相与正义的缝隙", arc_type: Serialized, archetype: Tragedy,  progress: 0.0, last_touched: 0}
+
+  rule_packs: [fair-play-knox, gongan-taboo]  # 原 world_rules_ref 改名（P7.4 L5 引用合并）
+  # 世界规则（Z3 SMT 硬约束 — expr 限事实词汇表）
+  world_rules:
+    - id: fair_play
+      kind: bool
+      desc: "公平断案：叙述者（勘验者视角）不可为凶手"
+      expr: "not(narrator_is_killer)"
+    - id: tech_no_miracle
+      kind: bool
+      desc: "技术非神迹：现代勘验不得以超自然方式直接给出真相作为收束"
+      expr: "not(has_supernatural and is_resolution)"
+    - id: clue_before_reveal
+      kind: bool
+      desc: "公平线索：结案章不得凭空引入未铺垫的关键线索"
+      expr: "not(is_resolution and introduces_new_key_clue)"
+
+  # 伏笔模板（Showrunner 种子计划用）
+  foreshadow_templates:
+    - {content: "尸身上的反常痕迹",     trigger: "复验时与前证比对",   payoff: "痕迹指向被忽略的真凶"}
+    - {content: "证物登记的经手漏洞",   trigger: "追查经手人链条",     payoff: "漏洞牵出权力干预的证据"}
+    - {content: "嫌疑人不合身份的一句话", trigger: "此话在翻供时重现", payoff: "话术背后另有指使之人"}
+
+  taboo_list:
+    - "现代知识不能万能——必须有古代技术条件限制"
+    - "不允许案件太容易被现代知识破解——必须有时代障碍"
+    - "权力阻挠必须有真实利益逻辑——不是反派纯粹作恶"
+
+  evaluation_weights:
+    情节连贯: 0.25
+    设定一致性: 0.20
+    角色动机: 0.15
+    对话真实度: 0.15
+    主题深度: 0.10
+    套路检测: 0.10
+    感官细节: 0.05
+
+  active_critics: [plot_coherence, setting_consistency, character_motivation, dialogue_authenticity]
+
+  fusion_specific_rules:
+    tech_constraint: "每次使用现代技术必须说明如何克服古代条件限制（材料/能源/卫生）"
+    power_barrier: "至少1次案件真相被权力压制——主角学会'曲线正义'"
+
+  # prompt 段：role/setting/characters/style/hard_requirements 五键
+  prompt:
+    role: "穿越法医题材小说作者"
+    setting: "架空王朝州县，现代法医魂穿为仵作学徒，以科学勘验立身，却步步撞上'权力大于真相'的铁壁"
+    characters: "宋青梧（穿越法医，缜密克制，只信证据）、裴照（年轻县尉，尚有余热的理想主义者）、卢世尧（州府通判，利益网络中枢，非脸谱化反派）"
+    style: "800-1200字，勘验细节专业克制，公堂与市井质感并重"
+    hard_requirements:
+      - "每次动用现代技术，必须交代如何克服古代条件限制（材料/卫生/工具）"
+      - "真相至少一次被权力压制——主角须学会'曲线正义'"
+      - "权力阻挠须有真实利益逻辑，禁止纯粹作恶的脸谱反派"
+
+  # phase_beats：Todorov 5 态（勘验—压制—曲线结构，primitive 限八种原语）
+  phase_beats:
+    equilibrium:
+      - {id: morgue_routine, desc: "仵作房日常：身份、规矩与偏见", primitive: GoalFormation}
+    disruption:
+      - {id: case_strikes, desc: "命案震动一方：初验即见疑点", primitive: Suspense}
+    recognition:
+      - {id: evidence_locked, desc: "科学勘验锁定关键证据", primitive: Revelation}
+      - {id: power_suppress, desc: "权力出手压案，证据被夺", primitive: Betrayal}
+    repair:
+      - {id: curve_justice, desc: "绕开铁壁：以程序与舆论曲线推进", primitive: Conflict}
+      - {id: price_for_proof, desc: "为护住证人或证据付出代价", primitive: Sacrifice}
+    new_equilibrium:
+      - {id: discounted_justice, desc: "真相落地，正义打了折扣但未缺席", primitive: Recognition}
+      - {id: network_looms, desc: "尾声留扣：更大的权力网络露头", primitive: Suspense}
+
+  # blend_domains：跨域融合的领域池
+  blend_domains: ["法医学", "古代刑名制度", "官场程序"]
+
+  # pacing_targets：键名对齐 PacingScore 四字段，值为 [min, max] 区间
+  pacing_targets:
+    reversal_density: [0.3, 0.6]
+    avg_reversal_magnitude: [0.4, 0.7]
+    pacing_consistency: [0.6, 0.9]
+    cliffhanger_strength: [0.5, 0.8]

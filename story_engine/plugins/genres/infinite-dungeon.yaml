@@ -1,0 +1,114 @@
+# 题材插件：无限流（survival_game × multiverse × horror，rule_collision 融合）
+# 结构对齐 mystery.yaml / romance.yaml；内容自本包 fusion 元数据派生
+manifest_version: 1
+name: infinite-dungeon
+extension_point: story.genre
+activation_events: ["on_genre:infinite-dungeon"]
+fusion:
+  type: rule_collision
+  parent_genres: [survival_game, multiverse, horror]
+  core_conflict: "熟悉的作品世界变成了死亡陷阱——安全区变成致命区"
+  fusion_formula: "多世界穿梭 + 生存游戏 + 升级体系 + 人性博弈"
+
+culture_bound: false
+allowed_cultures: ["*"]
+
+params:
+  pacing_curve: "进入主神空间→副本生存→积分兑换强化→团队/独行→终极真相"
+  power_system: "point_based_upgrade"        # 积分兑换血统/技能/装备
+  emotion_arcs: [man_in_hole, oedipus]       # 跌入地狱后挣扎
+  conflict_types:
+    - {type: physical, weight: 0.35}         # 副本战斗
+    - {type: cognitive, weight: 0.3}         # 规则破解/智斗
+    - {type: relational, weight: 0.2}        # 队友信任/背叛
+    - {type: political, weight: 0.15}        # 队伍间势力博弈
+  information_distribution: hidden_rules     # 副本规则需自行发现
+  max_red_herrings: 4
+  resolution_pattern: "破解主神空间真相+逃离或取代主神"
+  main_track: A
+  theme_track: E
+  payoff_window: 2
+  beats_per_chapter: 5
+
+  # 五轨道（Showrunner 调度对象 — 自 core_conflict/fusion_formula 推导：
+  # 副本生死主线 + 资深者势力 + 信任与背叛 + 副本世界单元 + 绝境人性主题）
+  tracks:
+    - {id: A, name: "主线·副本生死与主神之谜", arc_type: Serialized, archetype: Quest,   progress: 0.0, last_touched: 0}
+    - {id: B, name: "副线·资深者队伍的势力博弈", arc_type: Serialized, archetype: Monster,  progress: 0.0, last_touched: 0}
+    - {id: C, name: "副线·队友的信任与背叛",   arc_type: Serialized, archetype: Tragedy,  progress: 0.0, last_touched: 0}
+    - {id: D, name: "单元剧·副本世界纪",       arc_type: Anthology,  archetype: Quest,    progress: 0.0, last_touched: 0, min_main_progress: 0.3}
+    - {id: E, name: "主题·绝境中守住人味",     arc_type: Serialized, archetype: Rebirth,  progress: 0.0, last_touched: 0}
+
+  # 世界规则（Z3 SMT 硬约束 — expr 限事实词汇表）
+  world_rules:
+    - id: rules_deducible
+      kind: bool
+      desc: "规则可推理：副本机制（超自然）不得直接充当生路收束——生还靠破解规则"
+      expr: "not(has_supernatural and is_resolution)"
+    - id: death_weight
+      kind: bool
+      desc: "死亡有重量：结局章不得凭空引入未铺垫的复活/逃生关键"
+      expr: "not(is_resolution and introduces_new_key_clue)"
+
+  # 伏笔模板（Showrunner 种子计划用）
+  foreshadow_templates:
+    - {content: "副本规则里的一条语病",   trigger: "语病在高难度副本复现", payoff: "主神空间的规则本质露馅"}
+    - {content: "兑换列表里灰掉的条目",   trigger: "条目在特定条件下解锁", payoff: "解锁条件指向主神的筛选目的"}
+    - {content: "死去队友留下的记号",     trigger: "记号在另一副本中出现", payoff: "有人以'数据'形态活了下来"}
+
+  taboo_list:
+    - "不允许副本规则随意变更——规则必须可被推理"
+    - "不允许主角无理由碾压——每个副本必须有真实死亡风险"
+    - "队友死亡不可随意复活（除非有明确机制）"
+
+  evaluation_weights:
+    情节连贯: 0.25
+    设定一致性: 0.20
+    角色动机: 0.15
+    套路检测: 0.15                            # 副本设计的新颖性
+    对话真实度: 0.10
+    感官细节: 0.10
+    主题深度: 0.05
+
+  active_critics: [plot_coherence, setting_consistency, character_motivation, cliche_detection]
+
+  fusion_specific_rules:
+    sub_types: ["hot_blooded_combat", "puzzle_intellectual", "rule_game", "lone_wolf_slaughter"]
+    copy_world: "副本可基于电影/游戏/动漫/历史，但规则必须被扭曲"
+
+  # prompt 段：role/setting/characters/style/hard_requirements 五键
+  prompt:
+    role: "无限流小说作者"
+    setting: "主神空间：被选中者穿梭一个个被扭曲的熟悉世界，积分兑换血统技能，规则藏在细节里，失败即抹杀"
+    characters: "陈默（前急救员，冷静记账型求生者）、阎罗（资深者小队队长，强者逻辑的信奉者）、铃铛（新人少女，直觉型规则敏感者）"
+    style: "800-1200字，冷硬紧凑，规则分析与生死压力交替，数值与代价具体"
+    hard_requirements:
+      - "副本规则必须可被推理：破解靠观察与逻辑，禁止天降新规则救场"
+      - "每个副本必须有真实死亡风险，主角不得无理由碾压"
+      - "队友死亡不可随意复活，除非付出机制内的明确代价"
+
+  # phase_beats：Todorov 5 态（入本—破解—结算结构，primitive 限八种原语）
+  phase_beats:
+    equilibrium:
+      - {id: lobby_routine, desc: "主神空间日常：兑换、训练与情报", primitive: GoalFormation}
+    disruption:
+      - {id: dungeon_opens, desc: "新副本开启：世界扭曲，规则隐藏", primitive: Suspense}
+    recognition:
+      - {id: rule_cracked, desc: "隐藏规则被破解一角", primitive: Revelation}
+      - {id: team_fracture, desc: "队伍为生存策略反目", primitive: Betrayal}
+    repair:
+      - {id: trial_by_death, desc: "以命试错锁定生路", primitive: Conflict}
+      - {id: bet_for_mate, desc: "为队友赌上积分或性命", primitive: Sacrifice}
+    new_equilibrium:
+      - {id: casualty_settle, desc: "通关回归，伤亡与收益结算", primitive: Recognition}
+      - {id: truth_shard, desc: "尾声留扣：主神真相的一鳞半爪", primitive: Suspense}
+
+  # blend_domains：跨域融合的领域池
+  blend_domains: ["生存游戏设计", "急救医学", "博弈论"]
+
+  # pacing_targets：键名对齐 PacingScore 四字段，值为 [min, max] 区间
+  pacing_targets:
+    reversal_density: [0.4, 0.7]
+    avg_reversal_magnitude: [0.5, 0.8]
+    pacing_consistency: [0.5, 0.8]
+    cliffhanger_strength: [0.7, 1.0]

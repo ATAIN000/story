@@ -1,0 +1,113 @@
+# 题材插件：恐怖喜剧（horror × comedy，value_inversion 融合）
+# 结构对齐 mystery.yaml / romance.yaml；内容自本包 fusion 元数据派生
+manifest_version: 1
+name: horror-comedy
+extension_point: story.genre
+activation_events: ["on_genre:horror-comedy"]
+fusion:
+  type: value_inversion
+  parent_genres: [horror, comedy]
+  core_conflict: "恐惧 vs 欢笑——两种相反情绪的快速交替制造独特体验"
+  fusion_formula: "恐怖氛围 + 搞笑角色/反应 + 恐惧和笑声的快速切换"
+
+culture_bound: false
+allowed_cultures: ["*"]
+
+params:
+  pacing_curve: "日常→灵异初现（搞笑反应）→升级→搞笑与恐怖交替→高潮（笑着尖叫）"
+  power_system: "tonal_switch"                # 基调快速切换
+  emotion_arcs: [man_in_hole, cinderella]     # 低谷挣扎 + 倒霉蛋的反转回升
+  conflict_types:
+    - {type: cosmic, weight: 0.35}           # 真实的恐怖威胁
+    - {type: physical, weight: 0.25}          # 生存/逃跑
+    - {type: relational, weight: 0.25}        # 搞笑角色互动
+    - {type: cognitive, weight: 0.15}         # 用脑洞应对恐怖
+  information_distribution: absurd_reveal
+  max_red_herrings: 1
+  resolution_pattern: "用荒诞方式化解恐怖 + 留一个'其实没完'的尾巴"
+  main_track: A
+  theme_track: D
+  payoff_window: 2
+  beats_per_chapter: 5
+
+  # 四轨道（Showrunner 调度对象 — 自 core_conflict/fusion_formula 推导：
+  # 灵异委托主线 + 恶灵真威胁 + 逝者单元 + 笑对恐惧主题）
+  tracks:
+    - {id: A, name: "主线·灵异委托与事务所生计", arc_type: Serialized, archetype: Quest,   progress: 0.0, last_touched: 0}
+    - {id: B, name: "副线·恶灵的真实威胁",       arc_type: Serialized, archetype: Monster,  progress: 0.0, last_touched: 0}
+    - {id: C, name: "单元剧·逝者未了愿",         arc_type: Anthology,  archetype: Tragedy,  progress: 0.0, last_touched: 0, min_main_progress: 0.3}
+    - {id: D, name: "主题·用笑对抗恐惧",         arc_type: Serialized, archetype: Rebirth,  progress: 0.0, last_touched: 0}
+
+  # 世界规则（Z3 SMT 硬约束 — expr 限事实词汇表）
+  world_rules:
+    - id: ghost_not_solution
+      kind: bool
+      desc: "恐怖真实律：灵异威胁不得凭空自我消解充当结局"
+      expr: "not(has_supernatural and is_resolution)"
+    - id: weakness_seeded
+      kind: bool
+      desc: "弱点预埋：结局章不得凭空引入未铺垫的关键设定（克制之法须先埋伏笔）"
+      expr: "not(is_resolution and introduces_new_key_clue)"
+
+  # 伏笔模板（Showrunner 种子计划用）
+  foreshadow_templates:
+    - {content: "鬼魂重复的执念动作", trigger: "动作被活宝无意间打断", payoff: "执念背后牵出死因真相"}
+    - {content: "委托人闪烁其词的细节", trigger: "细节在午夜一应验",   payoff: "委托人才是灵异源头"}
+    - {content: "搞笑道具的奇怪来历", trigger: "道具在绝境中派上用场", payoff: "荒诞化解的关键就是它"}
+
+  taboo_list:
+    - "恐怖段落必须真恐怖——不能因为搞笑就削弱威胁感"
+    - "搞笑不能消解恐怖的后果——死人是真死了"
+    - "不允许全程搞笑或全程恐怖——必须是交替"
+
+  evaluation_weights:
+    对话真实度: 0.25                           # 搞笑对白
+    情节连贯: 0.20
+    感官细节: 0.15                             # 恐怖段落的氛围
+    套路检测: 0.15                             # 脑洞新颖性
+    角色动机: 0.10
+    主题深度: 0.10
+    设定一致性: 0.05
+
+  active_critics: [dialogue_authenticity, plot_coherence, sensory_detail, cliche_detection]
+
+  fusion_specific_rules:
+    tonal_whiplash: "相邻段落必须基调反转——恐怖段后紧跟搞笑段，制造情绪落差"
+    competent_fear: "恐怖威胁必须真实致命——搞笑角色是在真危险中耍宝，不是安全的闹剧"
+
+  # prompt 段：role/setting/characters/style/hard_requirements 五键
+  prompt:
+    role: "恐怖喜剧小说作者"
+    setting: "城中村老旧公寓'安乐园'，三流除灵事务所接下一单单真灵异委托——威胁致命，团队却个个是活宝"
+    characters: "郝大胆（事务所老板，嘴硬腿软，关键时刻靠谱）、米小满（实习生，天生阴阳眼，吐槽役）、老白（编外顾问，一只话多的黑猫）"
+    style: "800-1200字，恐怖段落氛围写足，搞笑对白利落，两种基调硬切不调和"
+    hard_requirements:
+      - "恐怖段落必须真恐怖：威胁真实致命，死人是真死了"
+      - "搞笑不消解后果：笑完仍要付出代价"
+      - "恐怖与搞笑必须交替出现，禁止单边到底"
+
+  # phase_beats：Todorov 5 态（笑闹—真恐怖交替结构，primitive 限八种原语）
+  phase_beats:
+    equilibrium:
+      - {id: broke_agency, desc: "事务所日常：穷与嘴贫", primitive: GoalFormation}
+    disruption:
+      - {id: real_haunt, desc: "笑闹中撞上真东西：灵异初现", primitive: Suspense}
+    recognition:
+      - {id: jokes_fail, desc: "搞笑应对失灵：威胁升级见血", primitive: TurningPoint}
+      - {id: tragic_cause, desc: "逝者执念的悲情真相浮出", primitive: Revelation}
+    repair:
+      - {id: absurd_fix, desc: "用荒诞方式化解恐怖", primitive: Conflict}
+      - {id: stake_it, desc: "为救人赌上生计与面子", primitive: Sacrifice}
+    new_equilibrium:
+      - {id: laugh_trembling, desc: "委托了结，笑着发抖", primitive: Recognition}
+      - {id: not_over, desc: "尾声留扣：其实没完——新的异响", primitive: Suspense}
+
+  # blend_domains：跨域融合的领域池
+  blend_domains: ["城中村生态", "殡葬行当", "直播短视频"]
+
+  # pacing_targets：键名对齐 PacingScore 四字段，值为 [min, max] 区间
+  pacing_targets:
+    reversal_density: [0.4, 0.7]
+    avg_reversal_magnitude: [0.5, 0.8]
+    pacing_consistency: [0.4, 0.7]
+    cliffhanger_strength: [0.6, 0.9]

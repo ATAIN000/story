@@ -1,0 +1,114 @@
+# 题材插件：历史系统流（historical_fiction × litrpg，rule_collision 融合）
+# 结构对齐 mystery.yaml / romance.yaml；内容自本包 fusion 元数据派生
+manifest_version: 1
+name: historical-system
+extension_point: story.genre
+activation_events: ["on_genre:historical-system"]
+fusion:
+  type: rule_collision
+  parent_genres: [historical_fiction, litrpg]
+  core_conflict: "系统的'游戏化任务' vs 历史的'沉重真实'——用做任务心态改变历史，但后果是真实的"
+  fusion_formula: "系统任务 + 历史关键节点 + 蝴蝶效应的伦理负担"
+
+culture_bound: false
+allowed_cultures: ["*"]
+
+params:
+  pacing_curve: "系统绑定→新手任务（小事）→历史节点任务→蝴蝶效应→系统vs历史的矛盾"
+  power_system: "history_quest_system"       # 任务驱动历史干预
+  emotion_arcs: [cinderella, oedipus]
+  conflict_types:
+    - {type: cognitive, weight: 0.3}         # 任务策略
+    - {type: political, weight: 0.3}         # 历史权谋
+    - {type: internal, weight: 0.25}         # 改变历史的伦理负担
+    - {type: relational, weight: 0.15}       # 历史人物关系
+  information_distribution: system_gated
+  max_red_herrings: 2
+  resolution_pattern: "系统真相揭示 + 选择忠于历史还是忠于系统"
+  main_track: A
+  theme_track: E
+  payoff_window: 2
+  beats_per_chapter: 4
+
+  # 五轨道（Showrunner 调度对象 — 自 core_conflict/fusion_formula 推导：
+  # 节点任务主线 + 历史人物自主意志 + 修正力反噬 + 支线任务单元 + 历史伦理主题）
+  tracks:
+    - {id: A, name: "主线·系统任务与历史节点", arc_type: Serialized, archetype: Quest,   progress: 0.0, last_touched: 0}
+    - {id: B, name: "副线·历史人物的自主意志", arc_type: Serialized, archetype: Rebirth,  progress: 0.0, last_touched: 0}
+    - {id: C, name: "副线·世界修正力的反噬",   arc_type: Serialized, archetype: Monster,  progress: 0.0, last_touched: 0}
+    - {id: D, name: "单元剧·支线任务录",       arc_type: Anthology,  archetype: Quest,    progress: 0.0, last_touched: 0, min_main_progress: 0.3}
+    - {id: E, name: "主题·改变历史的伦理",     arc_type: Serialized, archetype: Tragedy,  progress: 0.0, last_touched: 0}
+
+  # 世界规则（Z3 SMT 硬约束 — expr 限事实词汇表）
+  world_rules:
+    - id: task_in_history
+      kind: bool
+      desc: "任务嵌史律：系统（超自然）不得直接改写历史作为收束"
+      expr: "not(has_supernatural and is_resolution)"
+    - id: effect_accounted
+      kind: bool
+      desc: "蝴蝶记账：结局章不得凭空引入未铺垫的关键转折"
+      expr: "not(is_resolution and introduces_new_key_clue)"
+
+  # 伏笔模板（Showrunner 种子计划用）
+  foreshadow_templates:
+    - {content: "系统面板偶尔闪过的乱码", trigger: "乱码在节点任务中复现", payoff: "系统并非全知，另有棋手"}
+    - {content: "任务奖励的'历史修正值'", trigger: "修正值异常累积",       payoff: "世界修正力开始针对主角"}
+    - {content: "新手任务救下的小人物",   trigger: "小人物在历史节点再现", payoff: "当年善举改写了节点走向"}
+
+  taboo_list:
+    - "系统任务不能与历史逻辑矛盾——任务必须嵌入历史因果"
+    - "蝴蝶效应必须体现——改变历史有连锁后果"
+    - "历史人物不能沦为NPC——必须有自主意志"
+
+  evaluation_weights:
+    设定一致性: 0.25
+    情节连贯: 0.20
+    主题深度: 0.20                             # 历史伦理
+    角色动机: 0.15
+    对话真实度: 0.10
+    套路检测: 0.05
+    感官细节: 0.05
+
+  active_critics: [setting_consistency, plot_coherence, character_motivation]
+
+  fusion_specific_rules:
+    butterfly_accounting: "每完成一个历史任务，后续章节必须体现至少1个连锁变化"
+    npc_autonomy: "历史关键人物可拒绝配合系统——触发'世界修正力'"
+
+  # prompt 段：role/setting/characters/style/hard_requirements 五键
+  prompt:
+    role: "历史系统流小说作者"
+    setting: "安史之乱前夕的架空唐廷，主角绑定'历史干预系统'，被一个个任务推向历史节点——每个奖励背后都是真实人命"
+    characters: "李昀（没落宗室旁支，系统宿主，从做任务心态到背负伦理重担）、系统（冰冷面板，发布任务却回避真相）、阿史那·岩（边军斥候，被主角改命的'历史人物'，有自主意志）"
+    style: "800-1200字，系统提示音与历史正剧质感对撞，任务文本冷静，后果描写沉重"
+    hard_requirements:
+      - "系统任务必须嵌入历史因果，不得凭空生成或悬空"
+      - "每完成一个历史任务，后文必须呈现至少一处连锁变化"
+      - "历史人物可以拒绝配合系统——世界修正力真实存在"
+
+  # phase_beats：Todorov 5 态（任务—修正结构，primitive 限八种原语）
+  phase_beats:
+    equilibrium:
+      - {id: bind_system, desc: "绑定系统：新手任务与边军日常", primitive: GoalFormation}
+    disruption:
+      - {id: node_quest, desc: "首个历史节点任务下达", primitive: TurningPoint}
+    recognition:
+      - {id: butterfly_seen, desc: "蝴蝶效应显现：改动引发连锁", primitive: Revelation}
+      - {id: correction_falls, desc: "历史人物拒绝配合，修正力降临", primitive: Conflict}
+    repair:
+      - {id: conscience_choice, desc: "在系统指令与历史良心之间抉择", primitive: Sacrifice}
+      - {id: counter_correction, desc: "以任务机制反制修正力", primitive: Conflict}
+    new_equilibrium:
+      - {id: system_glimpse, desc: "节点落幕，系统真相露出一角", primitive: Revelation}
+      - {id: quest_points_self, desc: "尾声留扣：下一任务指向主角自身", primitive: Suspense}
+
+  # blend_domains：跨域融合的领域池
+  blend_domains: ["唐代边军制度", "任务系统设计", "驿传与情报网"]
+
+  # pacing_targets：键名对齐 PacingScore 四字段，值为 [min, max] 区间
+  pacing_targets:
+    reversal_density: [0.3, 0.6]
+    avg_reversal_magnitude: [0.4, 0.7]
+    pacing_consistency: [0.5, 0.8]
+    cliffhanger_strength: [0.6, 0.9]

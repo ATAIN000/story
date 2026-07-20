@@ -1,0 +1,115 @@
+# 题材插件：穿越言情（isekai × romance，value_inversion 融合）
+# 结构对齐 mystery.yaml / romance.yaml；内容自本包 fusion 元数据派生
+manifest_version: 1
+name: isekai-romance
+extension_point: story.genre
+activation_events: ["on_genre:isekai-romance"]
+fusion:
+  type: value_inversion
+  parent_genres: [isekai, romance]
+  core_conflict: "现代女性独立意识 vs 古代从属地位——'爱上这个时代的人，是否背叛了我的价值观？'"
+  fusion_formula: "现代价值观 + 古代爱情 + 女性意识觉醒 + '改变还是适应'的抉择"
+
+culture_bound: false
+allowed_cultures: ["*"]
+
+params:
+  pacing_curve: "穿越落地→身份困境→情感萌芽→价值观冲突→觉醒抉择→爱情与自我和解"
+  power_system: "modern_mindset"             # 现代思维是核心"武器"
+  emotion_arcs: [cinderella, man_in_hole]
+  conflict_types:
+    - {type: relational, weight: 0.4}        # 情感主线
+    - {type: internal, weight: 0.25}         # 价值观挣扎
+    - {type: political, weight: 0.2}         # 身份/阶级
+    - {type: cognitive, weight: 0.15}        # 现代知识应用
+  information_distribution: dual_perspective
+  max_red_herrings: 2
+  resolution_pattern: "在不放弃自我的前提下找到爱情 + 推动小范围观念改变"
+  main_track: A
+  theme_track: E
+  payoff_window: 3
+  beats_per_chapter: 5
+
+  # 五轨道（Showrunner 调度对象 — 自 core_conflict/fusion_formula 推导：
+  # 情感主线 + 身份阶级罗网 + 男主成长弧 + 观念议题单元 + 不背叛自我主题）
+  tracks:
+    - {id: A, name: "主线·情愫与自我之间",   arc_type: Serialized, archetype: Quest,   progress: 0.0, last_touched: 0}
+    - {id: B, name: "副线·身份与阶级的罗网", arc_type: Serialized, archetype: Monster,  progress: 0.0, last_touched: 0}
+    - {id: C, name: "副线·他被她改变的弧",   arc_type: Serialized, archetype: Rebirth,  progress: 0.0, last_touched: 0}
+    - {id: D, name: "单元剧·内宅与市井议题", arc_type: Anthology,  archetype: Quest,    progress: 0.0, last_touched: 0, min_main_progress: 0.3}
+    - {id: E, name: "主题·不背叛自己的爱",   arc_type: Serialized, archetype: Rebirth,  progress: 0.0, last_touched: 0}
+
+  rule_packs: [romance-taboo]  # 原 world_rules_ref 改名（P7.4 L5 引用合并）
+  # 世界规则（Z3 SMT 硬约束 — expr 限事实词汇表）
+  world_rules:
+    - id: no_fated_matchmaking
+      kind: bool
+      desc: "非命定律：姻缘圆满不得靠超自然/命定手段强行撮合"
+      expr: "not(has_supernatural and is_resolution)"
+    - id: growth_honored
+      kind: bool
+      desc: "成长兑现：结局章不得凭空引入未铺垫的关键转变（男主成长须在前文兑现）"
+      expr: "not(is_resolution and introduces_new_key_clue)"
+
+  # 伏笔模板（Showrunner 种子计划用）
+  foreshadow_templates:
+    - {content: "初见时他的傲慢之言", trigger: "此话被她原样奉还", payoff: "他第一次意识到自己在改变"}
+    - {content: "她藏起的现代小物",   trigger: "小物被他撞见",     payoff: "来历之问变成身份信任的考验"}
+    - {content: "一桩被指派的婚约",   trigger: "家族议事旧事重提", payoff: "婚约对象牵出真心归属"}
+
+  taboo_list:
+    - "不允许女主为爱情放弃现代价值观——必须有底线"
+    - "古代男主不能纯霸道——必须有理解/成长弧线"
+    - "不允许'用现代知识秒杀古人'——价值观冲突才是核心"
+
+  evaluation_weights:
+    角色动机: 0.25
+    情感弧: 0.20
+    主题深度: 0.15                             # 女性意识
+    对话真实度: 0.15
+    情节连贯: 0.15
+    套路检测: 0.05
+    感官细节: 0.05
+
+  active_critics: [character_motivation, emotion_arc, dialogue_authenticity, plot_coherence]
+
+  fusion_specific_rules:
+    value_test: "至少3次'价值观测试'场景——女主必须在现代vs古代之间做选择"
+    male_growth: "男主必须有'被女主改变'的成长弧——不能原地踏步"
+
+  # prompt 段：role/setting/characters/style/hard_requirements 五键
+  prompt:
+    role: "穿越言情小说作者"
+    setting: "架空古代士族社会，现代女性魂穿为低阶官员之女，在从属的命运里以现代心智谋生路，也与这个时代最耀眼的人相爱相搏"
+    characters: "林见夏（穿越者，清醒自持，谋生先谋心）、谢琅（世家嫡子，惊才绝艳，傲慢却可被焐热）、崔氏（当家主母，旧秩序的维护者与受害者）"
+    style: "800-1200字，细腻克制，机锋对白与内心角力并重"
+    hard_requirements:
+      - "女主至少三次在现代与古代价值观之间做选择，且不为爱情放弃底线"
+      - "男主必须有'被女主改变'的成长弧，禁止原地霸总"
+      - "禁止用现代知识碾压古人——价值观冲突才是核心"
+
+  # phase_beats：Todorov 5 态（困境—相搏—和解结构，primitive 限八种原语）
+  phase_beats:
+    equilibrium:
+      - {id: identity_trap, desc: "落地与身份困境：规矩如网", primitive: GoalFormation}
+    disruption:
+      - {id: fated_clash, desc: "命运初见或因立场结怨", primitive: TurningPoint}
+    recognition:
+      - {id: value_collision, desc: "价值观正面相撞：自尊还是周全", primitive: Conflict}
+      - {id: he_changes, desc: "察觉对方正在为自己改变", primitive: Recognition}
+    repair:
+      - {id: painful_cut, desc: "为守住底线的忍痛割舍", primitive: Sacrifice}
+      - {id: mutual_respect, desc: "以尊重为前提的两情相悦", primitive: Revelation}
+    new_equilibrium:
+      - {id: love_kept_self, desc: "不放弃自我的爱情落地", primitive: Recognition}
+      - {id: order_fights_back, desc: "尾声留扣：旧秩序的新一轮反扑", primitive: Suspense}
+
+  # blend_domains：跨域融合的领域池
+  blend_domains: ["古代女子生计", "士族礼法", "现代职业思维"]
+
+  # pacing_targets：键名对齐 PacingScore 四字段，值为 [min, max] 区间
+  pacing_targets:
+    reversal_density: [0.2, 0.5]
+    avg_reversal_magnitude: [0.3, 0.6]
+    pacing_consistency: [0.6, 0.9]
+    cliffhanger_strength: [0.4, 0.7]
