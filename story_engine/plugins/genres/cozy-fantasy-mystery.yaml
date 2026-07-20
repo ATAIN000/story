@@ -1,0 +1,118 @@
+# 题材插件：治愈奇幻推理（cozy_mystery × low_fantasy，promise_subversion 融合）
+# 结构对齐 mystery.yaml / romance.yaml；内容自本包 fusion 元数据派生
+manifest_version: 1
+name: cozy-fantasy-mystery
+extension_point: story.genre
+activation_events: ["on_genre:cozy-fantasy-mystery"]
+fusion:
+  type: promise_subversion
+  parent_genres: [cozy_mystery, low_fantasy]
+  core_conflict: "治愈系的温馨日常 vs 谋杀案的残酷真相；小社区的温情 vs 人心的黑暗"
+  fusion_formula: "低魔奇幻设定 + 社区日常 + 推理解谜 + 温暖基调"
+
+culture_bound: false
+allowed_cultures: ["*"]
+
+params:
+  pacing_curve: "社区日常→案件发生→温馨调查→温情推理→真相（不血腥）→社区修复"
+  power_system: "low_magic_domestic"         # 低魔：小魔法用于日常，不用于暴力
+  emotion_arcs: [cinderella, man_in_hole]    # 温暖基调 + 探案低谷回升
+  conflict_types:
+    - {type: cognitive, weight: 0.5}         # 推理主导
+    - {type: relational, weight: 0.35}       # 社区关系
+    - {type: internal, weight: 0.15}         # 温情领悟
+  information_distribution: fair_play
+  max_red_herrings: 2
+  resolution_pattern: "温和的真相揭示 + 社区关系修复（凶手也获得某种救赎）"
+  main_track: A
+  theme_track: D
+  payoff_window: 2
+  beats_per_chapter: 4
+
+  # 四轨道（Showrunner 调度对象 — 自 core_conflict/resolution_pattern 推导：
+  # 温情侦破 + 嫌疑人隐情 + 单元邻里委托 + 社区修复主题）
+  tracks:
+    - {id: A, name: "主线·小镇案件温情侦破", arc_type: Serialized, archetype: Quest,   progress: 0.0, last_touched: 0}
+    - {id: B, name: "副线·嫌疑人的隐情",     arc_type: Serialized, archetype: Tragedy,  progress: 0.0, last_touched: 0}
+    - {id: C, name: "单元剧·邻里小委托",     arc_type: Anthology,  archetype: Quest,    progress: 0.0, last_touched: 0, min_main_progress: 0.4}
+    - {id: D, name: "主题·人心向善与修复",   arc_type: Serialized, archetype: Rebirth,  progress: 0.0, last_touched: 0}
+
+  rule_packs: [fair-play-knox]  # 原 world_rules_ref 改名（P7.4 L5 引用合并）
+  # 世界规则（Z3 SMT 硬约束 — expr 限事实词汇表）
+  world_rules:
+    - id: cozy_fair_play
+      kind: bool
+      desc: "公平推理：叙述者（侦探视角）不可为凶手"
+      expr: "not(narrator_is_killer)"
+    - id: magic_not_crime_tool
+      kind: bool
+      desc: "低魔约束：魔法是日常工具，不得成为作案或破案的关键手段"
+      expr: "not(has_supernatural and is_resolution)"
+    - id: town_case_aging
+      kind: bool
+      desc: "小镇时效：案件须在三十日内了结，社区不悬置伤痛"
+      expr: "case_age_days <= 30"
+
+  # 伏笔模板（Showrunner 种子计划用）
+  foreshadow_templates:
+    - {content: "器物无心的一句低语", trigger: "再次经过同一物件", payoff: "低语指向案发当夜的真相"}
+    - {content: "邻里间避讳的旧话题", trigger: "话题被重新提起",   payoff: "避讳之下藏着真正动机"}
+    - {content: "镇上的季节性老规矩", trigger: "节庆临近",         payoff: "老规矩解释死者最后的行踪"}
+
+  taboo_list:
+    - "不允许血腥暴力描写——cozy基调"
+    - "不允许魔法直接用于犯罪/暴力——魔法是日常工具"
+    - "不允许极端黑暗的动机——人心本质向善"
+
+  evaluation_weights:
+    对话真实度: 0.25                           # 社区对话是灵魂
+    情节连贯: 0.20
+    感官细节: 0.15                             # 温馨氛围
+    角色动机: 0.15
+    套路检测: 0.10
+    设定一致性: 0.10
+    主题深度: 0.05
+
+  active_critics: [dialogue_authenticity, plot_coherence, sensory_detail, character_motivation]
+
+  fusion_specific_rules:
+    violence_cap: "暴力描写上限：暗示>明写，后果>过程"
+    community_focus: "凶手必须是社区成员，动机根植于社区关系"
+
+  # prompt 段：role/setting/characters/style/hard_requirements 五键
+  prompt:
+    role: "治愈系奇幻推理小说作者"
+    setting: "低魔小镇：茶壶会自己续水、白鸦替人送信、面包房里住着帮工的小妖精；一桩命案打破了小镇的宁静"
+    characters: "温珞（茶馆老板娘，业余侦探，能听见器物低语）、老周（面包师，沉默温柔，手艺镇上一绝）、小满（跑腿的白鸦少年，消息最灵通）、死者是镇上抬头不见低头见的熟面孔"
+    style: "800-1200字，温暖细腻，悬念藏在茶香与面包香里，对话有小镇烟火气"
+    hard_requirements:
+      - "不写血腥与暴力过程：暗示大于明写，后果大于过程"
+      - "魔法只做日常小事，不得用于犯罪或成为破案捷径"
+      - "凶手必须是社区成员，动机根植人情；禁止极端黑暗的动机"
+      - "结局须让社区关系得到修复，凶手也获得某种救赎"
+
+  # phase_beats：Todorov 5 态（日常—扰动—修复结构，primitive 限八种原语）
+  phase_beats:
+    equilibrium:
+      - {id: town_daily, desc: "小镇日常：茶馆开张与邻里往来", primitive: GoalFormation}
+    disruption:
+      - {id: body_found, desc: "案件发生：熟人遇害或失踪，宁静被打破", primitive: Suspense}
+    recognition:
+      - {id: gentle_clue, desc: "日常细节中的异样被发现", primitive: Revelation}
+      - {id: decent_suspect, desc: "烟雾弹：体面的嫌疑人引开视线", primitive: Betrayal}
+    repair:
+      - {id: hidden_motive, desc: "温情推理：动机背后的人情隐情浮现", primitive: Recognition}
+      - {id: soft_confession, desc: "对质：凶手在社区面前卸下防备", primitive: TurningPoint}
+    new_equilibrium:
+      - {id: community_heal, desc: "真相温和揭晓，社区以温情收束", primitive: Revelation}
+      - {id: tea_hook, desc: "尾声留扣：茶馆里新的器物低语", primitive: Suspense}
+
+  # blend_domains：跨域融合的领域池
+  blend_domains: ["茶艺", "烘焙", "小镇节庆民俗"]
+
+  # pacing_targets：cozy 基调——反转低密、钩子轻柔、一致性高
+  pacing_targets:
+    reversal_density: [0.2, 0.4]
+    avg_reversal_magnitude: [0.3, 0.5]
+    pacing_consistency: [0.6, 0.9]
+    cliffhanger_strength: [0.3, 0.6]

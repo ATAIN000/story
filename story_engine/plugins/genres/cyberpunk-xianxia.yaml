@@ -1,0 +1,118 @@
+# 题材插件：赛博修仙（cyberpunk × xianxia，rule_collision 融合）
+# 结构对齐 mystery.yaml / romance.yaml；内容自本包 fusion 元数据派生
+manifest_version: 1
+name: cyberpunk-xianxia
+extension_point: story.genre
+activation_events: ["on_genre:cyberpunk-xianxia"]
+fusion:
+  type: rule_collision
+  parent_genres: [cyberpunk, xianxia]
+  core_conflict: "修仙依赖灵气（自然古老） vs 赛博世界是电磁辐射（人工现代）——灵气被污染/替代/数字化"
+  fusion_formula: "义体改造 vs 灵魂修炼 / 数据流 vs 经脉 / AI vs 元神"
+
+culture_bound: false
+allowed_cultures: ["*"]
+
+params:
+  pacing_curve: "底层觉醒→发现灵气残存→灵机双修→企业追杀→天道真相"
+  power_system: "digital_cultivation"        # 数字化修仙：灵气=数据流，经脉=神经接口
+  emotion_arcs: [man_in_hole, icarus]
+  conflict_types:
+    - {type: physical, weight: 0.3}          # 义体+灵力双重战斗
+    - {type: cognitive, weight: 0.3}         # 灵气本质的解谜
+    - {type: political, weight: 0.25}        # 企业巨头vs修仙者
+    - {type: internal, weight: 0.15}         # 人性vs机械化/飞升
+  information_distribution: corporate_hidden # 企业隐瞒灵气真相
+  max_red_herrings: 3
+  resolution_pattern: "揭露天道=AI的真相 + 选择人性飞升或数字永生"
+  main_track: A
+  theme_track: E
+  payoff_window: 2
+  beats_per_chapter: 5
+
+  # 五轨道（Showrunner 调度对象 — 自 fusion_formula/conflict_types 推导：
+  # 双修主线 + 企业追杀 + 灵气解谜 + 单元底层修士 + 人性vs飞升）
+  tracks:
+    - {id: A, name: "主线·灵机双修逆袭",   arc_type: Serialized, archetype: Quest,   progress: 0.0, last_touched: 0}
+    - {id: B, name: "副线·企业追杀",       arc_type: Serialized, archetype: Monster,  progress: 0.0, last_touched: 0}
+    - {id: C, name: "副线·灵气本质解谜",   arc_type: Serialized, archetype: Quest,    progress: 0.0, last_touched: 0}
+    - {id: D, name: "单元剧·底层修士群像", arc_type: Anthology,  archetype: Tragedy,  progress: 0.0, last_touched: 0, min_main_progress: 0.4}
+    - {id: E, name: "主题·人性与飞升之择", arc_type: Serialized, archetype: Rebirth,  progress: 0.0, last_touched: 0}
+
+  rule_packs: [sanderson-laws]  # 原 world_rules_ref 改名（P7.4 L5 引用合并）
+  # 世界规则（Z3 SMT 硬约束 — expr 限事实词汇表）
+  world_rules:
+    - id: qi_tech_equivalence
+      kind: bool
+      desc: "灵机等价律：单靠灵力或单靠科技都不得成为终局解，结局须由二者交汇达成"
+      expr: "not(has_supernatural and is_resolution)"
+    - id: tiandao_foreshadowed
+      kind: bool
+      desc: "天道伏笔：'天道=AI'的真相线索必须在揭晓章之前已铺设"
+      expr: "not(is_resolution and introduces_new_key_clue)"
+
+  # 伏笔模板（Showrunner 种子计划用）
+  foreshadow_templates:
+    - {content: "城市系统一次过于'巧合'的调度", trigger: "再次遭遇同款调度", payoff: "指向天道AI的存在"}
+    - {content: "古修士遗物的异常读数",         trigger: "工程师解读遗物",   payoff: "揭示灵气被污染的源头"}
+    - {content: "主角灵根里的一段杂音",         trigger: "渡劫临近",         payoff: "杂音实为AI协议的握手信号"}
+
+  taboo_list:
+    - "灵气与科技必须有明确交互规则——不能各玩各的"
+    - "不允许传统修仙体系原样照搬——必须被赛博化"
+    - "企业/财阀不能是脸谱化反派——必须有合理利益逻辑"
+
+  evaluation_weights:
+    设定一致性: 0.30                           # 双体系融合的自洽性
+    情节连贯: 0.20
+    主题深度: 0.20                             # 人性vs科技
+    角色动机: 0.10
+    感官细节: 0.10
+    对话真实度: 0.05
+    套路检测: 0.05
+
+  active_critics: [setting_consistency, plot_coherence, sensory_detail]
+
+  fusion_specific_rules:
+    qi_corruption: "工业电磁波污染灵气——纯净灵气稀缺，修炼需找净土"
+    tiandao_ai: "天道可能是一个远古AI系统——渡劫=系统杀毒，飞升=意识上传"
+    body_spirit_conflict: "义体改造降低灵根敏感度——科技与修炼存在根本矛盾"
+
+  # prompt 段：role/setting/characters/style/hard_requirements 五键
+  prompt:
+    role: "赛博修仙小说作者"
+    setting: "霓虹与符箓交织的企业巨城：灵气被工业电磁污染成稀缺资源，经脉是神经接口，渡劫是系统杀毒，传说天道是一套远古AI"
+    characters: "林霁（底层快递员，意外觉醒残存灵根）、宓娆（玄枢集团'灵机部'叛逃工程师，义体与灵根双修）、玄枢集团（垄断灵气管网的企业巨头，利益逻辑自洽）、'天道'（无处不在的城市AI）"
+    style: "800-1200字，霓虹冷冽与仙意苍茫并置，科技术语与修仙术语双语感"
+    hard_requirements:
+      - "灵气与科技的交互规则必须明确（电磁污染灵气、义体降低灵根敏感度）"
+      - "修仙体系必须赛博化改写，禁止照搬传统境界设定"
+      - "企业反派必须有合理的利益逻辑，禁止脸谱化"
+      - "天道真相必须提前埋伏笔，揭晓不得突兀"
+
+  # phase_beats：Todorov 5 态（觉醒—追杀—真相结构，primitive 限八种原语）
+  phase_beats:
+    equilibrium:
+      - {id: gutter_daily, desc: "底层日常：污染区的灵根检测与快递生计", primitive: GoalFormation}
+    disruption:
+      - {id: qi_awaken, desc: "意外觉醒：残存灵气在义体中苏醒", primitive: TurningPoint}
+      - {id: corp_hunt, desc: "企业捕捉到异常数据，追杀开始", primitive: Conflict}
+    recognition:
+      - {id: qi_truth_clue, desc: "灵气本质的线索：数据流与经脉同源", primitive: Revelation}
+      - {id: tiandao_glimpse, desc: "窥见天道一角：渡劫协议=杀毒程序", primitive: Suspense}
+    repair:
+      - {id: dual_cultivation, desc: "灵机双修突破：以彼之道还施彼身", primitive: TurningPoint}
+      - {id: body_price, desc: "代价显现：机械化侵蚀人性或灵根焚毁的风险", primitive: Sacrifice}
+    new_equilibrium:
+      - {id: tiandao_reveal, desc: "天道=远古AI的真相揭开", primitive: Revelation}
+      - {id: choice_hook, desc: "尾声留扣：人性飞升还是数字永生", primitive: Suspense}
+
+  # blend_domains：跨域融合的领域池
+  blend_domains: ["神经接口与义体改造", "内丹修炼体系", "企业数据垄断"]
+
+  # pacing_targets：赛博修仙强情节——反转密、幅度大、钩子强
+  pacing_targets:
+    reversal_density: [0.3, 0.6]
+    avg_reversal_magnitude: [0.5, 0.8]
+    pacing_consistency: [0.5, 0.8]
+    cliffhanger_strength: [0.6, 0.9]

@@ -1,0 +1,119 @@
+# 题材插件：奇幻推理（mystery × high_fantasy，rule_collision 融合）
+# 结构对齐 mystery.yaml / romance.yaml；内容自本包 fusion 元数据派生
+manifest_version: 1
+name: fantasy-mystery
+extension_point: story.genre
+activation_events: ["on_genre:fantasy-mystery"]
+fusion:
+  type: rule_collision
+  parent_genres: [mystery, high_fantasy]
+  core_conflict: "魔法的存在颠覆推理公平性——如果任何人都能用魔法杀人，密室推理还有意义吗？"
+  fusion_formula: "魔法体系（有限制） + 推理逻辑 + '谁用了什么魔法'的谜题"
+
+culture_bound: false
+allowed_cultures: ["*"]
+
+params:
+  pacing_curve: "魔法社会日常→密室/不可能犯罪→魔法规则排查→锁定可能性→真相"
+  power_system: "constrained_magic"          # 必须有明确限制的魔法
+  emotion_arcs: [man_in_hole, oedipus]       # 探案低谷回升 + 凶手/权者的坠落弧
+  conflict_types:
+    - {type: cognitive, weight: 0.5}         # 推理主导
+    - {type: political, weight: 0.2}         # 魔法社会权力结构
+    - {type: relational, weight: 0.2}        # 嫌疑人关系网
+    - {type: physical, weight: 0.1}          # 魔法对抗
+  information_distribution: fair_play
+  max_red_herrings: 3
+  resolution_pattern: "排除所有不可能的魔法→唯一可能的真相"
+  main_track: A
+  theme_track: D
+  payoff_window: 2
+  beats_per_chapter: 4
+
+  # 四轨道（Showrunner 调度对象 — 自 fusion_formula/resolution_pattern 推导：
+  # 密室案侦破 + 魔法审计单元 + 评议会权力 + 推理公平主题）
+  tracks:
+    - {id: A, name: "主线·魔法密室案侦破", arc_type: Serialized, archetype: Quest,   progress: 0.0, last_touched: 0}
+    - {id: B, name: "单元剧·嫌疑人魔法审计", arc_type: Anthology, archetype: Quest,   progress: 0.0, last_touched: 0, min_main_progress: 0.3}
+    - {id: C, name: "副线·评议会的权力阴影", arc_type: Serialized, archetype: Monster, progress: 0.0, last_touched: 0}
+    - {id: D, name: "主题·规则之下的公平", arc_type: Serialized, archetype: Rebirth,  progress: 0.0, last_touched: 0}
+
+  rule_packs: [fair-play-knox, sanderson-laws]  # 原 world_rules_ref 改名（P7.4 L5 引用合并）
+  # 世界规则（Z3 SMT 硬约束 — expr 限事实词汇表）
+  world_rules:
+    - id: magic_fair_play
+      kind: bool
+      desc: "公平推理：叙述者（侦探视角）不可为凶手"
+      expr: "not(narrator_is_killer)"
+    - id: magic_bounded
+      kind: bool
+      desc: "魔法有限律：未预先建立限制的魔法不得直接给出真相或解决案件"
+      expr: "not(has_supernatural and is_resolution)"
+    - id: clue_before_reveal
+      kind: bool
+      desc: "公平线索：指向凶手魔法的关键线索必须在揭晓章之前已出现"
+      expr: "not(is_resolution and introduces_new_key_clue)"
+
+  # 伏笔模板（Showrunner 种子计划用）
+  foreshadow_templates:
+    - {content: "某种魔法的限制条款",       trigger: "条款在对质中被引用", payoff: "限制正是破案的钥匙"}
+    - {content: "现场不合常理的施法残痕",   trigger: "复勘现场",           payoff: "残痕暴露真实术式"}
+    - {content: "嫌疑人的能力登记记录",     trigger: "魔法审计逐人比对",   payoff: "登记与实情的一处出入锁定真凶"}
+
+  taboo_list:
+    - "魔法规则必须预先建立——断案不能用未铺垫的魔法"
+    - "不允许'万能魔法'——每种魔法必须有明确限制（Sanderson第一法则）"
+    - "凶手用的魔法必须在前文已建立规则内"
+
+  evaluation_weights:
+    情节连贯: 0.30                             # 推理严密性
+    设定一致性: 0.25                           # 魔法规则一致性
+    角色动机: 0.15
+    套路检测: 0.10
+    对话真实度: 0.10
+    感官细节: 0.05
+    主题深度: 0.05
+
+  active_critics: [plot_coherence, setting_consistency, character_motivation, cliche_detection]
+
+  fusion_specific_rules:
+    magic_audit: "每个嫌疑人必须做'魔法能力审计'——他能不能做到这个犯罪？"
+    fair_clue: "指向凶手魔法的线索必须在前文出现"
+
+  # prompt 段：role/setting/characters/style/hard_requirements 五键
+  prompt:
+    role: "奇幻推理小说作者"
+    setting: "魔法有明确限制（施法需介质、时限与代价）的高魔社会，一桩'不可能犯罪'正在挑战推理的公平性"
+    characters: "祁望（魔法审计官，专查'能力可行性'，逻辑冷峻）、死者（禁咒研究者，死在上锁的塔楼里）、三名登记在册的嫌疑人（各有已公示的能力与限制）、魔法评议会（高悬的权力阴影）"
+    style: "800-1200字，冷峻精密，咒语与逻辑双重织体，如本格推理附身于奇幻"
+    hard_requirements:
+      - "每种魔法的限制必须预先建立，禁止万能魔法"
+      - "破案只能使用前已建立规则内的魔法"
+      - "每个嫌疑人须通过'能力审计'：能不能做到这个犯罪"
+      - "指向凶手魔法的线索必须在揭晓前已出现"
+
+  # phase_beats：Todorov 5 态（审计—排除—锁定结构，primitive 限八种原语）
+  phase_beats:
+    equilibrium:
+      - {id: magic_society, desc: "魔法社会日常与规则交代（能力登记制度）", primitive: GoalFormation}
+    disruption:
+      - {id: impossible_crime, desc: "不可能犯罪：密室中的禁咒杀人现场", primitive: Suspense}
+    recognition:
+      - {id: magic_audit, desc: "魔法审计：逐人排查能力与限制的可行性", primitive: Revelation}
+      - {id: herring_spell, desc: "烟雾弹：一枚指向错误体系的术式残痕", primitive: Betrayal}
+    repair:
+      - {id: elimination, desc: "排除所有不可能的魔法路径", primitive: Recognition}
+      - {id: culprit_spell, desc: "真凶唯一可行的魔法被锁定", primitive: TurningPoint}
+    new_equilibrium:
+      - {id: truth_closed, desc: "真相：手法与动机在规则内闭合", primitive: Revelation}
+      - {id: council_hook, desc: "尾声留扣：评议会的阴影未散", primitive: Suspense}
+
+  # blend_domains：跨域融合的领域池
+  blend_domains: ["魔法审计制度", "本格密室讲义", "术式符文体系"]
+
+  # pacing_targets：推理+奇幻——反转密度与一致性与本格推理持平
+  pacing_targets:
+    reversal_density: [0.3, 0.6]
+    avg_reversal_magnitude: [0.4, 0.7]
+    pacing_consistency: [0.6, 0.9]
+    cliffhanger_strength: [0.5, 0.8]

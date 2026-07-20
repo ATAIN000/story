@@ -1,0 +1,116 @@
+# 题材插件：宫廷职场（palace_drama × workplace_comedy，perspective_misalignment 融合）
+# 结构对齐 mystery.yaml / romance.yaml；内容自本包 fusion 元数据派生
+manifest_version: 1
+name: court-workplace
+extension_point: story.genre
+activation_events: ["on_genre:court-workplace"]
+fusion:
+  type: perspective_misalignment
+  parent_genres: [palace_drama, workplace_comedy]
+  core_conflict: "古代宫廷规则映射现代职场——'妃子争宠'='同事竞争'，用宫斗技能搞职场"
+  fusion_formula: "宫廷生存逻辑 + 现代职场映射 + '用宫斗技能在职场逆袭'"
+
+culture_bound: false
+allowed_cultures: ["*"]
+
+params:
+  pacing_curve: "入职/入宫→摸清规则→站队→宫斗/职场战→上位→权力反思"
+  power_system: "social_strategy"            # 社交策略是核心能力
+  emotion_arcs: [cinderella, icarus]
+  conflict_types:
+    - {type: political, weight: 0.45}        # 办公室政治/后宫政治
+    - {type: relational, weight: 0.3}        # 同事/妃嫔关系
+    - {type: cognitive, weight: 0.15}        # 规则破解
+    - {type: internal, weight: 0.1}          # 手段vs底线
+  information_distribution: gossip_network   # 八卦网=情报网
+  max_red_herrings: 2
+  resolution_pattern: "上位 + 反思'变成自己讨厌的人'（or 保持底线地赢）"
+  main_track: A
+  theme_track: E
+  payoff_window: 2
+  beats_per_chapter: 4
+
+  # 五轨道（Showrunner 调度对象 — 自 core_conflict/resolution_pattern 推导：
+  # 逆袭上位 + 站队党争 + 盟友真心 + 单元差事 + 手段与底线）
+  tracks:
+    - {id: A, name: "主线·职场逆袭上位",   arc_type: Serialized, archetype: Quest,   progress: 0.0, last_touched: 0}
+    - {id: B, name: "副线·站队与党争",     arc_type: Serialized, archetype: Monster,  progress: 0.0, last_touched: 0}
+    - {id: C, name: "副线·盟友与真心",     arc_type: Serialized, archetype: Tragedy,  progress: 0.0, last_touched: 0}
+    - {id: D, name: "单元剧·差事与项目",   arc_type: Anthology,  archetype: Quest,    progress: 0.0, last_touched: 0, min_main_progress: 0.4}
+    - {id: E, name: "主题·手段与底线",     arc_type: Serialized, archetype: Rebirth,  progress: 0.0, last_touched: 0}
+
+  # 世界规则（Z3 SMT 硬约束 — expr 限事实词汇表）
+  world_rules:
+    - id: no_supernatural_promotion
+      kind: bool
+      desc: "规则博弈：上位不得靠托梦、鬼神示警等超自然手段达成"
+      expr: "not(has_supernatural and is_resolution)"
+    - id: gossip_sourced
+      kind: bool
+      desc: "胜负手有出处：翻盘所依的情报必须是前文八卦网中已流通的线索"
+      expr: "not(is_resolution and introduces_new_key_clue)"
+
+  # 伏笔模板（Showrunner 种子计划用）
+  foreshadow_templates:
+    - {content: "宴席上一句无心的闲谈", trigger: "旧事被人重新翻出", payoff: "闲谈成为翻盘的关键情报"}
+    - {content: "上级意味深长的提携",   trigger: "站队时刻到来",     payoff: "提携实为借刀杀人的利用"}
+    - {content: "盟友私下的一句底线提醒", trigger: "主角即将越线",   payoff: "提醒回响，促成悬崖勒马"}
+
+  taboo_list:
+    - "宫斗/职场规则映射必须清晰——每个宫廷元素有职场对应"
+    - "不允许纯爽文——必须有'赢了但失去了什么'的反思"
+    - "对手不能纯降智——必须有真实的政治智慧"
+
+  evaluation_weights:
+    角色动机: 0.25
+    情节连贯: 0.20
+    对话真实度: 0.20                           # 宫廷/职场双声道的台词
+    套路检测: 0.15
+    主题深度: 0.10                             # 职场异化
+    设定一致性: 0.05
+    感官细节: 0.05
+
+  active_critics: [character_motivation, plot_coherence, dialogue_authenticity, cliche_detection]
+
+  fusion_specific_rules:
+    dual_register: "对话和旁白可随时在'宫廷腔'和'职场腔'间切换——制造喜剧效果"
+    moral_cost: "每次用宫斗手段赢，主角必须付出一个道德代价（失去一个真朋友/良心不安）"
+
+  # prompt 段：role/setting/characters/style/hard_requirements 五键
+  prompt:
+    role: "宫廷职场小说作者"
+    setting: "架空王朝后宫：妃嫔位份如公司职级，圣眷是 KPI，请安是例会，赏赐是年终奖——一套宫廷规则处处映射现代职场"
+    characters: "沈令仪（新晋才人，把后宫当职场盘算的清醒者）、韦贵妃（资深'副总'，政治手腕老辣，笑里藏刀）、采蘋（同期才人，真心盟友，不擅钻营）、皇帝（掌握人事权的最高领导，深不可测）"
+    style: "800-1200字，机锋暗藏，台词可在'宫廷腔'与'职场腔'之间切换出喜剧感"
+    hard_requirements:
+      - "每个宫廷元素必须有清晰的职场对应（位份=职级、圣眷=绩效、赐死=裁员）"
+      - "对手不得降智：每一次出招都要有真实的政治智慧"
+      - "每次用宫斗手段赢，主角必须付出一个道德代价"
+      - "拒绝纯爽文：上位后必须有'赢了但失去了什么'的反思"
+
+  # phase_beats：Todorov 5 态（入局—上位—反思结构，primitive 限八种原语）
+  phase_beats:
+    equilibrium:
+      - {id: onboarding, desc: "入职/入宫：摸清明面规矩与水下潜规则", primitive: GoalFormation}
+    disruption:
+      - {id: first_conflict, desc: "抢功或背锅：第一次正面冲突", primitive: Conflict}
+      - {id: faction_pull, desc: "各方势力拉拢，站队压力逼近", primitive: Suspense}
+    recognition:
+      - {id: rule_crack, desc: "看破游戏规则：谁在借刀杀人", primitive: Revelation}
+      - {id: ally_betrayed, desc: "盟友被牺牲或信任破裂", primitive: Betrayal}
+    repair:
+      - {id: counter_scheme, desc: "以宫斗手段设局反击并取胜", primitive: TurningPoint}
+      - {id: moral_price, desc: "为胜利付出道德代价（失去真朋友/良心不安）", primitive: Sacrifice}
+    new_equilibrium:
+      - {id: promotion, desc: "上位/晋位：新位置带来新的棋局", primitive: Recognition}
+      - {id: mirror_hook, desc: "尾声留扣：镜中自省与下一轮风波", primitive: Suspense}
+
+  # blend_domains：跨域融合的领域池
+  blend_domains: ["后宫位份制度", "现代公司职级与考核", "情报与八卦传播学"]
+
+  # pacing_targets：权谋文反转中密、钩子中低（靠机锋不靠悬崖）
+  pacing_targets:
+    reversal_density: [0.3, 0.5]
+    avg_reversal_magnitude: [0.4, 0.6]
+    pacing_consistency: [0.6, 0.9]
+    cliffhanger_strength: [0.4, 0.7]

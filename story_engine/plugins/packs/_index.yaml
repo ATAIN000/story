@@ -345,48 +345,6 @@
   status: active
   source: hermes
   collected_at: "2026-07-20"
-- pack: apocalypse-romance
-  extension_point: story.genre
-  version: "0.1"
-  status: active
-  source: hermes
-  collected_at: "2026-07-20"
-- pack: court-workplace
-  extension_point: story.genre
-  version: "0.1"
-  status: active
-  source: hermes
-  collected_at: "2026-07-20"
-- pack: cozy-fantasy-mystery
-  extension_point: story.genre
-  version: "0.1"
-  status: active
-  source: hermes
-  collected_at: "2026-07-20"
-- pack: cyberpunk-xianxia
-  extension_point: story.genre
-  version: "0.1"
-  status: active
-  source: hermes
-  collected_at: "2026-07-20"
-- pack: fantasy-mystery
-  extension_point: story.genre
-  version: "0.1"
-  status: active
-  source: hermes
-  collected_at: "2026-07-20"
-- pack: fantasy-sports
-  extension_point: story.genre
-  version: "0.1"
-  status: active
-  source: hermes
-  collected_at: "2026-07-20"
-- pack: folk-cthulhu
-  extension_point: story.genre
-  version: "0.1"
-  status: active
-  source: hermes
-  collected_at: "2026-07-20"
 - pack: game-reality-invasion
   extension_point: story.genre
   version: "0.1"

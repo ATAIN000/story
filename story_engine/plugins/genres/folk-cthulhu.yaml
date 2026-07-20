@@ -1,0 +1,119 @@
+# 题材插件：民俗克苏鲁（chinese_folk_belief × cosmic_horror，promise_subversion 融合）
+# 结构对齐 mystery.yaml / romance.yaml；内容自本包 fusion 元数据派生
+manifest_version: 1
+name: folk-cthulhu
+extension_point: story.genre
+activation_events: ["on_genre:folk-cthulhu"]
+fusion:
+  type: promise_subversion
+  parent_genres: [chinese_folk_belief, cosmic_horror]
+  core_conflict: "亲切的日常神灵（灶神/土地公/城隍）其实都是不可名状的古老存在——'熟悉的'变成'最恐怖的'"
+  fusion_formula: "民间俗神信仰 + 不可名状恐怖 + '熟悉的日常神灵其实是……'"
+
+# culture_bound：俗神体系根植中国民间信仰，仅与本土文化包组合
+culture_bound: true
+allowed_cultures: ["chinese_folk", "confucian_officialdom"]
+
+params:
+  pacing_curve: "民俗日常→仪式异常→神灵真面目→信仰崩塌→在疯狂中寻找生路"
+  power_system: "folk_shrine_system"         # 俗神信仰体系（灶王/床婆/哭丧娘/城隍）
+  emotion_arcs: [riches_to_rags, man_in_hole]
+  conflict_types:
+    - {type: cosmic, weight: 0.4}            # 不可名状的日常化
+    - {type: cognitive, weight: 0.3}         # 信仰真相的解谜
+    - {type: internal, weight: 0.2}          # 认知崩溃
+    - {type: physical, weight: 0.1}          # 逃避/生存
+  information_distribution: folk_clue_layered
+  max_red_herrings: 2
+  resolution_pattern: "在'不可名状'面前找到东方式的应对（不是击败，是'敬而远之'或'以俗克诡'）"
+  main_track: A
+  theme_track: E
+  payoff_window: 3
+  beats_per_chapter: 4
+
+  # 五轨道（Showrunner 调度对象 — 自 core_conflict/resolution_pattern 推导：
+  # 异象溯源 + 不可名状侵蚀 + 信仰崩塌 + 单元乡里异闻 + 敬而远之的智慧）
+  tracks:
+    - {id: A, name: "主线·俗神异象溯源",   arc_type: Serialized, archetype: Quest,   progress: 0.0, last_touched: 0}
+    - {id: B, name: "副线·不可名状的侵蚀", arc_type: Serialized, archetype: Monster,  progress: 0.0, last_touched: 0}
+    - {id: C, name: "副线·信仰与传承的崩塌", arc_type: Serialized, archetype: Tragedy, progress: 0.0, last_touched: 0}
+    - {id: D, name: "单元剧·乡里异闻",     arc_type: Anthology,  archetype: Monster,  progress: 0.0, last_touched: 0, min_main_progress: 0.4}
+    - {id: E, name: "主题·敬而远之的智慧", arc_type: Serialized, archetype: Rebirth,  progress: 0.0, last_touched: 0}
+
+  rule_packs: [sanderson-laws]  # 原 world_rules_ref 改名（P7.4 L5 引用合并）
+  # 世界规则（Z3 SMT 硬约束 — expr 限事实词汇表）
+  world_rules:
+    - id: no_easy_banish
+      kind: bool
+      desc: "俗神不可轻遣：不可名状之物不得被法术神力正面'解决'，只能敬而远之或以俗克诡"
+      expr: "not(has_supernatural and is_resolution)"
+    - id: omen_before_reveal
+      kind: bool
+      desc: "异象先验：神灵真面目的征兆必须在揭晓前以日常异常层层铺垫"
+      expr: "not(is_resolution and introduces_new_key_clue)"
+
+  # 伏笔模板（Showrunner 种子计划用）
+  foreshadow_templates:
+    - {content: "老规矩里的一句禁忌",   trigger: "有人犯了禁忌",   payoff: "禁忌背后的真相显形"}
+    - {content: "神像或供器的细微异常", trigger: "再次祭拜",       payoff: "异常升级，直指神灵真面目"}
+    - {content: "老人欲言又止的旧事",   trigger: "旧事被重新问起", payoff: "旧案与当下异象同源"}
+
+  taboo_list:
+    - "俗神体系必须有考据基础——不能随意编造"
+    - "恐怖不能脱离'日常亲切感'——越日常越恐怖"
+    - "不允许西式克苏鲁直接照搬——必须是东方化的"
+
+  evaluation_weights:
+    设定一致性: 0.25                           # 民俗考据
+    感官细节: 0.25                             # 日常中的诡异
+    情节连贯: 0.20
+    主题深度: 0.15                             # 信仰本质
+    角色动机: 0.10
+    对话真实度: 0.05
+
+  active_critics: [setting_consistency, sensory_detail, plot_coherence]
+
+  fusion_specific_rules:
+    familiarity_horror: "恐怖感=日常物件的异常（灶台上的牙印/土地庙的呼吸声）"
+    folk_countermeasure: "对抗方式用民俗逻辑（请神/送煞/纸扎/符咒），不用科学"
+
+  # prompt 段：role/setting/characters/style/hard_requirements 五键
+  prompt:
+    role: "民俗恐怖小说作者"
+    setting: "当代中国乡镇：灶神、土地公、城隍的香火仍在日常里延续，但熟悉的神灵正一点点露出不可名状的另一面"
+    characters: "许三姑（懂老规矩的婆婆，敬神而不谄，知道什么时候该闭嘴）、陈麦（回乡奔丧的青年，半信半疑的记录者）、土地庙里那尊越看越不对劲的'神像'"
+    style: "800-1200字，烟火气中渗出寒意，越日常越瘆人，方言与祭文点缀"
+    hard_requirements:
+      - "俗神体系须有考据基础（灶王/土地/城隍的职司与祀俗不得随意编造）"
+      - "恐怖必须扎根日常亲切感：恐怖感=日常物件的异常"
+      - "禁止西式克苏鲁照搬（触手、疯狂山脉式套路）"
+      - "对抗只用民俗逻辑：请神、送煞、纸扎、符咒，不用科学解释"
+
+  # phase_beats：Todorov 5 态（日常—异变—敬远结构，primitive 限八种原语）
+  phase_beats:
+    equilibrium:
+      - {id: folk_daily, desc: "民俗日常：上供、烧香、节令规矩", primitive: GoalFormation}
+    disruption:
+      - {id: rite_anomaly, desc: "仪式异常：供品、香火或神像出现不对劲", primitive: Suspense}
+    recognition:
+      - {id: god_face, desc: "俗神'真面目'的一线窥见", primitive: Revelation}
+      - {id: belief_collapse, desc: "信仰崩塌：敬畏之物并不可亲", primitive: TurningPoint}
+    repair:
+      - {id: folk_counter, desc: "以俗克诡：请神、送煞、纸扎的应对", primitive: Conflict}
+      - {id: sanity_price, desc: "代价：窥见者付出心神或亲缘", primitive: Sacrifice}
+    new_equilibrium:
+      - {id: keep_distance, desc: "敬而远之：以老规矩重新划定人神界限", primitive: Recognition}
+      - {id: ember_hook, desc: "尾声留扣：另一处灶台睁开的眼睛", primitive: Suspense}
+
+  # blend_domains：跨域融合的领域池
+  blend_domains: ["中国民间俗神谱系", "岁时节令与祭祀礼仪", "纸扎与符咒手艺"]
+
+  # pacing_targets：慢热恐怖——反转低密但幅度深、钩子阴冷绵长
+  pacing_targets:
+    reversal_density: [0.2, 0.4]
+    avg_reversal_magnitude: [0.4, 0.7]
+    pacing_consistency: [0.5, 0.8]
+    cliffhanger_strength: [0.6, 0.9]
+
+  # CONCOCT：恐怖在具体细节处顶到峰值（日常异常的放大）
+  concreteness_shape: peak

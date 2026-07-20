@@ -1,0 +1,120 @@
+# 题材插件：奇幻竞技（sports_competition × progression_fantasy，rule_collision 融合）
+# 结构对齐 mystery.yaml / romance.yaml；内容自本包 fusion 元数据派生
+manifest_version: 1
+name: fantasy-sports
+extension_point: story.genre
+activation_events: ["on_genre:fantasy-sports"]
+fusion:
+  type: rule_collision
+  parent_genres: [sports_competition, progression_fantasy]
+  core_conflict: "体育的'公平竞技' vs 超能力的'先天不平等'——'如果有人天生能飞，百米赛跑还有意义吗？'"
+  fusion_formula: "体育竞技框架 + 超能力/修为 + '天赋vs努力'的终极辩论"
+
+culture_bound: false
+allowed_cultures: ["*"]
+
+params:
+  pacing_curve: "天赋觉醒→入队→训练+能力开发→比赛→能力规则争议→巅峰对决"
+  power_system: "athletic_supernatural"      # 超能力绑定特定运动
+  emotion_arcs: [cinderella, man_in_hole]
+  conflict_types:
+    - {type: physical, weight: 0.45}         # 比赛/战斗
+    - {type: internal, weight: 0.25}         # 天赋vs努力的身份认同
+    - {type: relational, weight: 0.2}        # 队友/对手关系
+    - {type: political, weight: 0.1}         # 能力公平性争议
+  information_distribution: scouting_report  # 赛前情报/对手分析
+  max_red_herrings: 1
+  resolution_pattern: "在公平性质疑中证明'努力能弥补天赋差'（or 重新定义'公平'）"
+  main_track: A
+  theme_track: E
+  payoff_window: 2
+  beats_per_chapter: 5
+
+  # 五轨道（Showrunner 调度对象 — 自 fusion_formula/conflict_types 推导：
+  # 赛季征程 + 天赋与训练 + 劲敌 + 单元分站赛 + 公平之辩）
+  tracks:
+    - {id: A, name: "主线·赛季征程与巅峰对决", arc_type: Serialized, archetype: Quest,   progress: 0.0, last_touched: 0}
+    - {id: B, name: "副线·天赋与训练的磨砺",   arc_type: Serialized, archetype: Rebirth,  progress: 0.0, last_touched: 0}
+    - {id: C, name: "副线·劲敌与冠军队伍",     arc_type: Serialized, archetype: Monster,  progress: 0.0, last_touched: 0}
+    - {id: D, name: "单元剧·分站赛事",         arc_type: Anthology,  archetype: Quest,    progress: 0.0, last_touched: 0, min_main_progress: 0.3}
+    - {id: E, name: "主题·公平与天赋之辩",     arc_type: Serialized, archetype: Rebirth,  progress: 0.0, last_touched: 0}
+
+  rule_packs: [sanderson-laws]  # 原 world_rules_ref 改名（P7.4 L5 引用合并）
+  # 世界规则（Z3 SMT 硬约束 — expr 限事实词汇表）
+  world_rules:
+    - id: power_not_victory
+      kind: bool
+      desc: "能力上限律：超能力不得直接赢下终局，胜利须由训练/策略/配合兑现"
+      expr: "not(has_supernatural and is_resolution)"
+    - id: no_late_power
+      kind: bool
+      desc: "能力铺垫：决胜用的能力或战术不得在大结局首次出现"
+      expr: "not(is_resolution and introduces_new_key_clue)"
+
+  # 伏笔模板（Showrunner 种子计划用）
+  foreshadow_templates:
+    - {content: "对手能力的一处细微迟滞", trigger: "再次交手",         payoff: "迟滞成为制胜突破口"}
+    - {content: "教练欲言又止的旧伤",     trigger: "高强度训练中伤病复发", payoff: "旧伤的教训改变训练方案"}
+    - {content: "规则手册的冷门条款",     trigger: "争议判罚",         payoff: "条款左右关键一战的胜负"}
+
+  taboo_list:
+    - "能力必须有明确限制——不能无脑碾压比赛"
+    - "体育规则必须真实可信——不能魔改运动本身"
+    - "不允许'纯靠天赋赢'——必须有训练/策略/团队配合"
+
+  evaluation_weights:
+    感官细节: 0.25                             # 比赛临场感
+    情节连贯: 0.20
+    角色动机: 0.15
+    主题深度: 0.15                             # 公平性探讨
+    对话真实度: 0.10
+    套路检测: 0.10
+    设定一致性: 0.05
+
+  active_critics: [sensory_detail, plot_coherence, character_motivation]
+
+  fusion_specific_rules:
+    fairness_debate: "必须有'能力组'和'无能力组'的分组——公平性争议是核心张力"
+    training_matters: "能力不能替代训练——必须展示训练 montage 来解锁能力的正确用法"
+
+  # prompt 段：role/setting/characters/style/hard_requirements 五键
+  prompt:
+    role: "奇幻体育小说作者"
+    setting: "超能力与特定运动绑定的竞技联盟：选手按'能力组/无能力组'分级参赛，天赋差异让'公平'二字悬在每一场比赛上空"
+    characters: "陈速（无能力组出身的新人，靠观察力和预判立足）、阿岚（能力组天才，背负着'你只靠天赋'的质疑）、老K（教练，前传奇选手，因伤退役，嘴硬心软）、联赛裁判委员会（公平性争议的漩涡中心）"
+    style: "800-1200字，临场感拉满，解说式节奏与选手内心独白穿插"
+    hard_requirements:
+      - "能力必须有明确的限制与代价，禁止无脑碾压"
+      - "运动本身的规则真实可信，不得为剧情魔改"
+      - "胜利必须由训练、策略与团队配合兑现，禁止纯靠天赋"
+      - "公平性争议必须正面呈现并贯穿赛季"
+
+  # phase_beats：Todorov 5 态（入队—磨砺—巅峰结构，primitive 限八种原语）
+  phase_beats:
+    equilibrium:
+      - {id: tryout, desc: "入队与能力测定：主角的起点定位", primitive: GoalFormation}
+    disruption:
+      - {id: first_match, desc: "首战：能力差距带来的冲击", primitive: Conflict}
+      - {id: fairness_row, desc: "公平性争议爆发：分组制度被质疑", primitive: Suspense}
+    recognition:
+      - {id: scout_report, desc: "对手情报解析：找到能力的缝隙", primitive: Revelation}
+      - {id: rival_truth, desc: "劲敌的真实姿态，让人重新理解'天赋'", primitive: Recognition}
+    repair:
+      - {id: training_montage, desc: "针对性训练：解锁能力的正确用法", primitive: TurningPoint}
+      - {id: injury_setback, desc: "伤病或惨败：努力必须付出的代价", primitive: Sacrifice}
+    new_equilibrium:
+      - {id: peak_match, desc: "巅峰对决：训练与策略在赛场上兑现", primitive: Conflict}
+      - {id: season_hook, desc: "尾声留扣：新赛季与新规之争", primitive: Suspense}
+
+  # blend_domains：跨域融合的领域池
+  blend_domains: ["运动生理学", "联赛赛制与裁判规则", "超能力分级制度"]
+
+  # pacing_targets：竞技文——反转中密、临场钩子强
+  pacing_targets:
+    reversal_density: [0.3, 0.5]
+    avg_reversal_magnitude: [0.4, 0.7]
+    pacing_consistency: [0.6, 0.9]
+    cliffhanger_strength: [0.5, 0.8]
+
+  # CONCOCT：赛场高潮在中段顶起（比赛章的峰形具体度）
+  concreteness_shape: peak
