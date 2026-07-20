@@ -27,7 +27,8 @@ P6.3：`rewrite_paragraph()` 单段重写（写作台核心卖点）——本章
 
 P7.2 L3：构造时可选注入 kernel registry，把 active 的 story.language pack
 （params.language 匹配本 realizer）的 `params.resources` 按键并集合并进
-本实例资源池（pack 词条追加、重复去重）；无 registry/零匹配 pack 时不动
+本实例资源池（list 类 pack 词条排在常量之前——采样取前 N 条方可命中 pack，
+重复去重；dict 类按子键并集）；无 registry/零匹配 pack 时不动
 类常量 LANGUAGE_RESOURCES，行为与基线逐字一致。
 """
 from __future__ import annotations
@@ -89,13 +90,16 @@ class LanguageRealizer:
         """匹配语言的 pack 资源并入本实例资源池（素材包计划 §3.2 键并集）。
 
         - 匹配规则：pack.params.language == self.language，不匹配跳过
-        - list 值：pack 词条追加在代码常量之后，重复词条去重（多 pack 累进去重）
-        - dict 值（敬语体系）：按子键并集，子键内追加去重
+        - list 值：pack 词条排在代码常量之前（采样确定性取前 N 条，pack 在前
+          才可命中），重复词条去重（多 pack 按包序累进去重）
+        - dict 值（敬语体系）：按子键并集，子键内追加去重（全量进 prompt，
+          顺序无关）
         - 未知键 / 未知子键 / 类型不符：warning + 忽略（不崩）
         - texture_hints 本期不进 TextureParams（最小决策：忽略，仅在此注释说明）
         合并在实例副本上进行（实例属性遮蔽类常量），类常量不被污染。
         """
         merged = None
+        pack_first: dict[str, list] = {}   # list 类：pack 词条按包序累积（排常量前）
         for pack in registry.packs("story.language"):
             params = getattr(pack, "params", None) or {}
             if params.get("language") != self.language:
@@ -129,12 +133,15 @@ class LanguageRealizer:
                         merged[key][sub] += [w for w in words
                                              if w not in merged[key][sub]]
                 elif isinstance(base, list) and isinstance(value, list):
-                    merged[key] += [w for w in value if w not in merged[key]]
+                    bucket = pack_first.setdefault(key, [])
+                    bucket += [w for w in value if w not in bucket]
                 else:
                     warnings.warn(
                         f"语言 pack {pack.name} 资源键 {key!r} 类型与代码常量"
                         f"不符，忽略", stacklevel=2)
         if merged is not None:
+            for key, words in pack_first.items():
+                merged[key] = words + [w for w in merged[key] if w not in words]
             self.LANGUAGE_RESOURCES = merged
 
     # ---------- 主入口：1 次 LLM 调用 ----------

@@ -6,6 +6,8 @@
 2. 采样进 prompt：fake LLM 下 realize 的 prompt 含 pack 敬语词条（确定性）
 3. 兜底：无 registry → 资源=纯代码常量；en pack 对 zh realizer 不合并；
    未知资源键 → warning + 忽略；en realizer 同样合并（zh/en 均生效）
+4. list 类资源 pack 在前：确定性采样窗（取前 N 条）可命中 pack 四字格
+   （采样可达性修复——append-after 时 pack 词条永进不了采样窗）
 """
 from __future__ import annotations
 
@@ -95,7 +97,29 @@ def test_pack_entries_reach_prompt():
     prompt = llm.calls[0][1]
     # zh 默认 honorific_register=0.6 ≥ 0.3 → 敬语体系全量进 prompt（确定性）
     assert "府尊" in prompt and "民妇" in prompt    # pack 敬语词条
-    assert "步履沉稳" in prompt                     # 常量采样仍在
+    # list 类 pack 在前：默认 idiom_density=0.5 → 采样窗前 5 条全为 pack 段；
+    # 明察秋毫（常量与 pack 重复，去重后居 pack 位）仍在窗内，常量未被吞掉
+    assert "明察秋毫" in prompt
+
+
+# ---------- 用例4：list 类 pack 在前 → 采样窗可命中 pack 四字格 ----------
+
+def test_pack_first_order_makes_pack_idioms_reachable():
+    # 合并顺序：pack 词条（按包序）在前，代码常量去重后随其后
+    r = ChineseRealizer(registry=_real_pack_registry())
+    assert (r.LANGUAGE_RESOURCES["四字格"][:3]
+            == ["明察秋毫", "铁面无私", "蛛丝马迹"])
+
+    # idiom_density=1.0 → n_idiom=10：采样窗（前 10 条）全落在 pack 段（12 条），
+    # pack 独有的四字格确定性进 prompt（append-after 时窗内只有常量，永不可达）
+    llm = FakeLLM({"realize_chapter": "包拯升堂。"})
+    r2 = ChineseRealizer(llm_call=llm.call, registry=_real_pack_registry())
+    ir = _ir()
+    ir.texture.idiom_density = 1.0
+    run(r2.realize(ir, None, _bundle()))
+    prompt = llm.calls[0][1]
+    for word in ("铁面无私", "蛛丝马迹", "沉吟半晌", "执法如山"):
+        assert word in prompt                     # pack 独有词条（常量中无）
 
 
 # ---------- 用例3：无 registry / 语言不匹配 / 未知键 兜底 ----------
