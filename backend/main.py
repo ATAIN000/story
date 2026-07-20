@@ -142,10 +142,9 @@ class SettingsReq(BaseModel):
 
 
 class TestLlmReq(BaseModel):
-    """P6.10 B10：LLM 测试连接 body；三键全可选，缺省用当前配置。
-    key 永不回前端（响应只 ok+latency+model+error）。"""
-    base_url: str | None = None
-    key: str | None = None
+    """P6.10 B10：LLM 测试连接 body；只接受可选 model 覆盖。
+    base_url/key 永不取自前端（防 SSRF + 系统密钥外泄）——始终用当前
+    engine.llm 配置。key 永不回前端（响应只 ok+latency+model+error）。"""
     model: str | None = None
 
 
@@ -360,16 +359,17 @@ def settings_post(req: SettingsReq):
 async def settings_test_llm(req: TestLlmReq | None = None):
     """【P6.10 B10】一次性 ping LLM —— 最小请求「请回复：好」max_tokens=10。
     body 缺省用当前 engine.llm 配置；mock 模式直接返回 ok=true。
+    始终用 engine.llm 的 base_url/api_key（不接受前端传入——防 SSRF + 密钥外泄）。
     响应只 {ok, latency_ms, model, error?} —— key 永不回前端。"""
     import time as _time
     import httpx
     src = req or TestLlmReq()
     client = engine.llm
-    base_url = (src.base_url or client.base_url).rstrip("/")
+    base_url = client.base_url.rstrip("/")
     model = src.model or client.model
-    key = src.key or client.api_key
+    key = client.api_key
     # mock 模式：直接 ok（不构造 client）
-    if client.is_mock and not src.key and not src.base_url:
+    if client.is_mock:
         return {"ok": True, "latency_ms": 0.0, "model": client.model}
     if not key:
         return {"ok": False, "error": "未配置 API key（环境变量 STORY_ENGINE_LLM_API_KEY 为空）",
