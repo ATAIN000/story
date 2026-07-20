@@ -1,0 +1,119 @@
+# 题材插件：盗墓探险（adventure × folk_horror × mystery，rule_collision 融合）
+# 结构对齐 mystery.yaml / romance.yaml；内容自本包 fusion 元数据派生
+manifest_version: 1
+name: tomb-exploration
+extension_point: story.genre
+activation_events: ["on_genre:tomb-exploration"]
+fusion:
+  type: rule_collision
+  parent_genres: [adventure, folk_horror, mystery]
+  core_conflict: "科学的考古方法 vs 超自然的风水秘术和鬼怪；贪欲驱动探险 vs 死亡如影随形"
+  fusion_formula: "风水秘术/民俗传说 + 探险悬疑 + 团队配置 + 历史谜团"
+culture_bound: true                  # 盗墓流深度绑定中国民俗
+allowed_cultures: ["chinese_folk", "confucian_officialdom"]
+
+params:
+  pacing_curve: "组队→探墓入口→机关谜题→超自然遭遇→真相揭示→逃生"
+  power_system: "fengshui_folkcraft"         # 风水秘术+民间法术
+  emotion_arcs: [man_in_hole, oedipus]
+  conflict_types:
+    - {type: cognitive, weight: 0.35}        # 机关谜题/风水推演
+    - {type: physical, weight: 0.3}          # 生存/战斗
+    - {type: cosmic, weight: 0.2}            # 超自然恐怖
+    - {type: relational, weight: 0.15}       # 团队信任/背叛
+  information_distribution: clue_progressive # 线索逐步揭示墓主秘密
+  max_red_herrings: 3
+  resolution_pattern: "揭开历史真相 + 带着代价逃生（队友可能有伤亡）"
+  main_track: A
+  theme_track: E
+  payoff_window: 2
+  beats_per_chapter: 4
+
+  # 五轨道（Showrunner 调度对象 — 自 core_conflict/fusion_formula 推导：
+  # 墓主真相主线 + 地宫生死关 + 队伍裂痕 + 耳室怪谈单元 + 敬畏与贪欲主题）
+  tracks:
+    - {id: A, name: "主线·墓主身份与历史真相", arc_type: Serialized, archetype: Quest,   progress: 0.0, last_touched: 0}
+    - {id: B, name: "副线·地宫机关与生死关", arc_type: Serialized, archetype: Monster,  progress: 0.0, last_touched: 0}
+    - {id: C, name: "副线·队伍的信任与裂痕", arc_type: Serialized, archetype: Tragedy, progress: 0.0, last_touched: 0}
+    - {id: D, name: "单元剧·陪葬坑与耳室诡事", arc_type: Anthology,  archetype: Monster,  progress: 0.0, last_touched: 0, min_main_progress: 0.4}
+    - {id: E, name: "主题·敬畏与贪欲的分寸", arc_type: Serialized, archetype: Rebirth,  progress: 0.0, last_touched: 0}
+
+  rule_packs: [gongan-taboo]  # 原 world_rules_ref 改名（P7.4 L5 引用合并）
+  # 世界规则（Z3 SMT 硬约束 — expr 限事实词汇表）
+  world_rules:
+    - id: craft_consistent
+      kind: bool
+      desc: "秘术一致律：风水秘术与民间法术须在既有体系内推演，不得临场新造"
+      expr: "not(is_resolution and introduces_new_key_clue)"
+    - id: no_divine_rescue
+      kind: bool
+      desc: "生死自负律：墓中诡物不得被神力式手段直接荡平——只能依规则避、镇、送"
+      expr: "not(has_supernatural and is_resolution)"
+
+  # 伏笔模板（Showrunner 种子计划用）
+  foreshadow_templates:
+    - {content: "墓志铭上被凿去的谥号", trigger: "拓片拼合后残字成句", payoff: "墓主真实身份推翻史书定论"}
+    - {content: "罗盘在某个方位反复打转", trigger: "换一条路仍回到原处", payoff: "方位异常处正是主墓室的伪装门"}
+    - {content: "队友随身的一件旧物",   trigger: "旧物与墓中纹样对上", payoff: "队伍里早有人与这座墓血脉相连"}
+
+  taboo_list:
+    - "风水秘术必须有体系——不能随意编造"
+    - "鬼怪必须有规则——不能无中生有"
+    - "不允许全员安全——必须有真实伤亡风险"
+
+  evaluation_weights:
+    设定一致性: 0.25
+    情节连贯: 0.20
+    感官细节: 0.20                            # 氛围营造极重要
+    角色动机: 0.15
+    对话真实度: 0.10
+    套路检测: 0.05
+    主题深度: 0.05
+
+  active_critics: [setting_consistency, plot_coherence, sensory_detail, character_motivation]
+
+  fusion_specific_rules:
+    team_roles: ["摸金/风水", "武力/护卫", "医术", "解谜/考古", "情报"]
+    sub_types: ["classic_fengshui", "suspense_mystery", "daoist_craft", "documentary_realism"]
+
+  # prompt 段：role/setting/characters/style/hard_requirements 五键
+  prompt:
+    role: "盗墓探险小说作者"
+    setting: "邙山余脉深处一座正史无载的大墓：半张祖传帛书把一支各怀本事的小队引到封土之下，墓里的规矩比外面的王法更硬"
+    characters: "陈青石（掌眼，精通堪舆与断代，谨守'有所取有所不取'的祖训）、雷大川（出力，退役工兵，信炸药也信艾草）、温九（支锅，出资组队的神秘女人，对墓主的了解多得可疑）"
+    style: "1000-1500字，手电光柱里的压迫感，堪舆口诀与工兵常识并用，每一步都踩在生死分界上"
+    hard_requirements:
+      - "堪舆与秘术必须成体系：口诀、罗盘、望气前后一致，不得临场编造"
+      - "墓中诡物必须有规则：触发条件、规避方法与镇送之法缺一不可"
+      - "伤亡必须真实：关键抉择要有人付出代价"
+      - "历史细节须可考：器物、葬制、铭文符合时代逻辑"
+
+  # phase_beats：Todorov 5 态（组队—下墓—逃生结构，primitive 限八种原语）
+  phase_beats:
+    equilibrium:
+      - {id: team_assemble, desc: "组队：帛书、分赃约定与各自的隐瞒", primitive: GoalFormation}
+    disruption:
+      - {id: entrance_found, desc: "找到入口：封土下的第一道机关", primitive: Suspense}
+      - {id: first_wrongness, desc: "不对劲：陪葬坑的摆设违背了葬制常识", primitive: TurningPoint}
+    recognition:
+      - {id: tomb_owner_hint, desc: "墓主身份的一线提示：谥号被凿去的缘由", primitive: Revelation}
+      - {id: trust_crack, desc: "队内裂痕：有人私藏了墓里取出的东西", primitive: Betrayal}
+    repair:
+      - {id: mechanism_gauntlet, desc: "生死关：连闯机关抵达主墓室", primitive: Conflict}
+      - {id: companion_price, desc: "代价：有人留在机关后面", primitive: Sacrifice}
+    new_equilibrium:
+      - {id: truth_escape, desc: "真相与逃生：带出来的东西比想象中少，也比想象中重", primitive: Recognition}
+      - {id: silk_hook, desc: "尾声留扣：帛书残片的背面还有半张图", primitive: Suspense}
+
+  # blend_domains：跨域融合的领域池
+  blend_domains: ["堪舆与历代葬制", "田野考古与金石断代", "工兵爆破与坑道作业"]
+
+  # pacing_targets：探险节奏——稳步增压，关底强钩
+  pacing_targets:
+    reversal_density: [0.3, 0.6]
+    avg_reversal_magnitude: [0.5, 0.8]
+    pacing_consistency: [0.5, 0.8]
+    cliffhanger_strength: [0.7, 1.0]
+
+  # CONCOCT：恐怖在机关与器物的具体细节处顶到峰值
+  concreteness_shape: peak

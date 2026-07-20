@@ -1,0 +1,119 @@
+# 题材插件：诡异修仙（xianxia × cosmic_horror，promise_subversion 融合）
+# 结构对齐 mystery.yaml / romance.yaml；内容自本包 fusion 元数据派生
+manifest_version: 1
+name: xianxia-cthulhu
+extension_point: story.genre
+activation_events: ["on_genre:xianxia-cthulhu"]
+# 融合元数据（图鉴 §一 的4种冲突结构）
+fusion:
+  type: promise_subversion        # 承诺颠覆
+  parent_genres: [xianxia, cosmic_horror]
+  core_conflict: "修仙承诺长生超脱 → 克苏鲁框架下长生=疯狂，飞升=被吞噬"
+  fusion_formula: "修炼体系(修仙) + 不可知恐惧(克苏鲁) → 力量的代价是人性"
+culture_bound: false
+allowed_cultures: ["*"]
+
+params:
+  pacing_curve: "凡人入门→诡异初现→越修越怖→认知崩溃→终极抉择"
+  power_system: "eerie_cultivation"        # 诡异修仙：境界越高越接近不可名状
+  emotion_arcs: [man_in_hole, riches_to_rags]  # 越强越绝望
+  conflict_types:
+    - {type: cognitive, weight: 0.4}       # 认知混乱：什么是真实？
+    - {type: cosmic, weight: 0.35}         # 不可名状的威胁
+    - {type: internal, weight: 0.25}       # 人性vs疯狂的内心战
+  information_distribution: unreliable_narrator  # 主角自己分不清真实/虚幻
+  max_red_herrings: 2
+  resolution_pattern: "觉醒真相+付出代价（清醒的疯狂 or 痛苦的超脱）"
+  main_track: A
+  theme_track: E
+  payoff_window: 2
+  beats_per_chapter: 4
+
+  # 五轨道（Showrunner 调度对象 — 自 core_conflict/fusion_formula 推导：
+  # 飞升之路主线 + 不可名状注视 + 同门异化 + 禁地异闻单元 + 长生与人性主题）
+  tracks:
+    - {id: A, name: "主线·越修越怖的飞升之路", arc_type: Serialized, archetype: Quest,   progress: 0.0, last_touched: 0}
+    - {id: B, name: "副线·云后投下的注视",   arc_type: Serialized, archetype: Monster,  progress: 0.0, last_touched: 0}
+    - {id: C, name: "副线·同门的疯狂与异化", arc_type: Serialized, archetype: Tragedy, progress: 0.0, last_touched: 0}
+    - {id: D, name: "单元剧·禁地与古卷异闻", arc_type: Anthology,  archetype: Monster,  progress: 0.0, last_touched: 0, min_main_progress: 0.4}
+    - {id: E, name: "主题·长生与人性的取舍", arc_type: Serialized, archetype: Rebirth,  progress: 0.0, last_touched: 0}
+
+  rule_packs: [sanderson-laws]  # 原 world_rules_ref 改名（P7.4 L5 引用合并）
+  # 世界规则（Z3 SMT 硬约束 — expr 限事实词汇表）
+  world_rules:
+    - id: ascension_not_solution
+      kind: bool
+      desc: "飞升非解律：飞升与神力不得作为问题的解决手段——境界越高越接近吞噬"
+      expr: "not(has_supernatural and is_resolution)"
+    - id: truth_omen_first
+      kind: bool
+      desc: "征兆先验律：终极真相揭晓前须有层层异象铺垫，不得空降答案"
+      expr: "not(is_resolution and introduces_new_key_clue)"
+
+  # 伏笔模板（Showrunner 种子计划用）
+  foreshadow_templates:
+    - {content: "功法残卷上多出来的一页", trigger: "按那一页行功后神识大涨", payoff: "多出的字迹不是人写的——它一直在回答"}
+    - {content: "祖师画像眼角的泪痕",   trigger: "每逢月晦泪痕便加深一分", payoff: "画像里的祖师还醒着，并且认出了主角的路"}
+    - {content: "丹成时的一缕异香",     trigger: "异香引来守山灵兽的跪拜", payoff: "灵兽拜的不是丹，是丹里借居的东西"}
+
+  taboo_list:
+    - "不允许轻松愉快的修仙氛围——力量必有恐怖代价"
+    - "不允许克苏鲁元素仅作装饰——必须颠覆修仙核心承诺"
+    - "不可名状之物不可被彻底理解或击败——只能逃避、献祭或同化"
+
+  evaluation_weights:
+    设定一致性: 0.25                        # 两套世界观的逻辑自洽
+    情节连贯: 0.20
+    主题深度: 0.20                          # 认知/存在主义的深度
+    角色动机: 0.15
+    感官细节: 0.10                          # 诡异氛围
+    对话真实度: 0.05
+    套路检测: 0.05
+
+  active_critics: [setting_consistency, plot_coherence, emotion_arc, sensory_detail]
+
+  fusion_specific_rules:
+    madness_threshold: "境界每升一级，疯狂值+1，超阈值触发认知崩溃事件"
+    reality_flicker: "主角感知的现实偶尔与真实世界不一致（读者也分不清）"
+
+  # prompt 段：role/setting/characters/style/hard_requirements 五键
+  prompt:
+    role: "诡异修仙小说作者"
+    setting: "云海之上的太玄门：人人求长生，代代有飞升——只是飞升那日的霞光里，总有些东西在云后俯视，而典籍对'霞光之后'讳莫如深"
+    characters: "顾青崖（外门弟子，根骨平平却读遍了藏经阁的禁卷）、守阁老人（从不修炼，看守藏经阁三百年，劝每一个天才'慢一点修'）、『师尊』（门中唯一逼近飞升的大能，近来吩咐弟子把肉身称作'衣服'）"
+    style: "1000-1500字，仙家气象与腐坏细节同屏，越清修越瘆人，真相只给轮廓不给全图"
+    hard_requirements:
+      - "力量必有恐怖代价：境界每进一步，主角离'人'就远一分"
+      - "克苏鲁元素必须颠覆修仙核心承诺：长生≈疯狂，飞升≈被吞噬"
+      - "不可名状之物不可被彻底理解或击败——只能逃避、献祭或同化"
+      - "主角的感知不完全可信：现实与异象的边界允许模糊"
+
+  # phase_beats：Todorov 5 态（入门—异化—抉择结构，primitive 限八种原语）
+  phase_beats:
+    equilibrium:
+      - {id: sect_daily, desc: "外门日常：吐纳、洒扫与藏经阁的禁卷", primitive: GoalFormation}
+    disruption:
+      - {id: first_eeriness, desc: "诡异初现：功法里的异香与画像的泪痕", primitive: Suspense}
+      - {id: deeper_wrong, desc: "越修越怖：境界提升伴随感知错位", primitive: TurningPoint}
+    recognition:
+      - {id: ascension_truth, desc: "飞升真相的一线轮廓：霞光之后有什么在等", primitive: Revelation}
+      - {id: mad_threshold, desc: "认知崩溃：再也分不清云端的是仙是别的", primitive: Conflict}
+    repair:
+      - {id: sever_or_see, desc: "终极抉择：自斩修为做人，或睁开'眼睛'赴道", primitive: Sacrifice}
+      - {id: anchor_human, desc: "以尘俗执念为锚，强留一线人性", primitive: Conflict}
+    new_equilibrium:
+      - {id: lucid_madness, desc: "清醒的疯狂：带着真相继续活在山上", primitive: Recognition}
+      - {id: cloud_hook, desc: "尾声留扣：云海之上，霞光又为一位新弟子亮起", primitive: Suspense}
+
+  # blend_domains：跨域融合的领域池
+  blend_domains: ["修仙境界体系与丹道", "宇宙主义恐怖与认知崩解", "道藏典籍与谶纬文本"]
+
+  # pacing_targets：慢热崩坏——反转低密但幅度深，越到后期越失控
+  pacing_targets:
+    reversal_density: [0.2, 0.5]
+    avg_reversal_magnitude: [0.5, 0.9]
+    pacing_consistency: [0.4, 0.8]
+    cliffhanger_strength: [0.6, 0.9]
+
+  # CONCOCT：恐怖在仙家物件的腐坏细节处顶到峰值
+  concreteness_shape: peak

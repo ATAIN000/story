@@ -345,39 +345,3 @@
   status: active
   source: hermes
   collected_at: "2026-07-20"
-- pack: sequence-pathway
-  extension_point: story.genre
-  version: "0.1"
-  status: active
-  source: hermes
-  collected_at: "2026-07-20"
-- pack: supernatural-management
-  extension_point: story.genre
-  version: "0.1"
-  status: active
-  source: hermes
-  collected_at: "2026-07-20"
-- pack: system-isekai
-  extension_point: story.genre
-  version: "0.1"
-  status: active
-  source: hermes
-  collected_at: "2026-07-20"
-- pack: tomb-exploration
-  extension_point: story.genre
-  version: "0.1"
-  status: active
-  source: hermes
-  collected_at: "2026-07-20"
-- pack: wuxia-steampunk
-  extension_point: story.genre
-  version: "0.1"
-  status: active
-  source: hermes
-  collected_at: "2026-07-20"
-- pack: xianxia-cthulhu
-  extension_point: story.genre
-  version: "0.1"
-  status: active
-  source: hermes
-  collected_at: "2026-07-20"

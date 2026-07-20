@@ -1,0 +1,118 @@
+# 题材插件：蒸汽武侠（wuxia × steampunk，rule_collision 融合）
+# 结构对齐 mystery.yaml / romance.yaml；内容自本包 fusion 元数据派生
+# 注：tracks/pacing_curve/taboo_list 参与 RAG 路由文档，措辞避开「江湖/武林/侠客」
+#     等 wuxia 路由关键词（P7.7 test_meta 回归教训），题材用语放 prompt 段表达
+manifest_version: 1
+name: wuxia-steampunk
+extension_point: story.genre
+activation_events: ["on_genre:wuxia-steampunk"]
+fusion:
+  type: rule_collision
+  parent_genres: [wuxia, steampunk]
+  core_conflict: "传统武功（内力气功） vs 蒸汽机械（工业动力）——'武功再高，怕不怕蒸汽锤？'"
+  fusion_formula: "传统武学 + 蒸汽朋克美学 + 侠义精神vs工业文明"
+culture_bound: false
+allowed_cultures: ["*"]
+
+params:
+  pacing_curve: "武馆旧序→蒸汽机侵入→拳师对机械师→新旧秩序相撞→融合或消亡"
+  power_system: "qi_vs_steam"                 # 内力 vs 蒸汽动力双体系
+  emotion_arcs: [riches_to_rags, oedipus]    # 旧时代的挽歌
+  conflict_types:
+    - {type: physical, weight: 0.35}         # 武功vs机械战斗
+    - {type: political, weight: 0.3}         # 旧武行vs新工业势力
+    - {type: cognitive, weight: 0.2}         # 技术/武学融合探索
+    - {type: internal, weight: 0.15}         # 侠义精神的现代意义
+  information_distribution: dual_camp        # 武行/工业双视角
+  max_red_herrings: 2
+  resolution_pattern: "新旧融合的新武学诞生 or 旧时代的悲壮落幕"
+  main_track: A
+  theme_track: E
+  payoff_window: 3
+  beats_per_chapter: 4
+
+  # 五轨道（Showrunner 调度对象 — 自 core_conflict/fusion_formula 推导：
+  # 气汽对撞主线 + 机件入侵 + 旧名宿谢幕 + 切磋帖单元 + 侠义去处主题）
+  tracks:
+    - {id: A, name: "主线·拳与汽的生死对撞", arc_type: Serialized, archetype: Quest,   progress: 0.0, last_touched: 0}
+    - {id: B, name: "副线·蒸汽机件的进逼",   arc_type: Serialized, archetype: Monster,  progress: 0.0, last_touched: 0}
+    - {id: C, name: "副线·旧武行最后的名宿", arc_type: Serialized, archetype: Tragedy, progress: 0.0, last_touched: 0}
+    - {id: D, name: "单元剧·机巧与拳脚的切磋帖", arc_type: Anthology,  archetype: Quest,   progress: 0.0, last_touched: 0, min_main_progress: 0.4}
+    - {id: E, name: "主题·侠义在机器时代的去处", arc_type: Serialized, archetype: Rebirth,  progress: 0.0, last_touched: 0}
+
+  rule_packs: [sanderson-laws, wuxia-taboo]  # 原 world_rules_ref 改名（P7.4 L5 引用合并）
+  # 世界规则（Z3 SMT 硬约束 — expr 限事实词汇表）
+  world_rules:
+    - id: qi_steam_fair
+      kind: bool
+      desc: "双体系律：内力与蒸汽机的胜负须按既定交互规则推演，结局不得临时偏向任何一边"
+      expr: "not(is_resolution and introduces_new_key_clue)"
+    - id: no_super_finish
+      kind: bool
+      desc: "止戈律：神迹式的超凡介入不得终结新旧之争——胜负由人一拳一锤打出"
+      expr: "not(has_supernatural and is_resolution)"
+
+  # 伏笔模板（Showrunner 种子计划用）
+  foreshadow_templates:
+    - {content: "名宿拳谱里夹着的一张机件图纸", trigger: "图纸被机械师认出型号", payoff: "名宿年轻时曾与蒸汽匠人合创过一门拳"}
+    - {content: "蒸汽锤上磨旧的拳印",       trigger: "拳印与某门失传的劲路吻合", payoff: "机器里藏着一位旧武人的最后传承"}
+    - {content: "铁轨尽头荒废的演武场",     trigger: "演武场地砖下的暗格被踩开", payoff: "暗格里是新旧两派三十年前签下又撕毁的盟约"}
+
+  taboo_list:
+    - "内力与蒸汽机械必须有交互规则——不能各玩各的"
+    - "不允许蒸汽机械纯碾压武功——内力有不可替代的优势"
+    - "蒸汽美学必须贯穿——齿轮、铜管与白汽的视觉始终在场"
+
+  evaluation_weights:
+    设定一致性: 0.25                           # 双体系平衡
+    感官细节: 0.20                             # 蒸汽朋克视觉
+    主题深度: 0.20                             # 传统vs现代
+    情节连贯: 0.15
+    角色动机: 0.10
+    对话真实度: 0.05
+    套路检测: 0.05
+
+  active_critics: [setting_consistency, sensory_detail, plot_coherence]
+
+  fusion_specific_rules:
+    tech_collision: "蒸汽机械可复制部分武功效果——但失去'意/道'，永远差一层"
+    era_metaphor: "武林没落=传统手工业被工业革命取代的隐喻"
+
+  # prompt 段：role/setting/characters/style/hard_requirements 五键
+  prompt:
+    role: "蒸汽武侠小说作者"
+    setting: "铁龙与汽笛开进山海关的年月：武馆、镖局与码头的旧秩序，正被齿轮、锅炉和铁轨一寸寸碾过，拳师们第一次听见时代的倒计时"
+    characters: "沈孤鸿（形意拳名宿，一双肉掌打遍北方，如今对着蒸汽锤沉默）、白矾（留洋归来的女机械师，相信机器能救人也能杀人）、小石头（武馆学徒，偷偷给锅炉房帮工，两只脚各踩一个时代）"
+    style: "1000-1500字，拳理与机件原理并置，铜管白汽的质感贯穿，打戏的每一分力都要交代来源"
+    hard_requirements:
+      - "内力与蒸汽机械必须有明确的交互规则：劲路能震散什么、震不散什么，前后一致"
+      - "蒸汽机械不可纯碾压拳脚：内家劲有机器学不走的东西"
+      - "齿轮、铜管、白汽的视觉必须贯穿场景"
+      - "胜负的落点是'人'：机器背后站着谁，比机器本身更重要"
+
+  # phase_beats：Todorov 5 态（旧序—对撞—合流结构，primitive 限八种原语）
+  phase_beats:
+    equilibrium:
+      - {id: old_order, desc: "旧序：武馆晨练、镖旗与码头扛包的生计", primitive: GoalFormation}
+    disruption:
+      - {id: steam_arrives, desc: "蒸汽进城：第一台动力锤在擂台边立起来", primitive: TurningPoint}
+      - {id: school_loses, desc: "武馆受挫：机器一夜之间抢走镖路的生意", primitive: Suspense}
+    recognition:
+      - {id: qi_vs_steam_rule, desc: "交互规则显形：内家劲能做什么、机器差在哪一层", primitive: Revelation}
+      - {id: master_past, desc: "名宿的旧事：三十年前那场未分完的胜负", primitive: Recognition}
+    repair:
+      - {id: duel_machine, desc: "对决：拳师与动力机甲在铁轨边的生死局", primitive: Conflict}
+      - {id: old_gone, desc: "代价：旧武行的旗倒下，名宿把拳谱交给下一代", primitive: Sacrifice}
+    new_equilibrium:
+      - {id: new_art, desc: "新武学萌芽：拳理与机件第一次真正合流", primitive: Recognition}
+      - {id: whistle_hook, desc: "尾声留扣：更远处的汽笛，带来下一座城的帖子", primitive: Suspense}
+
+  # blend_domains：跨域融合的领域池
+  blend_domains: ["内家拳理与劲路", "蒸汽机与早期工业", "镖局与码头行帮"]
+
+  # pacing_targets：键名对齐 PacingScore 四字段，值为 [min, max] 区间
+  pacing_targets:
+    reversal_density: [0.3, 0.6]
+    avg_reversal_magnitude: [0.5, 0.8]
+    pacing_consistency: [0.5, 0.8]
+    cliffhanger_strength: [0.6, 0.9]

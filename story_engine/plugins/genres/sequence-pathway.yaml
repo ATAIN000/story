@@ -1,0 +1,119 @@
+# 题材插件：序列途径（progression_fantasy × cosmic_horror × steampunk，rule_collision 融合）
+# 结构对齐 mystery.yaml / romance.yaml；内容自本包 fusion 元数据派生
+manifest_version: 1
+name: sequence-pathway
+extension_point: story.genre
+activation_events: ["on_genre:sequence-pathway"]
+fusion:
+  type: rule_collision              # 规则对撞
+  parent_genres: [progression_fantasy, cosmic_horror, steampunk]
+  core_conflict: "升级承诺变强 → 力量本身是诅咒，每次晋升都在'变强'和'变成怪物'之间走钢丝"
+  fusion_formula: "职业成长(网游) + 不可逆代价(恐怖) + 蒸汽朋克/科幻(美学)"
+culture_bound: false
+allowed_cultures: ["*"]
+
+params:
+  pacing_curve: "觉醒途径→序列9入门→逐级晋升→失控危机→序列0封神"
+  power_system: "pathway_sequences"         # 序列途径：22条途径，每条9→0
+  emotion_arcs: [cinderella, icarus]        # 崛起但伴随失控风险
+  conflict_types:
+    - {type: cognitive, weight: 0.3}        # 途径知识的解谜
+    - {type: physical, weight: 0.3}         # 序列战斗
+    - {type: internal, weight: 0.25}        # 失控风险
+    - {type: political, weight: 0.15}       # 途径组织间的博弈
+  information_distribution: gradual_reveal  # 途径知识逐步揭示
+  max_red_herrings: 3
+  resolution_pattern: "封神（序列0）+ 承担该途径的终极代价"
+  main_track: A
+  theme_track: E
+  payoff_window: 2
+  beats_per_chapter: 4
+
+  # 五轨道（Showrunner 调度对象 — 自 core_conflict/fusion_formula 推导：
+  # 晋升主线 + 失控侵蚀 + 组织博弈 + 超凡事件单元 + 人性神性主题）
+  tracks:
+    - {id: A, name: "主线·途径晋升之路",     arc_type: Serialized, archetype: Quest,   progress: 0.0, last_touched: 0}
+    - {id: B, name: "副线·失控值的累积",     arc_type: Serialized, archetype: Monster,  progress: 0.0, last_touched: 0}
+    - {id: C, name: "副线·途径组织的博弈",   arc_type: Serialized, archetype: Tragedy, progress: 0.0, last_touched: 0}
+    - {id: D, name: "单元剧·超凡事件与材料狩猎", arc_type: Anthology,  archetype: Monster,  progress: 0.0, last_touched: 0, min_main_progress: 0.4}
+    - {id: E, name: "主题·人性与神性的天平", arc_type: Serialized, archetype: Rebirth,  progress: 0.0, last_touched: 0}
+
+  rule_packs: [sanderson-laws]  # 原 world_rules_ref 改名（P7.4 L5 引用合并）
+  # 世界规则（Z3 SMT 硬约束 — expr 限事实词汇表）
+  world_rules:
+    - id: power_has_price
+      kind: bool
+      desc: "代价律：超凡能力不得成为结局的免费钥匙——晋升与神通都以失控为账"
+      expr: "not(has_supernatural and is_resolution)"
+    - id: knowledge_gated
+      kind: bool
+      desc: "知识门禁律：途径关键知识须逐级解锁，结局不得空降未铺垫的隐秘"
+      expr: "not(is_resolution and introduces_new_key_clue)"
+
+  # 伏笔模板（Showrunner 种子计划用）
+  foreshadow_templates:
+    - {content: "魔药配方的一味缺失材料", trigger: "黑市或古迹中传来材料的音讯", payoff: "材料的守护者引出下一段晋升危机"}
+    - {content: "扮演守则里一条怪诞细则", trigger: "违反细则后耳语骤然清晰", payoff: "细则是前代失控者用生命写下的警告"}
+    - {content: "同途径前辈的疯癫遗言", trigger: "晋升仪式前夜再度想起", payoff: "遗言点破该序列真正的扮演要义"}
+
+  taboo_list:
+    - "不允许无代价升级——每个序列行为都有失控累积"
+    - "不允许途径体系自相矛盾——22途径必须逻辑自洽"
+    - "超凡材料获取必须有合理来源链"
+
+  evaluation_weights:
+    设定一致性: 0.30                          # 序列体系的严密性
+    情节连贯: 0.20
+    角色动机: 0.15
+    主题深度: 0.15                            # 人性vs神性
+    对话真实度: 0.08
+    感官细节: 0.07
+    套路检测: 0.05
+
+  active_critics: [setting_consistency, plot_coherence, character_motivation]
+
+  fusion_specific_rules:
+    loss_of_control: "每次使用超凡能力累积失控值，超阈值需'扮演'来稳定"
+    acting_method: "角色必须持续'扮演'该序列的特质以维持理智"
+
+  # prompt 段：role/setting/characters/style/hard_requirements 五键
+  prompt:
+    role: "序列途径流暗黑奇幻小说作者"
+    setting: "蒸汽与煤气灯笼罩的异大陆城邦：二十二条超凡途径自太古流传，每条以序列9至序列0逐级晋升，力量越强，离'人'越远"
+    characters: "林恩（新晋'窥秘人'途径序列9，谨慎到近乎偏执的药剂师学徒）、霍恩队长（值夜者小队队长，序列7，擅长在失控边缘把自己拽回来）、'灰袍'（身份成谜的途径引路人，似乎在下一盘很大的棋）"
+    style: "1000-1500字，煤气灯式的阴郁哥特质感，晋升仪式与扮演细节具体可触，疯狂如影随形"
+    hard_requirements:
+      - "每次晋升必须付出相应代价并累积失控风险，禁止无代价变强"
+      - "二十二条途径体系必须逻辑自洽，能力边界清晰"
+      - "超凡材料与配方必须有合理来源链（古迹/黑市/组织配给）"
+      - "角色须持续'扮演'本序列特质以维持理智，扮演走样即滑向失控"
+
+  # phase_beats：Todorov 5 态（觉醒—扮演—封神结构，primitive 限八种原语）
+  phase_beats:
+    equilibrium:
+      - {id: apprentice_daily, desc: "城邦日常：药剂铺、煤气灯与超凡的只言片语", primitive: GoalFormation}
+    disruption:
+      - {id: pathway_awakened, desc: "觉醒途径：第一份魔药与随之而来的异感", primitive: TurningPoint}
+      - {id: first_loss_sign, desc: "失控初兆：耳语、幻视与扮演的第一次走样", primitive: Suspense}
+    recognition:
+      - {id: acting_truth, desc: "领悟扮演法：消化魔药的要义藏在'成为那个角色'里", primitive: Revelation}
+      - {id: org_game, desc: "途径组织的博弈浮出水面，晋升即站队", primitive: Conflict}
+    repair:
+      - {id: promotion_ritual, desc: "晋升仪式：在失控边缘完成序列跃迁", primitive: Conflict}
+      - {id: companion_fall, desc: "同伴失控陨落：力量账簿上最痛的一笔", primitive: Sacrifice}
+    new_equilibrium:
+      - {id: new_sequence, desc: "新序列立足：更强的力量与更重的扮演枷锁", primitive: Recognition}
+      - {id: godhood_hook, desc: "尾声留扣：序列0的传说在星界低语", primitive: Suspense}
+
+  # blend_domains：跨域融合的领域池
+  blend_domains: ["炼金与魔药学", "秘密结社与值夜者规程", "星界与灵界象征学"]
+
+  # pacing_targets：键名对齐 PacingScore 四字段，值为 [min, max] 区间
+  pacing_targets:
+    reversal_density: [0.3, 0.5]
+    avg_reversal_magnitude: [0.5, 0.8]
+    pacing_consistency: [0.5, 0.8]
+    cliffhanger_strength: [0.6, 0.9]
+
+  # CONCOCT：疯狂在晋升仪式的具体细节处顶到峰值
+  concreteness_shape: peak

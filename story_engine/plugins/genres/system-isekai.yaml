@@ -1,0 +1,115 @@
+# 题材插件：系统流穿越（isekai × litrpg，rule_collision 融合）
+# 结构对齐 mystery.yaml / romance.yaml；内容自本包 fusion 元数据派生
+manifest_version: 1
+name: system-isekai
+extension_point: story.genre
+activation_events: ["on_genre:system-isekai"]
+fusion:
+  type: rule_collision
+  parent_genres: [isekai, litrpg]
+  core_conflict: "系统是外挂也是枷锁——给力量但控制行为，完成任务有奖，不完成有罚"
+  fusion_formula: "异世界/穿越 + 游戏化任务系统 + 升级奖励 + 系统人格化"
+culture_bound: false
+allowed_cultures: ["*"]
+
+params:
+  pacing_curve: "穿越绑定系统→新手任务→系统升级→系统秘密→系统真相"
+  power_system: "game_ui_overlay"            # 可视化数值面板+任务+商店
+  emotion_arcs: [cinderella, rags_to_riches]
+  conflict_types:
+    - {type: cognitive, weight: 0.3}         # 任务策略
+    - {type: physical, weight: 0.3}          # 战斗升级
+    - {type: political, weight: 0.2}         # 世界势力博弈
+    - {type: internal, weight: 0.2}          # 依赖系统vs自主意志
+  information_distribution: system_gated     # 系统逐步解锁信息
+  max_red_herrings: 2
+  resolution_pattern: "掌控/摆脱系统 + 在异世界立足"
+  main_track: A
+  theme_track: E
+  payoff_window: 2
+  beats_per_chapter: 5
+
+  # 五轨道（Showrunner 调度对象 — 自 core_conflict/fusion_formula 推导：
+  # 任务立足主线 + 系统真相 + 势力博弈 + 委托单元 + 外挂与自主主题）
+  tracks:
+    - {id: A, name: "主线·任务与异世立足",   arc_type: Serialized, archetype: Quest,   progress: 0.0, last_touched: 0}
+    - {id: B, name: "副线·面板背后的真相",   arc_type: Serialized, archetype: Monster,  progress: 0.0, last_touched: 0}
+    - {id: C, name: "副线·势力的拉拢与算计", arc_type: Serialized, archetype: Tragedy, progress: 0.0, last_touched: 0}
+    - {id: D, name: "单元剧·委托与委托人的故事", arc_type: Anthology,  archetype: Quest,   progress: 0.0, last_touched: 0, min_main_progress: 0.4}
+    - {id: E, name: "主题·外挂与自主意志",   arc_type: Serialized, archetype: Rebirth,  progress: 0.0, last_touched: 0}
+
+  # 世界规则（Z3 SMT 硬约束 — expr 限事实词汇表）
+  world_rules:
+    - id: system_not_omnipotent
+      kind: bool
+      desc: "系统有限律：系统奖励不得直接抹平终极困局——胜负须由主角的抉择换来"
+      expr: "not(has_supernatural and is_resolution)"
+    - id: unlock_before_use
+      kind: bool
+      desc: "解锁先验律：系统功能与情报须先解锁后使用，结局不得空降未解锁的信息"
+      expr: "not(is_resolution and introduces_new_key_clue)"
+
+  # 伏笔模板（Showrunner 种子计划用）
+  foreshadow_templates:
+    - {content: "任务日志里一闪而过的乱码", trigger: "系统升级后回看旧日志", payoff: "乱码是上一任宿主留下的警告"}
+    - {content: "惩罚任务的反常模式",   trigger: "拒绝任务后惩罚重复出现", payoff: "惩罚在把主角推向系统预设的剧本"}
+    - {content: "商店里永不打折的一件商品", trigger: "攒够点数终于买下", payoff: "商品附带的说明揭开系统的来历"}
+
+  taboo_list:
+    - "系统必须有明确规则——不能随意开挂"
+    - "不允许系统万能——必须有局限或代价"
+    - "主角不能纯靠系统无脑碾压——必须有自主决策"
+
+  evaluation_weights:
+    设定一致性: 0.25
+    情节连贯: 0.20
+    角色动机: 0.15
+    套路检测: 0.15
+    对话真实度: 0.10
+    感官细节: 0.10
+    主题深度: 0.05
+
+  active_critics: [setting_consistency, plot_coherence, character_motivation, cliche_detection]
+
+  fusion_specific_rules:
+    system_personality: "系统可无人格/萌宠人格/AI人格/神秘人格"
+    task_types: ["daily", "main_quest", "hidden", "punishment"]
+
+  # prompt 段：role/setting/characters/style/hard_requirements 五键
+  prompt:
+    role: "系统流穿越小说作者"
+    setting: "剑与魔法的异世界艾兰泽：主角带着只有自己能看见的游戏面板穿越而来——任务、点数、商店一应俱全，但面板的备注栏偶尔会写出不像程序的句子"
+    characters: "陆远（穿越者，前手游策划，习惯把世界当系统拆解）、『引导者』（系统界面的人格化语音，热情得过分，回避一切关于自身来历的提问）、薇拉（边境小镇的佣兵队长，第一个发现陆远'变强的速度不对劲'的人）"
+    style: "1000-1500字，面板提示与冒险叙事穿插，爽感与隐忧并置，任务文本可以带点恶趣味"
+    hard_requirements:
+      - "系统规则必须明确且前后一致：奖励、惩罚、解锁条件说到做到"
+      - "系统不可万能：每次开挂都伴随代价、限制或反噬"
+      - "主角的关键胜利必须来自自主决策，而非系统直接代打"
+      - "任务类型轮转：日常、主线、隐藏、惩罚至少交替出现"
+
+  # phase_beats：Todorov 5 态（绑定—抗命—自立结构，primitive 限八种原语）
+  phase_beats:
+    equilibrium:
+      - {id: transmigration, desc: "穿越绑定：新手教程与第一个日常任务", primitive: GoalFormation}
+    disruption:
+      - {id: hidden_quest, desc: "隐藏任务触发：奖励高得反常", primitive: Suspense}
+      - {id: punishment_first, desc: "首次惩罚任务：系统的另一面露出来", primitive: TurningPoint}
+    recognition:
+      - {id: system_glitch, desc: "系统的裂隙：乱码、旧日志与前任宿主的痕迹", primitive: Revelation}
+      - {id: faction_pull, desc: "异世势力入局：有人盯上了'面板持有者'", primitive: Conflict}
+    repair:
+      - {id: defy_system, desc: "抗命：主角第一次按自己的判断撕掉任务剧本", primitive: Betrayal}
+      - {id: price_of_freedom, desc: "代价：脱离剧本的部分要以点数或等级偿还", primitive: Sacrifice}
+    new_equilibrium:
+      - {id: stand_on_own, desc: "立足异世：用系统而不依附系统", primitive: Recognition}
+      - {id: admin_hook, desc: "尾声留扣：面板弹出一行从未见过的权限提示", primitive: Suspense}
+
+  # blend_domains：跨域融合的领域池
+  blend_domains: ["游戏策划与数值设计", "异世界佣兵行会生态", "任务叙事与元提示文本"]
+
+  # pacing_targets：爽文快节奏——反转密集、钩子强，但幅度控制避免疲劳
+  pacing_targets:
+    reversal_density: [0.4, 0.7]
+    avg_reversal_magnitude: [0.4, 0.7]
+    pacing_consistency: [0.5, 0.8]
+    cliffhanger_strength: [0.7, 1.0]

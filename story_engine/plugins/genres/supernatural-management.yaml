@@ -1,0 +1,119 @@
+# 题材插件：灵异经营（business_management × folk_horror × episodic，rule_collision 融合）
+# 结构对齐 mystery.yaml / romance.yaml；内容自本包 fusion 元数据派生
+manifest_version: 1
+name: supernatural-management
+extension_point: story.genre
+activation_events: ["on_genre:supernatural-management"]
+fusion:
+  type: rule_collision
+  parent_genres: [business_management, folk_horror, episodic]
+  core_conflict: "恐怖元素的'吓人' vs 经营的'日常'——你主动去找鬼，鬼是你的'员工/资源'"
+  fusion_formula: "经营模拟系统 + 单元剧灵异案件 + 主线谜团"
+culture_bound: true
+allowed_cultures: ["chinese_folk", "confucian_officialdom"]
+
+params:
+  pacing_curve: "继承店铺→首个灵异单元→经营升级→主线谜团浮现→真相"
+  power_system: "management_system"          # 经营升级系统
+  emotion_arcs: [man_in_hole, cinderella]
+  conflict_types:
+    - {type: cognitive, weight: 0.35}        # 灵异单元解谜
+    - {type: cosmic, weight: 0.3}            # 超自然恐怖
+    - {type: resource, weight: 0.2}          # 经营资源管理
+    - {type: internal, weight: 0.15}         # 主角身世谜团
+  information_distribution: episodic_reveal  # 每单元揭示主线一块
+  max_red_herrings: 2
+  resolution_pattern: "主线真相 + 店铺/能力终极形态"
+  main_track: A
+  theme_track: E
+  payoff_window: 3
+  beats_per_chapter: 4
+
+  # 五轨道（Showrunner 调度对象 — 自 core_conflict/fusion_formula 推导：
+  # 店铺真相主线 + 午夜住客单元 + 经营升级 + 店主身世 + 恐怖背后的人情）
+  tracks:
+    - {id: A, name: "主线·这栋楼为何专收未了之事", arc_type: Serialized, archetype: Quest,   progress: 0.0, last_touched: 0}
+    - {id: B, name: "副线·午夜住客的执念",   arc_type: Serialized, archetype: Monster,  progress: 0.0, last_touched: 0}
+    - {id: C, name: "副线·店主身世之谜",     arc_type: Serialized, archetype: Tragedy, progress: 0.0, last_touched: 0}
+    - {id: D, name: "单元剧·一间房一个怪谈", arc_type: Anthology,  archetype: Monster,  progress: 0.0, last_touched: 0, min_main_progress: 0.4}
+    - {id: E, name: "主题·恐怖背后的人情",   arc_type: Serialized, archetype: Rebirth,  progress: 0.0, last_touched: 0}
+
+  rule_packs: [gongan-taboo]  # 原 world_rules_ref 改名（P7.4 L5 引用合并）
+  # 世界规则（Z3 SMT 硬约束 — expr 限事实词汇表）
+  world_rules:
+    - id: ghost_not_solution
+      kind: bool
+      desc: "灵异不兜底律：住客与诡物的能力不得直接摆平经营困局，须由人的抉择推动"
+      expr: "not(has_supernatural and is_resolution)"
+    - id: unit_clue_fair
+      kind: bool
+      desc: "单元公平律：每个灵异单元的真相线索须在该单元内提前给出"
+      expr: "not(is_resolution and introduces_new_key_clue)"
+
+  # 伏笔模板（Showrunner 种子计划用）
+  foreshadow_templates:
+    - {content: "登记簿上被划掉的名字", trigger: "同名住客再度入住", payoff: "被划掉的名字正是店主失踪的亲人"}
+    - {content: "午夜后多出来的一级楼梯", trigger: "有人数对了台阶数", payoff: "楼梯通向店铺被封存的旧层"}
+    - {content: "住客反复念叨的生前往事", trigger: "往事中的物件现世", payoff: "执念落地，住客的故事成为主线拼图"}
+
+  taboo_list:
+    - "灵异单元必须有完整故事——不能只吓人不讲故事"
+    - "经营系统不能喧宾夺主——服务于灵异叙事"
+    - "每个鬼必须有'人的故事'——恐怖背后是人情"
+
+  evaluation_weights:
+    感官细节: 0.25                             # 恐怖氛围
+    情节连贯: 0.20
+    角色动机: 0.15
+    主题深度: 0.15                             # 鬼故事背后的人性
+    设定一致性: 0.10
+    对话真实度: 0.10
+    套路检测: 0.05
+
+  active_critics: [sensory_detail, plot_coherence, character_motivation, emotion_arc]
+
+  fusion_specific_rules:
+    unit_structure: "每个灵异单元=1个独立恐怖短篇+1块主线拼图"
+    ghost_humanization: "每个鬼的'恐怖行为'背后有可被理解的人之执念"
+
+  # prompt 段：role/setting/characters/style/hard_requirements 五键
+  prompt:
+    role: "灵异经营流小说作者"
+    setting: "老城区巷深处一栋继承来的旧楼：白天是勉强维持的生意，入夜后各路'住客'登门，每间空屋都压着一段未了之事"
+    characters: "贺小雨（接手旧楼的年轻店主，嘴硬心软，账本和符纸一起管）、算盘（柜台上那只会自己拨珠的老算盘，店里资历最老的'员工'）、三楼的长住客（从不露面，只在雨夜传出缝纫机声）"
+    style: "800-1200字，市井烟火气与阴森凉意交替，单元故事有头有尾，恐怖的落点最后回到人情"
+    hard_requirements:
+      - "每个灵异单元必须是完整故事：有执念、有转折、有了结"
+      - "经营升级服务于灵异叙事，账目与设施细节要具体"
+      - "每个'诡'背后必须有可被理解的人之执念"
+      - "午夜规矩不可破：住客与店主的边界一旦模糊就要付出代价"
+
+  # phase_beats：Todorov 5 态（开店—迎客—了愿结构，primitive 限八种原语）
+  phase_beats:
+    equilibrium:
+      - {id: shop_daily, desc: "开店日常：算账、洒扫与巷子里的街坊", primitive: GoalFormation}
+    disruption:
+      - {id: first_guest, desc: "首个灵异单元：午夜登门的住客与它的请求", primitive: Suspense}
+      - {id: rule_broken, desc: "店里的一条老规矩被无意间触犯", primitive: TurningPoint}
+    recognition:
+      - {id: guest_story, desc: "住客生前往事显形：恐怖行为的来处", primitive: Revelation}
+      - {id: shop_secret, desc: "主线浮现：这栋楼为什么专收'未了之事'", primitive: TurningPoint}
+    repair:
+      - {id: resolve_obsession, desc: "以人间事解阴间结：替住客了却执念", primitive: Conflict}
+      - {id: price_paid, desc: "代价：店主押上一件自己在乎的东西", primitive: Sacrifice}
+    new_equilibrium:
+      - {id: shop_upgrade, desc: "店铺升级：新设施开张，住客名册添新页", primitive: Recognition}
+      - {id: registry_hook, desc: "尾声留扣：登记簿上又浮出一个陌生名字", primitive: Suspense}
+
+  # blend_domains：跨域融合的领域池
+  blend_domains: ["老城厢市井经营", "民俗禁忌与安魂仪轨", "旧物与记忆承载"]
+
+  # pacing_targets：单元剧节奏——每单元一个完整起落，钩子阴冷绵长
+  pacing_targets:
+    reversal_density: [0.3, 0.5]
+    avg_reversal_magnitude: [0.4, 0.7]
+    pacing_consistency: [0.5, 0.8]
+    cliffhanger_strength: [0.6, 0.9]
+
+  # CONCOCT：恐怖在旧物与规矩的具体细节处顶到峰值
+  concreteness_shape: peak
