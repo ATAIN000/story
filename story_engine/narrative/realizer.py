@@ -24,6 +24,11 @@ kernel.llm_call；无设施/异常 → 返回 ""（不阻塞，同 critic 兜底
 
 P6.3：`rewrite_paragraph()` 单段重写（写作台核心卖点）——本章骨架摘要 +
 前后段衔接上下文 + 作者方向，恰好 1 次 LLM 调用，只产文本不回写。
+
+P7.2 L3：构造时可选注入 kernel registry，把 active 的 story.language pack
+（params.language 匹配本 realizer）的 `params.resources` 按键并集合并进
+本实例资源池（pack 词条追加、重复去重）；无 registry/零匹配 pack 时不动
+类常量 LANGUAGE_RESOURCES，行为与基线逐字一致。
 """
 from __future__ import annotations
 
@@ -71,9 +76,66 @@ class LanguageRealizer:
     language = "zh"
     LANGUAGE_RESOURCES: dict = {}
 
-    def __init__(self, llm_call=None):
+    def __init__(self, llm_call=None, *, registry=None):
         # llm_call: async (prompt, *, purpose=, temperature=, max_tokens=) -> 带 .text
         self._llm_call = llm_call
+        # P7.2 L3：registry（kernel.registry）携带 story.language pack 时合并资源；
+        # None / 零匹配 pack 时不动类常量，行为与基线逐字一致
+        if registry is not None:
+            self._merge_pack_resources(registry)
+
+    # ---------- P7.2 L3：story.language pack 资源合并 ----------
+    def _merge_pack_resources(self, registry) -> None:
+        """匹配语言的 pack 资源并入本实例资源池（素材包计划 §3.2 键并集）。
+
+        - 匹配规则：pack.params.language == self.language，不匹配跳过
+        - list 值：pack 词条追加在代码常量之后，重复词条去重（多 pack 累进去重）
+        - dict 值（敬语体系）：按子键并集，子键内追加去重
+        - 未知键 / 未知子键 / 类型不符：warning + 忽略（不崩）
+        - texture_hints 本期不进 TextureParams（最小决策：忽略，仅在此注释说明）
+        合并在实例副本上进行（实例属性遮蔽类常量），类常量不被污染。
+        """
+        merged = None
+        for pack in registry.packs("story.language"):
+            params = getattr(pack, "params", None) or {}
+            if params.get("language") != self.language:
+                continue
+            resources = params.get("resources")
+            if not isinstance(resources, dict):
+                warnings.warn(f"语言 pack {pack.name} 缺 resources 映射，忽略",
+                              stacklevel=2)
+                continue
+            if merged is None:  # 懒拷贝：首个匹配 pack 时才建实例副本
+                merged = {
+                    k: ({sk: list(sv) for sk, sv in v.items()}
+                        if isinstance(v, dict) else list(v))
+                    for k, v in self.LANGUAGE_RESOURCES.items()
+                }
+            for key, value in resources.items():
+                base = self.LANGUAGE_RESOURCES.get(key)
+                if base is None:
+                    warnings.warn(
+                        f"语言 pack {pack.name} 含未知资源键 {key!r}，忽略",
+                        stacklevel=2)
+                    continue
+                if isinstance(base, dict) and isinstance(value, dict):
+                    for sub, words in value.items():
+                        if not isinstance(base.get(sub), list) \
+                                or not isinstance(words, list):
+                            warnings.warn(
+                                f"语言 pack {pack.name} 资源键 {key!r} 含未知"
+                                f"子键或非列表 {sub!r}，忽略", stacklevel=2)
+                            continue
+                        merged[key][sub] += [w for w in words
+                                             if w not in merged[key][sub]]
+                elif isinstance(base, list) and isinstance(value, list):
+                    merged[key] += [w for w in value if w not in merged[key]]
+                else:
+                    warnings.warn(
+                        f"语言 pack {pack.name} 资源键 {key!r} 类型与代码常量"
+                        f"不符，忽略", stacklevel=2)
+        if merged is not None:
+            self.LANGUAGE_RESOURCES = merged
 
     # ---------- 主入口：1 次 LLM 调用 ----------
     async def realize(self, ir: NarrativeIR, sjuzhet=None, bundle=None,
@@ -412,7 +474,8 @@ class EnglishRealizer(LanguageRealizer):
 class Narrativizer:
     """编排器：IR → realizer → humanize（决策4/5，不接线 engine，P5.6 才接）
 
-    kernel: Kernel 实例（可选；取其 llm_call 作 LLM 设施）
+    kernel: Kernel 实例（可选；取其 llm_call 作 LLM 设施，registry 作 P7.2
+        story.language pack 资源来源）
     bundle: GenreBundle（语言选择 + 插件 prompt 段来源；缺省给空壳）
     llm_call: 直接注入的 LLM callable（测试 fake 注入点；优先级高于 kernel）
     """
@@ -429,13 +492,17 @@ class Narrativizer:
             self._llm_call = None
 
     def select_realizer(self, language: str) -> LanguageRealizer:
-        """zh→ChineseRealizer，en→EnglishRealizer，未知/缺省→zh（未知记 warning）"""
+        """zh→ChineseRealizer，en→EnglishRealizer，未知/缺省→zh（未知记 warning）
+
+        P7.2 L3：kernel 携带 registry 时注入 realizer（story.language pack 资源
+        并入资源池）；无 kernel/registry 时行为与基线逐字一致。"""
         lang = language or "zh"
+        registry = getattr(self.kernel, "registry", None)
         if lang == "en":
-            return EnglishRealizer(self._llm_call)
+            return EnglishRealizer(self._llm_call, registry=registry)
         if lang != "zh":
             warnings.warn(f"未知语言 {lang!r}，回退中文 Realizer", stacklevel=2)
-        return ChineseRealizer(self._llm_call)
+        return ChineseRealizer(self._llm_call, registry=registry)
 
     async def narrate(self, ir: NarrativeIR, sjuzhet=None,
                       *, recap: str | None = None) -> str:
