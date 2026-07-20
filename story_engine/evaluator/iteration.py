@@ -68,6 +68,14 @@ class IterationController:
         # 与 versions 对齐的 reader 反应平行表（Version 无 reader 字段，types 不改）
         self._reactions: list[ReaderReaction] = []
 
+    @property
+    def reactions(self) -> list[ReaderReaction]:
+        """reader 反应平行表的只读副本（P5.12 ⑤ 公开口）。
+
+        与 run() 记录的 versions 同序对齐；返回副本，外部改返回值不影响内部表。
+        """
+        return list(self._reactions)
+
     async def run(self, generate_fn: Callable, chapter_spec) -> IterationResult:
         versions: list[Version] = []
         self._last_feedback = None

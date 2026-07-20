@@ -73,9 +73,13 @@ class LanguageRealizer:
         self._llm_call = llm_call
 
     # ---------- 主入口：1 次 LLM 调用 ----------
-    async def realize(self, ir: NarrativeIR, sjuzhet=None, bundle=None) -> str:
-        """IR → 目标语言文本（共创模式，恰好 1 次 LLM 调用；无设施/异常 → ""）"""
-        prompt = self._render_prompt(ir, sjuzhet, bundle)
+    async def realize(self, ir: NarrativeIR, sjuzhet=None, bundle=None,
+                      *, recap: str | None = None) -> str:
+        """IR → 目标语言文本（共创模式，恰好 1 次 LLM 调用；无设施/异常 → ""）
+
+        recap：可选前情提要文本（P5.12 ②，章节连续性上下文）；None 时 prompt
+        与现状逐字一致。"""
+        prompt = self._render_prompt(ir, sjuzhet, bundle, recap=recap)
         if self._llm_call is None:
             return ""
         try:
@@ -86,14 +90,21 @@ class LanguageRealizer:
             return ""
 
     # ---------- prompt 组装 ----------
-    def _render_prompt(self, ir: NarrativeIR, sjuzhet=None, bundle=None) -> str:
+    def _render_prompt(self, ir: NarrativeIR, sjuzhet=None, bundle=None,
+                       *, recap: str | None = None) -> str:
         pcfg = _plugin_prompt_config(bundle)
         hard_reqs = [pcfg["style"], *(pcfg.get("hard_requirements") or []),
                      *self._craft_rules()]
         hard_txt = "\n".join(f"{i}. {r}" for i, r in enumerate(hard_reqs, 1))
+        # P5.12 ②：可选前情 recap 段（章节连续性上下文）；None/空串时整段缺席，
+        # prompt 与现状逐字一致
+        recap_txt = (
+            f"=== 前情提要（已定稿章节结尾与未回收伏笔，保持连续性） ===\n{recap}\n\n"
+            if recap else "")
         return (
             f"你是{pcfg['role']}。背景：{pcfg['setting']}。\n"
             f"人物：{pcfg['characters']}。\n\n"
+            f"{recap_txt}"
             f"=== 本章故事骨架（IR 概念级摘要，供你再创作，不是待译原文） ===\n"
             f"{self._ir_summary(ir, sjuzhet)}\n\n"
             f"=== 质感目标（创作指令） ===\n{self._texture_block(ir.texture)}\n\n"
@@ -245,14 +256,22 @@ class EnglishRealizer(LanguageRealizer):
         ],
     }
 
-    def _render_prompt(self, ir: NarrativeIR, sjuzhet=None, bundle=None) -> str:
+    def _render_prompt(self, ir: NarrativeIR, sjuzhet=None, bundle=None,
+                       *, recap: str | None = None) -> str:
         pcfg = _plugin_prompt_config(bundle)
         hard_reqs = [pcfg["style"], *(pcfg.get("hard_requirements") or []),
                      *self._craft_rules()]
         hard_txt = "\n".join(f"{i}. {r}" for i, r in enumerate(hard_reqs, 1))
+        # P5.12 ②：optional recap block (chapter continuity); absent when None,
+        # keeping the prompt byte-identical to before
+        recap_txt = (
+            f"=== Previously on (finalized chapter endings and unpaid "
+            f"foreshadowing — keep continuity) ===\n{recap}\n\n"
+            if recap else "")
         return (
             f"You are {pcfg['role']}. Setting: {pcfg['setting']}.\n"
             f"Characters: {pcfg['characters']}.\n\n"
+            f"{recap_txt}"
             f"=== Story skeleton (concept-level IR summary — raw material to "
             f"re-create from, not text to translate) ===\n"
             f"{self._ir_summary(ir, sjuzhet)}\n\n"
@@ -331,9 +350,14 @@ class Narrativizer:
             warnings.warn(f"未知语言 {lang!r}，回退中文 Realizer", stacklevel=2)
         return ChineseRealizer(self._llm_call)
 
-    async def narrate(self, ir: NarrativeIR, sjuzhet=None) -> str:
-        """realize（1 次 LLM）→ _filter_ai_isms → （env 门控的）_inject_imperfection"""
+    async def narrate(self, ir: NarrativeIR, sjuzhet=None,
+                      *, recap: str | None = None) -> str:
+        """realize（1 次 LLM）→ _filter_ai_isms → （env 门控的）_inject_imperfection
+
+        recap：可选前情提要（P5.12 ②，engine IR-first 路径注入最近章节结尾 +
+        未回收伏笔）；None 时 prompt 与现状逐字一致。
+        """
         realizer = self.select_realizer(self.bundle.language)
-        text = await realizer.realize(ir, sjuzhet, self.bundle)
+        text = await realizer.realize(ir, sjuzhet, self.bundle, recap=recap)
         text = _filter_ai_isms(text, realizer.language)
         return _inject_imperfection(text, realizer.language)

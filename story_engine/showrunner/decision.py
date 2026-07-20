@@ -81,6 +81,9 @@ class DecisionCard:
     creative_seeds: list[dict] = field(default_factory=list)  # P3.7 填
     # ---- P3.10 新增（只增不改）：前端轨道名展示 {id: name}，随 genre 插件走 ----
     track_names: dict[str, str] = field(default_factory=dict)
+    # ---- P5.12 新增（只增不改）：最新 intent 类作者介入文本（goal_update/
+    # constraint/reason 拼装）；无介入或无事件源 → None，下游 prompt 与现状一致 ----
+    author_intent: str | None = None
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -177,7 +180,40 @@ class Showrunner:
             pool_stats=pool_stats, queued_foreshadows=queued,
             pacing=pacing,
             track_names={tid: t.name for tid, t in self.tracks.items()},
+            author_intent=self._author_intent(),
         )
+
+    # ---------- P5.12: intent 介入消费（最新 active intent 事件 → 决策卡文本） ----------
+    def _author_intent(self) -> str | None:
+        """读事件流里最新一条 active 的 intent 类 author_intervention 事件，
+        把 goal_update/constraint/reason 拼成决策卡文本。
+
+        复用 P3.4 的 event_source 注入通道（all_events 含 active 标记）；
+        无事件源 / 无 intent 事件 / 事件内容全空 → None（author_intent 保持
+        None，下游与现状逐字一致）。多条 intent 时最新一条生效（事件流顺序，
+        后介入覆盖先介入——介入即事件的「新意图取代旧意图」语义）。
+        """
+        if self._event_source is None:
+            return None
+        latest: dict | None = None
+        for e in self._event_source():
+            if not e.get("active", True):
+                continue
+            if e.get("event_type") != "author_intervention":
+                continue
+            p = e.get("payload") or {}
+            if p.get("type") == "intent":
+                latest = p
+        if latest is None:
+            return None
+        parts = []
+        if latest.get("goal_update"):
+            parts.append(f"目标调整：{latest['goal_update']}")
+        if latest.get("constraint"):
+            parts.append(f"约束：{latest['constraint']}")
+        if latest.get("reason"):
+            parts.append(f"理由：{latest['reason']}")
+        return "；".join(parts) or None
 
     # ---------- P3.7: ConceptualBlending 门控挂载（决策7） ----------
     async def attach_creative_seed(self, card: DecisionCard,

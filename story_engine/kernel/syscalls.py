@@ -19,7 +19,7 @@ Phase 2 实现：
 - LLM：完整工作（薄包装 LLMPool）
 - 记忆 recall：接 SemanticMemoryBanks + MemoryRetrieval（本地 embedding）
 - HITL：P5.9 真实现（pending 落盘 + asyncio.Event 等待应答，超时返回 None）
-- branch_timeline / merge_branch：留 NotImplementedError（Phase 5 后续）
+- branch_timeline / merge_branch：蓝图未定义分支/合并语义，暂缓（保持 NotImplementedError）
 """
 from __future__ import annotations
 
@@ -91,7 +91,7 @@ class Kernel:
         # HITL 应答等待注册表（P5.9）：request_id → asyncio.Event / 应答内容
         self._human_input_events: dict[str, asyncio.Event] = {}
         self._human_input_answers: dict[str, Any] = {}
-        # branch registry：Phase 5 完整实现，先占位
+        # branch registry：蓝图未定义分支语义，暂缓；先占位
         self._branches: dict[BranchID, SnapshotID] = {}
 
     def _load_plugins(self, plugin_dir: Path) -> None:
@@ -157,26 +157,26 @@ class Kernel:
                  branch_id: BranchID = "main") -> None:
         """回滚到指定快照或事件点
 
-        Phase 1 只支持 int（tick）；SnapshotID / EventID 留 Phase 5 完整实现。
+        本期只支持 int（tick）；SnapshotID / EventID 定位回滚蓝图未定义，暂缓。
         """
         if isinstance(to, int):
             return self.store.rollback(to, branch_id)
         raise NotImplementedError(
-            f"rollback by {type(to).__name__} 是 Phase 5 任务，Phase 1 仅支持 int tick")
+            f"rollback by {type(to).__name__} 蓝图未定义，暂缓；本期仅支持 int tick")
 
     def branch_timeline(self, from_: SnapshotID, name: str) -> BranchID:
         """git 式分支 — 作者实验用
 
-        Phase 5 完整实现：拷贝快照+事件到新 branch_id；先抛 NotImplemented。
+        蓝图未定义分支语义，暂缓实现（保持 NotImplementedError）。
         """
-        raise NotImplementedError("branch_timeline 是 Phase 5 任务")
+        raise NotImplementedError("branch_timeline 蓝图未定义，暂缓")
 
     def merge_branch(self, branch: BranchID, strategy: str = "theirs") -> None:
         """合并分支（需定义合并策略）
 
-        Phase 5 完整实现；先抛 NotImplemented。
+        蓝图未定义合并策略语义，暂缓实现（保持 NotImplementedError）。
         """
-        raise NotImplementedError("merge_branch 是 Phase 5 任务")
+        raise NotImplementedError("merge_branch 蓝图未定义，暂缓")
 
     # =========================================================
     # 记忆管理 (Context Manager — L0 向量库)

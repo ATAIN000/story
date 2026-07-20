@@ -7,6 +7,7 @@ Phase 4 实现（独立层，P4.5 才接线 engine）：
   leader        — LeaderArbiter 宪法化优先级仲裁（蓝图 6.3，纯规则）
   reader_proxy  — ReaderProxy 读者代理（蓝图 6.4，行为预测非评分）
   iteration     — IterationController 3 轮 best-of-K 迭代控制器（蓝图 6.5）
+  critic_parliament — CriticParliament Critic 议会（蓝图 6.2，串联两阶段）
   presentation_scorer — PresentationScorer 展示层打分（蓝图 6.6，
                   唯一出数字分的地方，分数不影响内部判断）
 """
@@ -24,6 +25,7 @@ from .leader import (
 )
 from .reader_proxy import ReaderProxy
 from .iteration import IterationController, ChapterSpec
+from .critic_parliament import CriticParliament
 from .presentation_scorer import (
     PresentationScorer, DIMENSION_WEIGHT_KEYS, NEUTRAL_ENGAGEMENT,
 )
@@ -37,5 +39,6 @@ __all__ = [
     "BLOCKING_DIMENSIONS", "ARBITRATION_ORDER",
     "ReaderProxy",
     "IterationController", "ChapterSpec",
+    "CriticParliament",
     "PresentationScorer", "DIMENSION_WEIGHT_KEYS", "NEUTRAL_ENGAGEMENT",
 ]

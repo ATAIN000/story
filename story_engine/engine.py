@@ -34,9 +34,9 @@ from uuid import uuid4
 from .kernel import Kernel
 from .kernel.actor import CharacterConfig
 from .creativity import ConceptualBlending
-from .evaluator import (ChapterSpec, IterationController, LeaderArbiter,
-                        PresentationScorer, ProcessGate, ReaderProxy)
-from .evaluator.critic_parliament import CriticParliament  # __init__ 未导出
+from .evaluator import (ChapterSpec, CriticParliament, IterationController,
+                        LeaderArbiter, PresentationScorer, ProcessGate,
+                        ReaderProxy)
 from .llm import LLMError  # 通过 shim 兼容旧 import 路径
 from .narrative import (FabulaBuilder, IRBuilder, Narrativizer,
                         SjuzhetSelector)
@@ -370,6 +370,29 @@ class StoryEngine:
                 return text
         return await self._llm_generate_draft(chapter_no, card, state)
 
+    def _ir_recap(self) -> str | None:
+        """P5.12 ②：IR-first Realizer prompt 的前情 recap（章节连续性上下文）。
+
+        数据源复用 _real_generate_prompt 的既有口径：chapters.json 未
+        superseded 章（最近 1-3 章，各取结尾 ~200 字）+ WorldState 伏笔池
+        未回收列表。首章（无已定稿前情）→ None（narrate 收到 None 时 prompt
+        与现状逐字一致）。
+        """
+        chapters = [c for c in self._read_chapters() if not c.get("superseded")]
+        if not chapters:
+            return None
+        parts = [
+            f"第{c['chapter']}章《{c['title']}》结尾：{c['final']['text'][-200:]}"
+            for c in chapters[-3:]
+        ]
+        state = self.kernel.query_world("current_state")
+        pending = [f for f in state.narrative.foreshadow_pool if not f.payed_off]
+        if pending:
+            parts.append("未回收伏笔：" + "；".join(
+                f"{f.foreshadow_id}：{f.content}（触发：{f.trigger_condition}）"
+                for f in pending))
+        return "\n".join(parts)
+
     async def _ir_first_narrate(self, chapter_no: int, card,
                                 *, close_chapter: bool = False) -> tuple:
         """IR-first 文本产出：IRBuilder → Fabula → Sjuzhet → Narrativizer。
@@ -402,7 +425,8 @@ class StoryEngine:
                       if e.get("active", True)]
             fabula = FabulaBuilder().build(active)
             sjuzhet = SjuzhetSelector().select(fabula, self.bundle)
-            text = await Narrativizer(self.kernel, self.bundle).narrate(ir, sjuzhet)
+            text = await Narrativizer(self.kernel, self.bundle).narrate(
+                ir, sjuzhet, recap=self._ir_recap())
         except Exception as exc:
             warnings.warn(
                 f"P5.6 IR-first 链路异常（{exc!r}），回退旧文本产出路径",
@@ -423,6 +447,12 @@ class StoryEngine:
         first_line = text.lstrip().splitlines()[0] if text.strip() else ""
         if not _re.match(r"^标题[:：]\S", first_line):
             text = f"标题：第{chapter_no}章\n\n{text}"
+        elif first_line.startswith("标题:"):
+            # P5.12 ④：半角冒号标题归一化为全角——keep 正则接受半角，但 L5
+            # title_format（process_gates `^标题：\S+`，全角口径）只认全角，
+            # 不归一化会每章保底 L5 FAIL 多烧一轮修正。首行前仅有 lstrip 空白，
+            # 「标题:」首次出现必在首行，replace 一次即精准命中
+            text = text.replace("标题:", "标题：", 1)
         # 摘要（扁平小对象，非全量 IR —— 快照体积控制）：
         # beats/events/dialogue 计数 + texture 8 字段值 + 语言 + sjuzhet pov/order
         texture = asdict(ir.texture)
@@ -558,7 +588,7 @@ class StoryEngine:
                                    initial_text: str) -> dict:
         """决策6：evaluation 返回体（只增）。
 
-        reader 取与 best 版本对齐的反应（controller._reactions 与 versions
+        reader 取与 best 版本对齐的反应（controller.reactions 与 versions
         平行）；get_predictions() 暂只存入返回体（反预期设计接 L4 是后续）。
         best=None（全轮 gate FAIL）时重跑规则 gate 记 FAIL 原因
         （ProcessGate 纯规则无 LLM，零成本）。
@@ -581,8 +611,8 @@ class StoryEngine:
                 "reader_predictions": predictions,
             }
         idx = versions.index(best)
-        reaction = (controller._reactions[idx]
-                    if idx < len(controller._reactions) else None)
+        reactions = controller.reactions  # P5.12 ⑤：公开只读 accessor，不再碰 _reactions
+        reaction = reactions[idx] if idx < len(reactions) else None
         curves = reader.get_reaction_curve() if reader else None
         return {
             "rounds": max(v.round for v in versions) + 1,
@@ -852,6 +882,11 @@ class StoryEngine:
             domains = " × ".join(s.get("domains", []))
             inspire_txt = (
                 f"可选灵感（可参考可忽略）：{domains} —— {s.get('emergent', '')[:200]}\n")
+        # P5.12 ①：intent 介入消费 —— 决策卡 author_intent → 本章调度段首行
+        # （硬指令语气；无介入事件时为 None，prompt 与现状逐字一致）
+        intent_txt = ""
+        if getattr(card, "author_intent", None):
+            intent_txt = f"作者意图（必须遵循）：{card.author_intent}\n"
         # P3.8：生成文案从题材插件 params.prompt 渲染（缺段/缺键走通用兜底）；
         # 「章末留钩子 + 首行标题格式」是引擎级约定（标题行由引擎解析），
         # 统一追加在插件 hard_requirements 之后
@@ -865,7 +900,7 @@ class StoryEngine:
             f"你是{pcfg['role']}。背景：{pcfg['setting']}。\n"
             f"人物：{pcfg['characters']}。\n\n"
             f"=== 已定稿前情 ===\n{history or '（开篇）'}\n\n"
-            f"=== 本章调度 ===\n推进轨道：{advance_txt}\n"
+            f"=== 本章调度 ===\n{intent_txt}推进轨道：{advance_txt}\n"
             f"原语序列：{prim_txt or '无'}\n"
             f"{inspire_txt}"
             f"情感弧目标：{card.target_arc}　集末钩子：{card.ending_hook['style']}\n"
