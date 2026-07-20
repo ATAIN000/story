@@ -63,13 +63,12 @@ params:
     - "魔法与奇幻元素不能喧宾夺主——必须服务于情感张力"
 
   evaluation_weights:
-    角色动机: 0.25
-    情感弧: 0.20
-    情节连贯: 0.15
-    对话真实度: 0.15                           # 情侣对白
-    设定一致性: 0.10
-    感官细节: 0.10
-    套路检测: 0.05
+    角色动机: 0.31
+    情节连贯: 0.19
+    对话真实度: 0.19                           # 情侣对白
+    设定一致性: 0.12
+    感官细节: 0.13
+    套路检测: 0.06
 
   active_critics: [character_motivation, emotion_arc, plot_coherence, dialogue_authenticity]
 

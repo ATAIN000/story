@@ -63,13 +63,12 @@ params:
     - "重生预知不能万能——灾变有不可预测的变量"
 
   evaluation_weights:
-    情感弧: 0.25
-    角色动机: 0.20
-    感官细节: 0.20                             # 末日氛围
-    情节连贯: 0.15
-    设定一致性: 0.10
-    对话真实度: 0.05
-    套路检测: 0.05
+    角色动机: 0.27
+    感官细节: 0.27                             # 末日氛围
+    情节连贯: 0.20
+    设定一致性: 0.13
+    对话真实度: 0.07
+    套路检测: 0.06
 
   active_critics: [emotion_arc, character_motivation, sensory_detail, plot_coherence]
 

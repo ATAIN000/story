@@ -62,13 +62,12 @@ params:
     - "反转不能廉价——爱人的秘密必须落在道德灰色地带，不是单纯的'是坏人'"
 
   evaluation_weights:
-    角色动机: 0.25
-    情感弧: 0.20
-    情节连贯: 0.20
-    对话真实度: 0.15                           # 情侣间的潜台词
-    套路检测: 0.10
-    主题深度: 0.05
-    感官细节: 0.05
+    角色动机: 0.31
+    情节连贯: 0.25
+    对话真实度: 0.19                           # 情侣间的潜台词
+    套路检测: 0.13
+    主题深度: 0.06
+    感官细节: 0.06
 
   active_critics: [character_motivation, emotion_arc, plot_coherence, dialogue_authenticity]
 
