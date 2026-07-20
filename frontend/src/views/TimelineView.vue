@@ -50,8 +50,11 @@ const placedEvents = computed(() => {
   }
   const placed = []
   for (const [key, evs] of groups) {
-    const [ch, tr] = key.split('|')
-    const ci = chapterCols.value.findIndex(c => String(c.chapter) === String(ch))
+    const [chRaw, tr] = key.split('|')
+    const ch = Number(chRaw)
+    /* chapter=0（未归章）事件归入第一列（chapter=1）并打 untagged 标，避免被静默丢弃 */
+    const chForCol = ch > 0 ? ch : 1
+    const ci = chapterCols.value.findIndex(c => c.chapter === chForCol)
     const ti = vm.value.tracks.findIndex(t => t.id === tr)
     if (ci < 0 || ti < 0) continue
     evs.forEach((e, i) => {
@@ -61,6 +64,7 @@ const placedEvents = computed(() => {
         x: colX(ci) + offset,
         y: trackY(ti),
         idx: i,
+        untagged: ch <= 0,
       }
     )})
   }
@@ -175,7 +179,7 @@ onUnmounted(() => window.removeEventListener(THEME_EVENT, onTheme))
             <text :x="e.x" :y="e.y + 16" text-anchor="middle" font-size="11" fill="var(--ink)">
               {{ e.agent || '·' }}：{{ e.action?.slice(0, 12) || e.eventType }}
             </text>
-            <title>第{{ e.chapter }}章 · {{ e.agent }}：{{ e.action }}</title>
+            <title>第{{ e.chapter }}章 · {{ e.agent }}：{{ e.action }}{{ e.untagged ? '（未归章）' : '' }}</title>
           </g>
         </g>
       </svg>

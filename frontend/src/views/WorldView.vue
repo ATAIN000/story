@@ -3,7 +3,7 @@
 // 数据源：toWorldViewVM —— world_rules 从 genre 静态回退（后端 /api/config 未暴露，
 // brief 允许「静态读或省略」）；条目从 world 快照聚合（physical/relationships/minds），
 // 不编造。稀疏时友好提示「世界观条目由生成过程填充，本视图展示已建立的规则与出场统计」。
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { toWorldViewVM } from '../api/adapters'
 import EmptyState from '../components/EmptyState.vue'
 
@@ -35,7 +35,6 @@ function ensureSelection() {
     activeCat.value = CATS.value[0].name
   }
 }
-import { watch } from 'vue'
 watch(CATS, ensureSelection, { immediate: true })
 
 const activeGroup = computed(() => CATS.value.find(c => c.name === activeCat.value) ?? null)

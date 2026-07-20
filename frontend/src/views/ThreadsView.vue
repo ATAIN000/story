@@ -125,10 +125,10 @@ function fmtWhen(item) {
         <div class="iv-sub">{{ noteTarget.content }}</div>
         <textarea class="rw-ta" rows="3" v-model="noteText"
                   placeholder="例：这条伏笔可压一章再收 / 直接作废 / 改为暗线回收"
-                  @keydown.enter.exact.prevent="submitNote"
+                  @keydown.enter.prevent="submitNote"
                   @keydown.esc.prevent="closeNote"></textarea>
         <div class="iv-bar">
-          <span class="ie-hint">Ctrl+Enter 确定 · 进作者意图，下章决策卡生效</span>
+          <span class="ie-hint">Enter 确定 · 进作者意图，下章决策卡生效</span>
           <button class="ie-ok" :disabled="!noteText.trim() || noteBusy" @click="submitNote">
             {{ noteBusy ? '提交中…' : '✓ 记账' }}
           </button>

@@ -417,15 +417,6 @@ export function toTimelineVM(project) {
   Object.keys(trackLabels).sort().forEach(id => {
     if (!trackOrder.includes(id)) trackOrder.push(id)
   })
-  /* agent+chapter → track 映射：扫每章决策卡 beats */
-  const agentTrackMap = new Map()   // `${chapter}|${agent}` → track
-  for (const c of chapters) {
-    const beats = c.card?.beats ?? []
-    /* beats 无 agent 字段；退化为按章节内 beat-track 的出现频次给整章事件做兜底：
-     * 即「该章事件若 agent 出现在决策卡 characters 中则按 track 匹配」不可行（beats 无人物）。
-     * 简化口径（brief 允许「读代码选最小实现」）：事件按 agent 归到其在该章最常出现的 track，
-     * 没有匹配则归到该章 advance[0] 或 'A'。 */
-  }
   /* 事件聚合：events 全量，分章 */
   const evByChapter = new Map()
   for (const e of (project.events ?? [])) {

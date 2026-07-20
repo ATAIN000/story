@@ -103,7 +103,7 @@ const rels = computed(() => {
 })
 
 /* tooltip（相对 graph 容器定位：评审 8.2-#9） */
-const tip = ref({ show: false, x: 0, y: 0, html: '' })
+const tip = ref({ show: false, x: 0, y: 0, id: '', role: '', goal: '' })
 function onNodeEnter(n, ev) {
   const zone = ev.currentTarget.closest('.graph-zone')
   const zr = zone?.getBoundingClientRect()
@@ -113,7 +113,9 @@ function onNodeEnter(n, ev) {
     show: true,
     x: sr.left - zr.left + sr.width / 2 - 60,
     y: sr.top - zr.top - 8,
-    html: `<b>${n.id}</b> · ${n.role || '—'}<br><span style="color:var(--faint)">${n.goals?.[0] || ''}</span>`,
+    id: n.id,
+    role: n.role || '—',
+    goal: n.goals?.[0] || '',
   }
 }
 function onNodeLeave() { tip.value.show = false }
@@ -254,8 +256,10 @@ async function submitIv() {
       </div>
 
       <!-- tooltip -->
-      <div class="g-tip" :style="{ left: tip.x + 'px', top: tip.y + 'px', opacity: tip.show ? 1 : 0 }"
-           v-html="tip.html"></div>
+      <div class="g-tip" :style="{ left: tip.x + 'px', top: tip.y + 'px', opacity: tip.show ? 1 : 0 }">
+        <b>{{ tip.id }}</b> · {{ tip.role }}<br>
+        <span style="color:var(--faint)">{{ tip.goal }}</span>
+      </div>
 
       <!-- 角色介入按钮 -->
       <button class="iv-fab" @click="openIv" title="角色介入" aria-label="角色介入">✋ 角色介入</button>
@@ -326,10 +330,10 @@ async function submitIv() {
         </div>
         <textarea class="rw-ta" rows="3" v-model="ivText"
                   :placeholder="IV_TYPES.find(t => t.id === ivType)?.placeholder || ''"
-                  @keydown.enter.exact.prevent="submitIv"
+                  @keydown.enter.prevent="submitIv"
                   @keydown.esc.prevent="closeIv"></textarea>
         <div class="iv-bar">
-          <span class="ie-hint">Ctrl+Enter 确定 · Esc 取消</span>
+          <span class="ie-hint">Enter 确定 · Esc 取消</span>
           <button class="ie-ok" :disabled="!ivText.trim() || ivBusy" @click="submitIv">
             {{ ivBusy ? '提交中…' : '✓ 确定' }}
           </button>
