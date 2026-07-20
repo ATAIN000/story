@@ -40,7 +40,6 @@ from .evaluator import (ChapterSpec, CriticParliament, IterationController,
 from .llm import LLMError  # 通过 shim 兼容旧 import 路径
 from .narrative import (FabulaBuilder, IRBuilder, Narrativizer,
                         SjuzhetSelector)
-from .registry import ExtensionRegistry, PluginManifest
 from .showrunner import Showrunner
 from .types import (WorldEvent, WorldState, CharacterMind, Relation,
                     NarrativeState, ForeshadowTriple, Check, StoryEngineError,
@@ -127,12 +126,10 @@ class StoryEngine:
             self.registry = self.kernel.registry
             self.project_dir = self.kernel.project_dir
         else:
-            # 旧式构造：自动建 Kernel
+            # 旧式构造：自动建 Kernel（插件由 Kernel._load_plugins 统一加载，
+            # 含 P7.1 packs 扫描 + story.skill 接线）
             self.project_dir = Path(kernel_or_dir)
             self.project_dir.mkdir(parents=True, exist_ok=True)
-            self.registry = ExtensionRegistry()
-            for path in PLUGIN_DIR.rglob("*.yaml"):
-                self.registry.register(PluginManifest.load(path))
             from .kernel import LLMPool
             llm_pool = llm_client or LLMPool()
             self.kernel = Kernel(
@@ -141,7 +138,6 @@ class StoryEngine:
                 llm_pool=llm_pool if hasattr(llm_pool, "call") else None,
                 plugin_dir=PLUGIN_DIR,
             )
-            # 插件可能被 Kernel 又加载一遍，但 register 是幂等 dict-set，覆盖即可
             self.registry = self.kernel.registry
             self.llm = self.kernel.llm
             self.store = self.kernel.store
