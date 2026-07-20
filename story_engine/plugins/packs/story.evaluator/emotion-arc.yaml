@@ -1,0 +1,17 @@
+# critic 包：情感弧（Reagan 弧推进一致性）
+manifest_version: 1
+name: emotion-arc
+extension_point: story.evaluator
+params:
+  dimension: emotion_arc
+  guide: |
+    评估情感弧是否按决策卡目标弧（emotion_arcs）推进：
+    ①本章目标弧坐标与文本实际情感走向是否一致；
+    ②情感转折是否有铺垫，无铺垫的情绪急转为 FAIL；
+    ③章末情感落点与下一章弧起点的衔接是否连续。
+  examples:
+    pass: "她攥紧那封信，指节发白——前章的离别铺垫，在这一刻收束成了无声的恸。"
+    fail: "上一段还悲痛欲绝、泣不成声，下一段毫无过渡地喜笑颜开、谈笑风生。"
+  priority: after:character_motivation   # 在 Leader 仲裁顺序中的位置（蓝图 7 维之后、emotion_arc 扩展位同款）
+  blocking: false
+  source: manual

@@ -1,0 +1,16 @@
+# 技能包：公堂问审（蓝图 Module 0.3 技能样例 / story.html 插件页同款）
+manifest_version: 1
+name: courtroom-interrogation
+extension_point: story.skill
+params:
+  desc: "公堂问审：先行踪、后物证的逼问节奏"
+  trigger: "公堂/审问/提审/问话场景"
+  prompt_template: |
+    问审节奏三段：先问行踪（可验证的细节）→ 再问关系（利益与往来）→ 最后亮物证（不可辩驳）。
+    每段之间留一拍停顿，让嫌疑人自己填补沉默——破绽往往出在抢答。
+    判官不先下结论，只追问细节；让证词在细节上自相矛盾。
+  postprocess: ""
+  examples:
+    good: "「初七之夜，你在何处？」包拯不问玉佩先问行踪。张三道邻县探亲，包拯微微颔首，忽然将拓片一掷而下：「这张记二字，作何解释？」"
+    bad: "包拯拍案喝道：「人证物证俱在，就是你偷的！从实招来！」"
+  source: manual

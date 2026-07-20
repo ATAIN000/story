@@ -1,0 +1,15 @@
+# 人物原型包：判官（预留格式，消费接线二期）
+manifest_version: 1
+name: judge-official
+extension_point: story.character.archetype
+params:
+  desc: "判官：沉静多疑，证据至上"
+  persona:
+    traits: [沉静, 多疑, 克制, 重实证]
+    taboos: [轻信, 情绪外露, 先入为主]
+    goals: [查明真相, 维护律法公正]
+  voice_hint: "本府只认证据，不认梦。"
+  typical_relations:
+    - {type: 信任, target_archetype: loyal-guard}
+    - {type: 倚重, target_archetype: advisor-scribe}
+  source: manual

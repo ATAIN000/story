@@ -1,0 +1,45 @@
+# 素材包清单（_index.yaml）
+# status: active=加载 / draft=不加载（草稿）
+# 本文件由素材作者（hermes 或人工）维护；loader 按 extension_point 分桶加载
+- pack: courtroom-interrogation
+  extension_point: story.skill
+  version: "0.1"
+  status: active
+  source: manual
+  collected_at: "2026-07-20"
+- pack: deliberate-slip
+  extension_point: story.skill
+  version: "0.1"
+  status: active
+  source: manual
+  collected_at: "2026-07-20"
+- pack: foreshadow-echo
+  extension_point: story.skill
+  version: "0.1"
+  status: active
+  source: manual
+  collected_at: "2026-07-20"
+- pack: zh-gongan-texture
+  extension_point: story.language
+  version: "0.1"
+  status: active
+  source: manual
+  collected_at: "2026-07-20"
+- pack: emotion-arc
+  extension_point: story.evaluator
+  version: "0.1"
+  status: active
+  source: manual
+  collected_at: "2026-07-20"
+- pack: fair-play
+  extension_point: world.rule
+  version: "0.1"
+  status: active
+  source: manual
+  collected_at: "2026-07-20"
+- pack: judge-official
+  extension_point: story.character.archetype
+  version: "0.1"
+  status: draft            # 预留：archetype 消费接线二期
+  source: manual
+  collected_at: "2026-07-20"
