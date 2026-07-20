@@ -1,7 +1,9 @@
 """P7.1 测试：L1 素材包扫描（draft 跳过 / 宽松校验）+ L2 story.skill 接线
 
 核心用例（用户指令：只保留核心）：
-1. packs 扫描：packs("story.skill") 含 3 个样例；draft 的 judge-official 不在任何桶
+1. packs 扫描：packs("story.skill") 含 3 个样例；P7.5 L6 起 judge-official
+   转 active，出现在 story.character.archetype 桶（注册可见，消费二期）
+1b. draft 语义：_index.yaml 标 draft 的 pack 不加载（合成 tmp 目录）
 2. 容错：缺 name 键的坏 pack → warning + 跳过不崩，其余正常加载
 3. skill 接线：StoryEngine 启动后 story.skill 注册可见（registry 最短真实路径）
 """
@@ -20,16 +22,38 @@ ALL_BUCKETS = ["story.skill", "story.language", "story.evaluator",
 
 
 class TestPacksScan(unittest.TestCase):
-    def test_1_scan_buckets_and_draft_skipped(self):
+    def test_1_scan_buckets_and_archetype_visible(self):
         reg = ExtensionRegistry()
         reg.load_packs(PACKS_DIR)
         skills = {p.name for p in reg.packs("story.skill")}
         self.assertEqual(skills, {"courtroom-interrogation",
                                   "deliberate-slip", "foreshadow-echo"})
-        # draft 的 judge-official 不出现在任何桶
-        for point in ALL_BUCKETS:
-            self.assertNotIn("judge-official",
-                             {p.name for p in reg.packs(point)})
+        # P7.5 L6：judge-official 已转 active，archetype 桶注册可见
+        self.assertEqual([p.name for p in
+                          reg.packs("story.character.archetype")],
+                         ["judge-official"])
+
+    def test_1b_draft_status_skipped(self):
+        tmp = Path(tempfile.mkdtemp())
+        try:
+            pack_dir = tmp / "packs" / "story.character.archetype"
+            pack_dir.mkdir(parents=True)
+            (pack_dir / "draft-pack.yaml").write_text(
+                "manifest_version: 1\nname: draft-pack\n"
+                "extension_point: story.character.archetype\nparams: {}\n",
+                encoding="utf-8")
+            (tmp / "packs" / "_index.yaml").write_text(
+                "- pack: draft-pack\n  extension_point: story.character.archetype\n"
+                "  status: draft\n",
+                encoding="utf-8")
+            reg = ExtensionRegistry()
+            reg.load_packs(tmp / "packs")
+            # draft 不出现在任何桶
+            for point in ALL_BUCKETS:
+                self.assertNotIn("draft-pack",
+                                 {p.name for p in reg.packs(point)})
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
 
     def test_2_bad_manifest_warns_and_skips(self):
         tmp = Path(tempfile.mkdtemp())

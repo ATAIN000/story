@@ -40,6 +40,6 @@
 - pack: judge-official
   extension_point: story.character.archetype
   version: "0.1"
-  status: draft            # 预留：archetype 消费接线二期
+  status: active           # 注册可见（前端插件视图非空）；消费接线二期（Actor spawn）
   source: manual
   collected_at: "2026-07-20"

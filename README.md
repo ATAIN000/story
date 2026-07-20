@@ -105,12 +105,24 @@ story_engine/                ← 纯 Python 核心包（不依赖 Web 框架）
     ├── genres/mystery.yaml              题材插件·悬疑公案（五轨道/世界规则/评估权重/禁忌）
     ├── genres/romance.yaml              题材插件·古代言情（四轨道/phase_beats/pacing_targets，Phase 3 新增）
     ├── genres/wuxia.yaml                题材插件·武侠（culture_bound 组合校验示例）
-    └── cultures/confucian_officialdom.yaml  文化插件（Hofstede 6维/评书扣子/原型映射）
+    ├── cultures/confucian_officialdom.yaml  文化插件（Hofstede 6维/评书扣子/原型映射）
+    └── packs/                           素材包（P7：5 扩展点 7 样例 + _index.yaml 清单）
 
 backend/main.py              FastAPI：/api/project、generate、rollback、reset、config
 frontend/                    Vue 3 + Vite + Tailwind（四个可视化面板）
 tests/test_engine.py         赌注1/赌注4/核心循环回归测试
 ```
+
+### 素材包（Packs）
+
+`plugins/packs/` 存放按扩展点分桶的素材包（`story.skill` / `story.language` /
+`story.evaluator` / `world.rule` / `story.character.archetype`），由 `_index.yaml`
+清单管理（`status: active` 加载、`draft` 跳过）。引擎启动时 registry 宽松扫描
+（坏包 warning 跳过不崩），各扩展点按各自方式消费：skill 包注册进内核、language
+包并入 Realizer 资源池、evaluator 包扩充 critic 维度库、world.rule 包经 genre
+`rule_packs` 键显式引用合并、archetype 包注册可见（消费接线二期）。前端插件视图
+经 `GET /api/config` 的 `plugins` 字段展示全部桶。格式规范见
+`../docs/素材包体系与hermes采集计划.md`。
 
 ## 关键设计决策（来自调研与验证报告）
 
