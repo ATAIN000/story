@@ -7,26 +7,35 @@ API：
   POST /api/project/reset      重置项目
   GET  /api/config             运行配置（LLM 模式/插件）
   POST /api/meta/config        【v0.2 新增】UserIntent → StoryConfig（Module 8）
+  POST /api/intervene          【v0.5 新增】作者介入统一入口（5 类，Module 7.1）
+  GET  /api/interventions      【v0.5 新增】介入历史（author_intervention 事件流）
+  POST /api/hitl/respond       【v0.5 新增】应答 pending 的 HITL 请求
 静态：/ → frontend/dist（Vue SPA）
 """
 from __future__ import annotations
 
+import asyncio
 import os
 import sys
 import tempfile
+from dataclasses import asdict
 from pathlib import Path
+from typing import Any
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from starlette.concurrency import run_in_threadpool
 
 # 让 backend 能 import story_engine（项目根在上一级）
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from story_engine.engine import StoryEngine, StoryEngineMockEnded  # noqa: E402
+from story_engine.hitl import (  # noqa: E402
+    HumanInput, InterventionRouter, TrainingPipeline)
 from story_engine.kernel import Kernel, LLMPool  # noqa: E402
 from story_engine.llm import LLMError  # noqa: E402
 from story_engine.meta import MetaGenerator, UserIntent  # noqa: E402
@@ -62,6 +71,25 @@ engine = StoryEngine(kernel)
 meta_gen = MetaGenerator(kernel)
 
 
+def _regenerate_sync() -> None:
+    """InterventionRouter.regenerate_fn 约定：无参同步 callable（P5.8）；
+    engine.regenerate_current_chapter 是 async → 最小适配（P5.10 评审传导2）：
+    asyncio.run 包一层。安全性：本函数只经 run_in_threadpool 在工作线程调用
+    （无线程内运行中的事件循环），故 asyncio.run 合法；EventStore 为
+    check_same_thread=False + 锁，跨线程 commit 安全；LLMPool 每次调用
+    自建 httpx.AsyncClient，不绑定特定事件循环。"""
+    asyncio.run(engine.regenerate_current_chapter())
+
+
+# === v0.5: HITL（P5.10）— InterventionRouter + TrainingPipeline 挂载 ===
+# 挂载点决策（任务卡落地要点）：engine 侧无 router/pipeline 实例（读 engine.py
+# 确认），参照 meta_gen 同款模式在 backend 侧构造，依赖 kernel 单例 +
+# regenerate_fn async 包装 + TrainingPipeline(kernel, project_dir)。
+training_pipeline = TrainingPipeline(kernel, PROJECT_DIR)
+intervention_router = InterventionRouter(
+    kernel, pipeline=training_pipeline, regenerate_fn=_regenerate_sync)
+
+
 class RollbackReq(BaseModel):
     tick: int
 
@@ -72,6 +100,19 @@ class UserIntentReq(BaseModel):
     language: str = "zh"
     target_length: int = 12
     platform: str = "novel"
+
+
+class InterveneReq(BaseModel):
+    """作者介入统一入口 body（P5.10 契约）"""
+    type: str                 # intent / structural / character / textual / evaluation
+    payload: dict = {}
+    reason: str = ""
+
+
+class HitlRespondReq(BaseModel):
+    """HITL 应答 body（response 可为任意 JSON：选项/文本/结构化对象）"""
+    request_id: str
+    response: Any = None
 
 
 @app.get("/api/config")
@@ -132,6 +173,53 @@ async def meta_config(req: UserIntentReq):
         return cfg.to_dict()
     except StoryEngineError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+# ---------- HITL（P5.10，Module 7：介入即事件，可回放） ----------
+INTERVENTION_TYPES = ("intent", "structural", "character", "textual", "evaluation")
+
+
+@app.post("/api/intervene")
+async def intervene(req: InterveneReq):
+    """5 类作者介入统一入口 → InterventionResult dict。
+
+    router.route 全程同步且可能触发章级重生成（structural → regenerate_fn），
+    经 run_in_threadpool 调度：既不阻塞主事件循环，也让 _regenerate_sync 的
+    asyncio.run 落在无运行中循环的工作线程（见该函数注释）。
+    未知 type 在 API 层拦截 → 400；router 级失败（如目标事件不存在）
+    返回 200 + ok:false（契约：InterventionResult 原样返回）。
+    """
+    if req.type not in INTERVENTION_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"未知介入类型「{req.type}」（支持 {'/'.join(INTERVENTION_TYPES)}）")
+    result = await run_in_threadpool(
+        intervention_router.route,
+        HumanInput(type=req.type, payload=req.payload, reason=req.reason))
+    return asdict(result)
+
+
+@app.get("/api/interventions")
+async def list_interventions():
+    """介入历史：事件流中的 author_intervention 事件（含 active 标记）。
+    query_world 无现成 predicate，按 all_events 过滤 event_type（任务卡口径）。"""
+    return [e for e in kernel.query_world("all_events")
+            if e.get("event_type") == "author_intervention"]
+
+
+@app.post("/api/hitl/respond")
+async def hitl_respond(req: HitlRespondReq):
+    """应答 pending 的 HITL 请求 → {ok: true}；无此 pending（id 错误/已应答/
+    已超时）→ 404（与现有端点 HTTPException 风格一致）。
+
+    保持 async 直调不进 threadpool：resolve_human_input 的 event.set 有事件
+    循环线程亲和，须与 request_human_input 等待协程同线程（kernel docstring）。
+    """
+    if not kernel.resolve_human_input(req.request_id, req.response):
+        raise HTTPException(
+            status_code=404,
+            detail=f"无此 pending 请求「{req.request_id}」（id 错误或已应答/超时）")
+    return {"ok": True}
 
 
 # ---------- 静态托管 Vue SPA ----------

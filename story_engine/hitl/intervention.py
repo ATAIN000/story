@@ -4,7 +4,7 @@
   - intent      改目标/约束 → author_intervention 事件，下章决策卡生效
   - structural  Fabula 层重写 → rolled_back + 可选章级重生成（P5.8）
   - character   改角色信念/关系/记忆 → 事件（learn/relations 复用现有 effects 协议）
-  - textual     Sjuzhet 层改写 → 只记事件，不重生成（P5.8，蓝图：最贵，最小化）
+  - textual     Sjuzhet 层改写 → 事件 + TrainingPipeline 文风数据（P5.10 接线），不重生成（蓝图：最贵，最小化）
   - evaluation  质量标注 → 事件 + TrainingPipeline 偏好数据（P5.9，依赖注入预留）
 
 全部规则化，零 LLM（重生成调用注入的 regenerate_fn 除外——那是 engine 的事）。
@@ -311,6 +311,13 @@ class InterventionRouter:
             "before": p.get("before"),
             "after": p.get("after"),
         })
+        fed = False
+        if self.pipeline is not None:
+            # TrainingPipeline 文风对齐数据通路（P5.10 接线，评审传导1：
+            # 与 _route_evaluation 同款调用；pipeline 自身吞异常所以无需 try）
+            self.pipeline.process_intervention(event)
+            fed = True
         return InterventionResult(
             ok=True, event_id=event.event_id, regenerated=False,
-            message=f"第{p['chapter']}章文本编辑已记录（可回放），不重生成")
+            message=f"第{p['chapter']}章文本编辑已记录（可回放），不重生成"
+                    + ("，已送入 TrainingPipeline" if fed else ""))

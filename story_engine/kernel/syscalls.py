@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 from datetime import datetime
 from pathlib import Path
@@ -43,6 +44,8 @@ from .actor_scheduler import ActorScheduler
 from .actor import (
     ActorRef, CharacterConfig, GenreBundle, CriticConfig, HumanResponse,
 )
+
+logger = logging.getLogger(__name__)
 
 
 # 蓝图 Module 0.1 列出的全部 syscall（供测试枚举校验）
@@ -268,12 +271,16 @@ class Kernel:
     def resolve_human_input(self, request_id: str, response: Any) -> bool:
         """写入应答并唤醒等待中的 request_human_input（供 P5.10 API 调用）。
 
-        返回 False = 无此 pending 请求（id 错误或已超时）。须与
-        request_human_input 在同一事件循环线程调用（event.set 无跨线程包装）。
+        返回 False = 无此 pending 请求（id 错误或已超时），或该请求已被应答
+        （P5.10 评审传导4 已应答守卫：第一个应答生效后、等待协程消费前的
+        窗口内，重复 resolve 不得覆盖先到应答——忽略第二个，返回 False）。
+        须与 request_human_input 在同一事件循环线程调用（event.set 无跨线程包装）。
         """
         event = self._human_input_events.get(request_id)
         if event is None:
             return False
+        if request_id in self._human_input_answers:
+            return False  # 已应答守卫：先到应答优先，忽略重复 resolve
         self._human_input_answers[request_id] = response
         event.set()
         return True
@@ -288,7 +295,8 @@ class Kernel:
             if path.exists():
                 return json.loads(path.read_text(encoding="utf-8"))
         except Exception:
-            pass
+            # 失败不阻断主流程，但必须留 log（P5.10 评审传导3：不再静默 pass）
+            logger.warning("hitl_requests.json 读取失败，按空表处理", exc_info=True)
         return []
 
     def _write_hitl_requests(self, records: list) -> None:
@@ -297,7 +305,9 @@ class Kernel:
                 json.dumps(records, ensure_ascii=False, indent=1),
                 encoding="utf-8")
         except Exception:
-            pass  # 审计落盘失败不阻断 HITL 等待/应答主流程
+            # 审计落盘失败不阻断 HITL 等待/应答主流程，但必须留 log（评审传导3）
+            logger.warning("hitl_requests.json 落盘失败（审计记录可能丢失）",
+                           exc_info=True)
 
     def _append_hitl_request(self, record: dict) -> None:
         records = self._read_hitl_requests()

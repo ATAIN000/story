@@ -4,7 +4,8 @@
 1. high 质量 evaluation 介入 → 技能注册 story.skill + preferences.jsonl 落盘一行；
    pipeline 依赖抛错时异常不传播 → router 仍 ok
 2. textual 介入 → style.jsonl 落盘（before/after/reason 完整）
-   （注：router 现状只把 evaluation 事件转给 pipeline，textual 直接喂 pipeline 验证）
+   （直接喂 pipeline 验证通路；router→pipeline 的 textual 接线由 P5.10 补齐，
+   端到端闭环见 tests/test_hitl_api.py）
 3. request_human_input：pending 落盘 → resolve_human_input 应答返回；
    超时路径返回 None（timeout=0.1s）
 """
@@ -78,7 +79,7 @@ class TestTrainingPipeline(_KernelBase):
         self.assertTrue(r2.ok)
 
     def test_textual_records_style(self):
-        # router 现状（P5.8）不把 textual 事件转给 pipeline，直接喂事件验证通路
+        # 直接喂 pipeline 验证通路（router→pipeline 的 textual 接线由 P5.10 补齐）
         self.pipeline.process_intervention({
             "type": "textual", "chapter": 2,
             "before": "他走了进去。", "after": "他推门，闪身而入。",
