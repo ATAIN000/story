@@ -102,9 +102,8 @@ story_engine/                ← 纯 Python 核心包（不依赖 Web 框架）
 ├── engine.py                核心循环编排器（生成/检查/修正三通道分离 — worldstate_paradox）
 ├── mock_script.py           《玉佩案》3 章剧本（含三类违规的教科书式演示）
 └── plugins/
-    ├── genres/mystery.yaml              题材插件·悬疑公案（五轨道/世界规则/评估权重/禁忌）
-    ├── genres/romance.yaml              题材插件·古代言情（四轨道/phase_beats/pacing_targets，Phase 3 新增）
-    ├── genres/wuxia.yaml                题材插件·武侠（culture_bound 组合校验示例）
+    ├── genres/                          题材插件 ×29（mystery/romance/wuxia + H7 提升的 26 个融合题材；
+    │                                    STORY_ENGINE_GENRE 环境变量切换，默认 mystery）
     ├── cultures/confucian_officialdom.yaml  文化插件（Hofstede 6维/评书扣子/原型映射）
     └── packs/                           素材包（P7：5 扩展点 7 样例 + _index.yaml 清单）
 
