@@ -21,6 +21,7 @@ data/projects/*/story.db
 data/projects/*/story.db-wal
 data/projects/*/story.db-shm
 data/projects/*/chapters.json
+data/projects/*/training_data/
 
 # IDE
 .vscode/

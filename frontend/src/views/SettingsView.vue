@@ -13,6 +13,13 @@ import { useTheme } from '../composables/useTheme'
 import { useFontSize } from '../composables/useFontSize'
 import EmptyState from '../components/EmptyState.vue'
 
+// App.vue 通过 <component :is> 统一传 :project :config；这里显式声明（即便未用）
+// 避免 fallthrough 到根元素 attr。
+defineProps({
+  project: { type: Object, default: null },
+  config: { type: Object, default: null },
+})
+
 const { toast, toastError } = useToast()
 const { theme, toggleTheme } = useTheme()
 const { fsSize, setFont } = useFontSize()
@@ -170,6 +177,9 @@ function onFont(e) {
           <span class="card-tag">进程内覆盖 · 重启失效</span>
         </header>
         <div class="card-body">
+          <div class="gen-hint">
+            开关在<b>下一次生成</b>时生效，不会打断当前正在生成的章节。
+          </div>
           <div class="switch-row">
             <div class="sw-text">
               <div class="sw-name">自评迭代（EVAL_ENABLED）</div>
@@ -258,6 +268,10 @@ function onFont(e) {
   border-radius: 10px; background: var(--s3); }
 .card-tag.mock { color: var(--violet); }
 .card-body { padding: 14px 16px; }
+
+.gen-hint { font-size: 11.5px; color: var(--faint); line-height: 1.6;
+  margin-bottom: 8px; padding: 6px 10px; background: var(--s3);
+  border-radius: 5px; }
 
 .kv { display: flex; padding: 6px 0; font-size: 12.5px; align-items: baseline; gap: 10px; }
 .kv .k { color: var(--faint); min-width: 130px; flex-shrink: 0; font-size: 11.5px; }

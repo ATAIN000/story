@@ -395,8 +395,10 @@ async def settings_test_llm(req: TestLlmReq | None = None):
                 "latency_ms": None, "model": model}
     latency = round((_time.perf_counter() - t0) * 1000, 1)
     if r.status_code != 200:
+        # 只用 reason_phrase（无 body）：上游 LLM 错误响应可能回显请求头/body，
+        # 其中可能含 Authorization Bearer 或 api_key，绝不引入前端。
         return {"ok": False,
-                "error": f"HTTP {r.status_code}：{r.text[:200]}",
+                "error": f"HTTP {r.status_code} {r.reason_phrase}",
                 "latency_ms": latency, "model": model}
     return {"ok": True, "latency_ms": latency, "model": model}
 

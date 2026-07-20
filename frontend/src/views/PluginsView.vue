@@ -13,6 +13,7 @@ import { useToast } from '../composables/useToast'
 import EmptyState from '../components/EmptyState.vue'
 
 const props = defineProps({
+  project: { type: Object, default: null },
   config: { type: Object, default: null },
 })
 
