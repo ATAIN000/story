@@ -581,8 +581,13 @@ class StoryEngine:
         persona = (self.bundle.genre_params.get("reader_persona")
                    or "喜欢本类型的普通读者")
         reader = ReaderProxy(persona, kernel=self.kernel)
+        # P7.3：parliament 从 story.evaluator pack 收集的优先级/ blocking 规则
+        # 传给 Leader（空规则 → Leader 行为与基线逐字一致）
         controller = IterationController(
-            parliament, LeaderArbiter(), gates, reader,
+            parliament,
+            LeaderArbiter(insertions=parliament.leader_insertions,
+                          blocking_extra=parliament.leader_blocking),
+            gates, reader,
             max_rounds=self._eval_max_rounds())
         scorer = PresentationScorer(self.bundle.genre_params)
         return controller, reader, scorer

@@ -33,6 +33,20 @@ LLM 设施：复用 P3.7 blending 已验证的 callable 注入模式
 （async (prompt, *, purpose=, temperature=, max_tokens=) -> 带 .text 的对象）。
 构造时可传 kernel（取其 llm_call，即 LLMPool.call 的薄包装）或直接传 llm_call；
 两者皆无 → 一切调用返回 ""→ 不阻塞。测试注入 fake callable，不触网、不建 Kernel。
+
+P7.3 L4（素材包计划 §4）：story.evaluator pack 扩充维度库 + 收集 Leader 规则
+- registry 注入与 P7.2 同款：`registry=` 关键字参数（测试注入点）优先，
+  缺省 `getattr(kernel, "registry", None)` 兜底（mock/无 registry 的 kernel 安全）
+- pack 的 params.dimension 已在 DIMENSION_GUIDE → pack 的 guide/examples
+  **覆盖**硬编码三元组（pack 优先：素材版即同维度更新版，硬编码是内置初版）
+- 新维度 → 加入实例维度库；genre yaml `active_critics` 引用即启用（机制不变）
+- params.priority（after:<dim>/before:<dim>）与 blocking: true 收集为
+  `leader_insertions` / `leader_blocking`，由 engine 接线时传给 LeaderArbiter
+  （parliament 不改 Leader 全局常量，实例隔离）
+- pack 缺 dimension/guide/examples → warning + 跳过该 pack（不崩）
+- 一切修改在实例副本上进行（懒拷贝），模块级 DIMENSION_GUIDE 不被污染；
+  无 registry/零有效 pack 时 dimension_guide 即模块常量（identity），
+  Leader 规则为空，行为与基线逐字一致
 """
 from __future__ import annotations
 
@@ -115,35 +129,112 @@ class SuspectSegment:
 class CriticParliament:
     """7+1 维专家 critic — 串联模式：单 judge 粗筛 → 多 critic 精审
 
-    kernel: Kernel 实例（可选；取其 llm_call 作为 LLM 设施）
+    kernel: Kernel 实例（可选；取其 llm_call 作为 LLM 设施，其 registry 作
+            P7.3 story.evaluator pack 来源）
     genre: GenreBundle（可选；dimensions 从 genre.genre_params["active_critics"]
            加载——该 dict 即插件 params，active_critics 在其中；缺省/为空 →
            回退蓝图全量 ALL_DIMENSIONS 7 维。串联模式下空 judge 即零成本，
            回退不会带来意外调用。）
     llm_call: 直接注入的 LLM callable（测试 fake 注入点；优先级高于 kernel）
+    registry: 直接注入的 ExtensionRegistry（P7.3 测试注入点；缺省取
+              kernel.registry；None/零 pack → 维度库与 Leader 规则同基线）
     """
 
-    def __init__(self, kernel=None, genre=None, *, llm_call=None):
+    def __init__(self, kernel=None, genre=None, *, llm_call=None, registry=None):
         if llm_call is not None:
             self._llm_call = llm_call
         elif kernel is not None:
             self._llm_call = kernel.llm_call
         else:
             self._llm_call = None
+        # P7.3 L4：registry 显式传入优先；否则从 kernel 取（P7.2 同款 getattr
+        # 兜底）。零 pack 时 dimension_guide 即模块常量 identity、Leader 规则
+        # 为空，行为与基线逐字一致
+        if registry is None:
+            registry = getattr(kernel, "registry", None)
+        self.dimension_guide = DIMENSION_GUIDE
+        self.leader_insertions: list[tuple[str, str, str]] = []
+        self.leader_blocking: set[str] = set()
+        if registry is not None:
+            self._load_evaluator_packs(registry)
         active = list((getattr(genre, "genre_params", None) or {})
                       .get("active_critics") or [])
         self.dimensions = self._filter_dimensions(active or list(ALL_DIMENSIONS))
 
-    @staticmethod
-    def _filter_dimensions(names: list[str]) -> list[str]:
-        """未知维度（插件写错名）跳过并记 warning，不崩（决策2）"""
+    def _filter_dimensions(self, names: list[str]) -> list[str]:
+        """未知维度（插件写错名）跳过并记 warning，不崩（决策2）。
+
+        已知集 = 实例维度库（DIMENSION_GUIDE + pack 新增维度）。
+        """
         dims: list[str] = []
         for name in names:
-            if name in KNOWN_DIMENSIONS:
+            if name in self.dimension_guide:
                 dims.append(name)
             else:
                 logger.warning("CriticParliament: 未知 critic 维度「%s」，已跳过", name)
         return dims
+
+    # ---------- P7.3 L4：story.evaluator pack 扩充维度库 ----------
+    def _load_evaluator_packs(self, registry) -> None:
+        """加载 story.evaluator pack：覆盖/新增维度 + 收集 Leader 优先级规则。
+
+        - dimension 已在维度库 → pack 的 guide/examples 覆盖（pack 优先于硬编码）
+        - 新维度 → 加入实例维度库（active_critics 引用即启用）
+        - priority（after:<dim>/before:<dim>）→ leader_insertions 规则
+          (dimension, position, anchor)，交 LeaderArbiter 按声明插入；
+          缺 priority 的新维度不进仲裁序（蓝图：不在优先级表中不参与仲裁）
+        - blocking: true → leader_blocking（缺省 false 不加）
+        - 缺 dimension/guide/examples → warning + 跳过该 pack（不崩）
+        修改在实例副本上进行（懒拷贝），模块级常量不被污染。
+        """
+        guide = None  # 懒拷贝：首个有效 pack 才建实例副本
+        for pack in registry.packs("story.evaluator"):
+            params = getattr(pack, "params", None) or {}
+            pack_name = getattr(pack, "name", "?")
+            dimension = params.get("dimension")
+            pack_guide = params.get("guide")
+            examples = params.get("examples")
+            if not isinstance(dimension, str) or not dimension.strip() \
+                    or not isinstance(pack_guide, str) or not pack_guide.strip() \
+                    or not isinstance(examples, dict):
+                logger.warning(
+                    "CriticParliament: evaluator pack「%s」缺 dimension/guide/"
+                    "examples，已跳过", pack_name)
+                continue
+            dimension = dimension.strip()
+            good = str(examples.get("pass") or "").strip()
+            bad = str(examples.get("fail") or "").strip()
+            if guide is None:
+                guide = dict(DIMENSION_GUIDE)
+            # pack 优先于硬编码：同名维度（如样例 emotion_arc）的 guide/examples
+            # 更新为素材版
+            guide[dimension] = (
+                pack_guide.strip(),
+                f"正例：{good}" if good else "",
+                f"反例：{bad}" if bad else "")
+            priority = params.get("priority")
+            if priority:
+                rule = self._parse_priority(dimension, priority, pack_name)
+                if rule is not None:
+                    self.leader_insertions.append(rule)
+            if params.get("blocking"):
+                self.leader_blocking.add(dimension)
+        if guide is not None:
+            self.dimension_guide = guide
+
+    @staticmethod
+    def _parse_priority(dimension: str, priority, pack_name: str):
+        """解析 priority 声明 → (dimension, "after"|"before", anchor)；
+        格式非法 → warning + None（维度仍入库，仅放弃仲裁位声明）"""
+        text = str(priority).strip()
+        position, sep, anchor = text.partition(":")
+        if not sep or position not in ("after", "before") or not anchor.strip():
+            logger.warning(
+                "CriticParliament: evaluator pack「%s」priority 格式非法「%s」"
+                "（须 after:<dimension> / before:<dimension>），忽略仲裁位声明",
+                pack_name, priority)
+            return None
+        return (dimension, position, anchor.strip())
 
     # ---------- 串联主流程 ----------
     async def assess(self, chapter: str, world_state=None) -> list[Critique]:
@@ -208,7 +299,7 @@ class CriticParliament:
 
         解析失败/空响应/异常 → None（丢弃该 critique，不抛异常、不阻塞）。
         """
-        desc, good, bad = DIMENSION_GUIDE[dimension]
+        desc, good, bad = self.dimension_guide[dimension]
         seg_lines = "\n".join(
             f"{i + 1}. 引文：{s.quote}\n   粗筛理由：{s.reason or '（无）'}"
             for i, s in enumerate(suspects))

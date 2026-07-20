@@ -13,10 +13,20 @@
 - emotion_arc 插入位置（计划决策2）：插在 character_motivation 之后
   （同属严重级），但不进前 3 blocking 集合——blocking 只取蓝图原文前 3 维
 - 不在优先级表中的维度不参与仲裁（蓝图语义：只按表裁决）
+
+P7.3 L4（素材包计划 §4）：构造时可传 pack 声明的插入规则 insertions
+[(dimension, "after"|"before", anchor)] 与额外 blocking 维 blocking_extra，
+在**实例副本**上应用（dimension 已在仲裁序 → 幂等跳过不重复；anchor 不在序
+→ warning + 追加到末尾，不崩）。缺省/空规则 → 直接用模块常量（identity），
+行为与基线逐字一致，全局常量不被污染。
 """
 from __future__ import annotations
 
+import logging
+
 from .types_eval import Critique, RevisionPlan
+
+logger = logging.getLogger(__name__)
 
 # 蓝图 CONSTITUTIONAL_PRIORITY 逐字（顺序=优先级；blocking 只取前 3 维）
 CONSTITUTIONAL_PRIORITY = [
@@ -40,12 +50,40 @@ ARBITRATION_ORDER.insert(
 
 
 class LeaderArbiter:
-    """宪法化优先级仲裁——纯规则，无状态，不调 LLM"""
+    """宪法化优先级仲裁——纯规则，无状态，不调 LLM
+
+    insertions: P7.3 pack 声明的插入规则 [(dimension, "after"|"before",
+                anchor)]，按包序应用到实例仲裁序副本；dimension 已在序
+                （pack 与硬编码同位声明）→ 跳过不重复；anchor 不在序 →
+                warning + 追加到末尾（不崩）
+    blocking_extra: P7.3 pack 声明 blocking: true 的额外维度集
+    两者皆空 → 不建副本，直接用模块级 ARBITRATION_ORDER / BLOCKING_DIMENSIONS
+    """
+
+    def __init__(self, insertions=None, blocking_extra=None):
+        if not insertions and not blocking_extra:
+            self._order = ARBITRATION_ORDER
+            self._blocking = BLOCKING_DIMENSIONS
+            return
+        order = list(ARBITRATION_ORDER)
+        for dimension, position, anchor in insertions or []:
+            if dimension in order:
+                continue  # 已在仲裁序 → 幂等跳过（不重复插入）
+            if anchor in order:
+                idx = order.index(anchor)
+                order.insert(idx + 1 if position == "after" else idx, dimension)
+            else:
+                logger.warning(
+                    "LeaderArbiter: 插入规则锚点维度「%s」不存在，「%s」追加到"
+                    "仲裁序末尾", anchor, dimension)
+                order.append(dimension)
+        self._order = order
+        self._blocking = BLOCKING_DIMENSIONS | frozenset(blocking_extra or ())
 
     def arbitrate(self, critiques: list[Critique]) -> RevisionPlan:
         must_fix: list[str] = []
         noted: list[str] = []
-        for dim in ARBITRATION_ORDER:
+        for dim in self._order:
             critique = self._find(dim, critiques)
             if critique and critique.verdict == "FAIL":
                 if critique.executable != "no":
@@ -55,7 +93,7 @@ class LeaderArbiter:
         # 高优先级可执行 FAIL 一票否决：即使低维度全 PASS 也必须修订
         blocking = any(
             c.verdict == "FAIL" and c.executable != "no"
-            and c.dimension in BLOCKING_DIMENSIONS
+            and c.dimension in self._blocking
             for c in critiques)
         return RevisionPlan(must_fix=must_fix, noted=noted, blocking=blocking)
 
