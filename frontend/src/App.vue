@@ -3,10 +3,11 @@
 // 布局/样式迁移自 story.html :41-73 / :432-464；视图占位 stub 由 P6.6-P6.10 填充。
 import { ref, computed, onMounted } from 'vue'
 import { api } from './api/api'
-import { toProjectVM } from './api/adapters'
+import { toProjectVM, toConfigVM } from './api/adapters'
 import { useTheme } from './composables/useTheme'
 import { useToast } from './composables/useToast'
 import { useGeneration } from './composables/useGeneration'
+import { useFontSize } from './composables/useFontSize'
 import AppIcon from './components/AppIcon.vue'
 import { NAV_ICONS } from './components/icons'
 import ToastHost from './components/ToastHost.vue'
@@ -19,8 +20,15 @@ import PluginsView from './views/PluginsView.vue'
 import SettingsView from './views/SettingsView.vue'
 
 const { theme, toggleTheme } = useTheme()
-const { toastError } = useToast()
+const { toast, toastError } = useToast()
 const { generating, stage } = useGeneration()
+const { fsSize, incFont, decFont } = useFontSize()
+
+// A−/A＋（story.html :459-461）：只接手稿 .para 字号，提示当前档
+function bumpFont(dir) {
+  dir > 0 ? incFont() : decFont()
+  toast(`正文字号 ${fsSize.value}px`)
+}
 
 const VIEWS = { write: WriteView, chars: CharsView, world: WorldView, timeline: TimelineView, threads: ThreadsView, plugins: PluginsView, settings: SettingsView }
 const NAV = [
@@ -39,8 +47,8 @@ const NAV = [
 
 const view = ref('write')
 const project = ref(null)   // toProjectVM 后的视图模型
-const config = ref(null)
-const pluginCount = ref(0)
+const config = ref(null)    // toConfigVM 后的视图模型
+const pluginCount = computed(() => config.value?.pluginCount ?? 0)
 
 const activeView = computed(() => VIEWS[view.value] || WriteView)
 const meta = computed(() => project.value?.meta || {})
@@ -65,10 +73,7 @@ async function refresh() {
 
 onMounted(async () => {
   try {
-    config.value = await api.config()
-    // list_plugins() 返回 {挂载点: [名称...]}，计数=各挂载点插件数之和
-    pluginCount.value = Object.values(config.value.plugins || {})
-      .reduce((n, names) => n + (Array.isArray(names) ? names.length : 0), 0)
+    config.value = toConfigVM(await api.config())
   } catch (e) {
     toastError(`后端未连接：${e.message}`)
   }
@@ -115,6 +120,8 @@ onMounted(async () => {
             <span class="dot" aria-hidden="true"></span>{{ stage || '生成中' }}
           </span>
           <div class="theme-ctl">
+            <button @click="bumpFont(-1)" title="缩小正文字号" aria-label="缩小正文字号">A−</button>
+            <button @click="bumpFont(1)" title="放大正文字号" aria-label="放大正文字号">A＋</button>
             <button @click="toggleTheme" :aria-label="theme === 'night' ? '切换到日间模式' : '切换到夜读模式'"
                     :title="theme === 'night' ? '切换到日间模式' : '切换到夜读模式'">
               <AppIcon :name="theme === 'night' ? 'sun' : 'moon'" :size="13" />
@@ -126,7 +133,7 @@ onMounted(async () => {
 
       <!-- 视图区（状态机切换；组件只消费 adapter 视图模型） -->
       <main class="view" role="main" :aria-label="`视图：${view}`">
-        <component :is="activeView" :project="project" :config="config" />
+        <component :is="activeView" :project="project" :config="config" @refresh="refresh" />
       </main>
     </div>
 

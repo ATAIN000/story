@@ -188,3 +188,112 @@ button { font: inherit; cursor: pointer; border: none; background: none; color: 
 .stub { padding: 30px 34px; }
 .stub h2 { font: 700 22px var(--serif); margin-bottom: 4px; }
 .stub .stub-sub { font-size: 12px; color: var(--faint); }
+
+/* ==========================================================================
+   写作台（P6.6）—— 迁移自 story.html：desk 三栏 :75-100、gen-console :211-239、
+   saga :241-249、已读标记 :251-253、结构 :466-483。
+   与 story.html 的差异（沿用 P6.5 修复口径 + 本任务新增态，均已记录）：
+   1. 9px/9.5px → 10px（8.4-#1 字号下限：.c-st、.saga-tracks）；
+   2. .ch-item.rb（已回滚章灰显）为新增态 —— 后端 rolled_back 标记，story.html 无对应物；
+   3. .m-badge（手稿「审读中/已回滚」徽标）、.gc-err（生成失败横幅）、.gc-note、
+      .gc-confirm（回滚内联确认）、.gc-bar 不定态动画为新增（真实两阶段流需要，
+      story.html 仅有演示壳）；
+   4. fab / diag / ie-*（行内编辑器）未迁 —— 段落操作是 P6.7 领土。
+   ========================================================================== */
+
+/* ===== desk 三栏（story.html :76-88, :466-483） ===== */
+.desk { display: grid; grid-template-columns: 185px 1fr 280px; height: 100%; overflow: hidden; }
+.desk-empty { height: 100%; display: flex; align-items: flex-start; justify-content: center; overflow-y: auto; }
+
+/* 章节 binder（左栏） */
+.binder { border-right: 1px solid var(--line); background: var(--s1); padding: 14px 10px; overflow-y: auto; transition: background .25s; }
+.b-t { font-size: 10px; color: var(--faint); padding: 0 8px 8px; letter-spacing: 1.5px; }
+.b-empty { font-size: 11px; color: var(--faint); padding: 6px 10px; line-height: 1.7; }
+.ch-item { padding: 8px 10px; border-radius: 6px; margin-bottom: 1px; cursor: pointer; transition: .12s; }
+.ch-item:hover { background: var(--s3); }
+.ch-item.active { background: var(--primary-tint); }
+.ch-item .c-no { font-size: 12px; font-weight: 600; color: var(--ink2); }
+.ch-item.active .c-no { color: var(--primary); }
+.ch-item .c-t { font-size: 10px; color: var(--faint); margin-top: 1px; }
+.ch-item .c-st { font-size: 10px; margin-top: 3px; display: inline-block; color: var(--faint); }
+.ch-item .c-st.ok { color: var(--accent); }
+.ch-item .c-st.ing { color: var(--primary); }
+.ch-item.rb { opacity: .45; } /* 已回滚（后端 rolled_back）：灰显，仍可点开读原文 */
+
+/* 中栏：进度条 + 控制台 + 手稿 */
+.writing { overflow-y: auto; }
+.desk-progress { position: sticky; top: 0; z-index: 5; display: flex; gap: 2px; background: var(--bg); border-bottom: 1px solid var(--line); padding: 10px 26px; }
+.dp-step { flex: 1; text-align: center; padding: 6px 4px; font-size: 11px; color: var(--faint); position: relative; }
+.dp-step.done { color: var(--accent); }
+.dp-step.now { color: var(--primary); font-weight: 700; }
+.dp-step:not(:last-child)::after { content: '›'; position: absolute; right: -6px; top: 6px; color: var(--line2); }
+
+/* 手稿（段落协议渲染；字号由 topbar A−/A＋ 经 useFontSize 内联驱动） */
+.manuscript { max-width: 680px; margin: 0 auto; padding: 36px 24px 120px; }
+.manuscript h2 { font: 700 28px/1.5 var(--serif); color: var(--ink); }
+.manuscript .m-sub { font-size: 13px; color: var(--faint); margin: 8px 0 30px; padding-bottom: 16px; border-bottom: 1px solid var(--line); }
+.manuscript .m-sub .sys { font-size: 10px; font-family: Menlo, monospace; margin-left: 8px; }
+.m-badge { font-size: 10px; padding: 2px 8px; border-radius: 4px; margin-left: 10px; vertical-align: 4px; border: 1px solid var(--primary); color: var(--primary); }
+.m-badge.rb { border-color: var(--faint); color: var(--faint); }
+.para { font: 17px/1.9 var(--serif); color: var(--ink); padding: 8px 12px; border-radius: 4px; cursor: pointer; transition: background .12s; position: relative; }
+.para:hover { background: var(--s3); }
+.para.sel { background: var(--primary-tint); }
+.para .read-mark { position: absolute; left: -16px; top: 16px; font-size: 10px; color: var(--accent); opacity: 0; }
+.para.read .read-mark { opacity: 1; }
+
+/* 情境栏（右栏）：本章档案 */
+.rail { border-left: 1px solid var(--line); background: var(--s1); overflow-y: auto; padding: 16px 14px; transition: background .25s; }
+.rail-sec { margin-bottom: 20px; }
+.rail-t { font-size: 10px; color: var(--faint); letter-spacing: 1.5px; margin-bottom: 9px; }
+
+/* ===== 全书进度 saga（story.html :241-249） ===== */
+.saga { margin-top: 14px; padding: 12px 10px 10px; border-top: 1px solid var(--line); }
+.saga-t { font-size: 10px; color: var(--faint); letter-spacing: 1.5px; }
+.saga-no { font: 700 20px var(--serif); color: var(--ink); margin-top: 4px; }
+.saga-no span { font: 400 11px var(--sans); color: var(--faint); }
+.saga-spark { width: 100%; height: 36px; margin-top: 8px; }
+.saga-tracks { font-size: 10px; color: var(--faint); line-height: 1.7; margin-top: 4px; }
+
+/* ===== 生成控制台（story.html :211-239） ===== */
+.gen-console { max-width: 680px; margin: 18px auto 0; border: 1px solid var(--line); border-radius: 10px; background: var(--s2); padding: 18px 22px; animation: pop .2s; }
+.gc-head { display: flex; align-items: baseline; gap: 12px; }
+.gc-title { font: 700 16px var(--serif); }
+.gc-time { margin-left: auto; font: 12px Menlo, monospace; color: var(--faint); }
+.gc-bar { height: 3px; border-radius: 2px; background: var(--s3); margin: 12px 0 14px; overflow: hidden; }
+.gc-bar i { display: block; height: 100%; width: 0; background: var(--primary); transition: width .2s; }
+.gc-bar i.ind { width: 35%; animation: gcind 1.4s ease-in-out infinite; } /* 不定态：等待 generate 返回 */
+@keyframes gcind { from { transform: translateX(-100%); } to { transform: translateX(400%); } }
+.gc-steps { display: flex; flex-direction: column; }
+.gc-step { display: flex; gap: 12px; padding: 9px 0; border-bottom: 1px dashed var(--line); font-size: 12.5px; }
+.gc-step:last-child { border-bottom: none; }
+.gc-step .st { width: 18px; flex-shrink: 0; padding-top: 2px; text-align: center; }
+.gc-step .nm { width: 82px; font-weight: 600; flex-shrink: 0; }
+.gc-step .dt { color: var(--faint); font-size: 11px; line-height: 1.7; }
+.gc-step .du { margin-left: auto; font: 10px Menlo, monospace; color: var(--faint); flex-shrink: 0; }
+.gc-step.todo { opacity: .45; }
+.gc-step.run .nm { color: var(--primary); }
+.gc-step.done .st { color: var(--accent); }
+.gc-spin { width: 13px; height: 13px; border: 2px solid var(--line2); border-top-color: var(--primary); border-radius: 50%; animation: spin .7s linear infinite; display: inline-block; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.gc-sub { display: inline-block; font-size: 10px; padding: 1px 7px; border-radius: 4px; margin: 0 4px 4px 0; border: 1px solid var(--line); color: var(--faint); }
+.gc-sub.ok { color: var(--accent); border-color: var(--accent); }
+.gc-sub.bad { color: var(--danger); border-color: var(--danger); }
+.gc-done-row { margin-top: 14px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.gc-note { font-size: 10px; color: var(--faint); }
+.gc-err { margin-top: 10px; border: 1px solid var(--danger); border-radius: 8px; padding: 9px 13px; font-size: 12px; color: var(--danger); }
+.gc-confirm { margin-top: 10px; border: 1px solid var(--danger); border-radius: 8px; padding: 10px 14px; font-size: 12px; color: var(--ink2); }
+.gc-confirm .cf-act { margin-top: 8px; display: flex; gap: 8px; }
+.btn-line.danger { color: var(--danger); }
+.btn-line.danger:hover { border-color: var(--danger); color: var(--danger); }
+
+/* 决策卡预览（简化版：完整决策卡视图是 P6.8 领土） */
+.plan-rows { margin-top: 10px; }
+.plan-row { display: flex; gap: 10px; padding: 6px 0; border-bottom: 1px dashed var(--line); font-size: 12.5px; }
+.plan-row:last-child { border-bottom: none; }
+.plan-row .pl { width: 56px; flex-shrink: 0; color: var(--faint); font-size: 11px; padding-top: 2px; }
+.plan-row .pv { flex: 1; line-height: 1.7; }
+
+/* 违规列表（步骤回放 · 硬约束验证） */
+.gc-viol { margin-top: 6px; display: flex; flex-direction: column; gap: 4px; }
+.gc-viol .v { font-size: 11px; color: var(--ink2); border-left: 2px solid var(--danger); padding-left: 8px; line-height: 1.6; }
+.gc-viol .v b { color: var(--danger); font-weight: 600; }

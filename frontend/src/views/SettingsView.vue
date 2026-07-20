@@ -4,6 +4,7 @@ import EmptyState from '../components/EmptyState.vue'
 
 defineProps({
   project: { type: Object, default: null },
+  config: { type: Object, default: null },
 })
 </script>
 

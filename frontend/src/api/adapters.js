@@ -139,6 +139,83 @@ export function toCharacterVM(c) {
   }
 }
 
+/* ===== 运行配置（GET /api/config → VM，P6.6 传导修复） =====
+ * 源：backend/main.py config()。plugins 为 {挂载点: [名称...]} 原样透传
+ * （P6.10 插件视图消费），pluginCount 为各挂载点插件数之和（App 徽标）。 */
+export function toConfigVM(cfg) {
+  if (!cfg) return null
+  const plugins = cfg.plugins ?? {}
+  const axes = cfg.axes ?? {}
+  const kernel = cfg.kernel ?? {}
+  return {
+    llmMode: cfg.llm_mode ?? '',
+    llmModel: cfg.llm_model ?? '',
+    baseUrl: cfg.base_url ?? null,           // mock → null（不编造）
+    plugins,
+    pluginCount: Object.values(plugins)
+      .reduce((n, names) => n + (Array.isArray(names) ? names.length : 0), 0),
+    axes: {
+      genre: axes.genre ?? '',
+      culture: axes.culture ?? '',
+      language: axes.language ?? 'zh',
+    },
+    kernel: {
+      syscalls: kernel.syscalls ?? [],
+      actors: kernel.actors ?? [],
+    },
+  }
+}
+
+/* ===== 生成回放（POST /api/project/generate 返回体 → VM，P6.6 步骤回放） =====
+ * 源：engine._generate_chapter_llm_path / _generate_chapter_actor_path 的
+ * record（与 chapters.json 落盘同形）。只取回放所需字段，只增不改。
+ * 空稿回退标记：后端无显式字段（engine._produce_draft_text 内部消化回退），
+ * fellBack 按「非剧本通道且 narrative_ir 缺失」推断 —— 也可能是 IR_FIRST=0
+ * 门控关闭，故只作提示不作判决（brief 口径：推断并注明）。 */
+export function toGenReportVM(rec) {
+  if (!rec) return null
+  const draft = rec.draft ?? {}
+  const final = rec.final ?? {}
+  const corr = rec.correction ?? null
+  const ev = rec.evaluation ?? null
+  const ir = rec.narrative_ir ?? null
+  const fsUp = rec.foreshadow_updates ?? {}
+  const mode = rec.generation_mode ?? ''
+  return {
+    chapterNo: rec.chapter ?? 0,
+    title: rec.title ?? '',
+    mode,                                     // scripted | llm | actor
+    durationMs: rec.duration_ms ?? 0,
+    card: toCardVM(rec.decision_card),
+    draftChars: String(draft.text ?? '').length,
+    violationCount: draft.violation_count ?? 0,
+    violations: draft.violations ?? [],       // [{event, check, reason}]
+    corrected: !!corr,
+    correctionNote: (corr && corr.note) ?? '',
+    recheckPassed: corr ? (corr.recheck_passed ?? null) : null,  // null=未复验（actor 文本修正）
+    eventCount: (final.committed_events ?? []).length,
+    tickRange: rec.tick_range ?? [0, 0],
+    snapshotId: rec.snapshot_id ?? '',
+    foreshadow: {
+      planted: (fsUp.planted ?? []).length,
+      payedOff: (fsUp.payed_off ?? []).length,
+    },
+    evaluation: ev ? {                        // P4.5 自评（有则：轮数/评语计数）
+      rounds: ev.rounds ?? 0,
+      bestRound: ev.best_round ?? null,
+      critiques: (ev.critiques ?? []).length,
+    } : null,
+    narrativeIr: ir ? {                       // P5.6 IR-first 摘要（有则）
+      beats: ir.beats ?? 0,
+      events: ir.events ?? 0,
+      dialogue: ir.dialogue ?? 0,
+      pov: ir.pov ?? '',
+      order: ir.order ?? '',
+    } : null,
+    fellBack: !ir && mode !== '' && mode !== 'scripted',
+  }
+}
+
 /* ===== 项目快照（GET /api/project → VM） ===== */
 export function toProjectVM(snap) {
   if (!snap) return null

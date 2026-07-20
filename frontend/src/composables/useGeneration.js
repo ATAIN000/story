@@ -6,13 +6,20 @@ import { ref, readonly } from 'vue'
 const _generating = ref(false)
 const _stage = ref('') // 供 topbar stage-pill 展示（如「第 4 章 · 生成中」）
 
+/**
+ * 重入拒绝标记（P6.6 传导修复）：runGeneration 在锁中被调用时返回它。
+ * 旧实现返回 undefined，与「fn 恰好返回 undefined」不可区分，调用方无法
+ * 识别拒绝并提示「正在生成中」；用 Symbol 保证不与任何 fn 返回值碰撞。
+ */
+export const GEN_REJECTED = Symbol('storyos.gen-rejected')
+
 export function useGeneration() {
   /**
-   * 在全局锁内执行一个生成类异步操作；已在锁中则直接拒绝（返回 undefined）。
-   * 用法：await runGeneration(async () => { ...await api.generate()... })
+   * 在全局锁内执行一个生成类异步操作；已在锁中则拒绝并返回 GEN_REJECTED。
+   * 用法：const r = await runGeneration(fn, stage)；r === GEN_REJECTED → toast。
    */
   async function runGeneration(fn, stage = '') {
-    if (_generating.value) return undefined
+    if (_generating.value) return GEN_REJECTED
     _generating.value = true
     _stage.value = stage
     try {
