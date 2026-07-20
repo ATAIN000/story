@@ -51,12 +51,18 @@ function setReviewing(s) {
 const chapters = computed(() =>
   (props.project?.chapters ?? []).slice().sort((a, b) => a.no - b.no))
 const hasChapters = computed(() => chapters.value.length > 0)
-const activeChapter = computed(() => chapters.value.find(c => c.no === activeNo.value) ?? null)
+/* 章号 → 记录解析：同号多记录（回滚后重生成）取最新未回滚记录，全已回滚则回退首条同号记录 */
+function resolveChapter(no) {
+  if (no == null) return null
+  const alive = chapters.value.filter(c => c.no === no && !c.rolledBack)
+  return alive.at(-1) ?? chapters.value.find(c => c.no === no) ?? null
+}
+const activeChapter = computed(() => resolveChapter(activeNo.value))
 const nextNo = computed(() => (props.project?.meta.chapterCount ?? chapters.value.length) + 1)
 
 const reviewNo = computed(() =>
   genReport.value?.chapterNo ?? ([...reviewing.value].sort((a, b) => b - a)[0] ?? null))
-const reviewChapter = computed(() => chapters.value.find(c => c.no === reviewNo.value) ?? null)
+const reviewChapter = computed(() => resolveChapter(reviewNo.value))
 const rollbackTick = computed(() => {
   const tr = reviewChapter.value?.tickRange
   return tr ? Math.max(0, tr[0] - 1) : null   // 回到本章首事件之前（tick 0 合法，tests 口径）
@@ -169,6 +175,7 @@ async function confirmGenerate() {
 function archive() {
   const no = reviewNo.value
   if (no == null) return
+  confirmingRollback.value = false
   setReviewing(new Set([...reviewing.value].filter(n => n !== no)))
   flow.value = 'idle'
   genReport.value = null
@@ -253,7 +260,7 @@ const chFs = computed(() => {
                   @rollback-cancel="confirmingRollback = false"
                   @rollback-confirm="doRollback" />
 
-      <ManuscriptPanel v-if="activeChapter" :key="activeChapter.no" :chapter="activeChapter"
+      <ManuscriptPanel v-if="activeChapter" :key="activeChapter.no + '@' + activeChapter.timestamp" :chapter="activeChapter"
                        :reviewing="reviewing.has(activeChapter.no)" :fs-size="fsSize" />
       <EmptyState v-else icon="pen" title="还没有章节"
         desc="批准方案后，第一章手稿会出现在这里。" />
@@ -266,7 +273,7 @@ const chFs = computed(() => {
         <div class="mini-stat"><span>篇幅</span><b>{{ activeChapter.paraCount }} 段 · {{ chChars }} 字</b></div>
         <div class="mini-stat"><span>成稿</span><b>{{ chMode }} · {{ chDuration }}</b></div>
         <div class="mini-stat"><span>事件</span><b>{{ activeChapter.committedEvents.length }} 个 · tick {{ activeChapter.tickRange[0] }}–{{ activeChapter.tickRange[1] }}</b></div>
-        <div class="mini-stat"><span>硬约束</span><b>{{ activeChapter.draftViolationCount ? `${activeChapter.draftViolationCount} 处违规已修正` : '0 违规' }}</b></div>
+        <div class="mini-stat"><span>硬约束</span><b>{{ activeChapter.draftViolationCount ? `${activeChapter.draftViolationCount} 处违规` : '0 违规' }}</b></div>
         <div v-if="chFs" class="mini-stat"><span>伏笔</span><b>埋 {{ chFs.planted }} · 收 {{ chFs.payed }}</b></div>
         <div class="mini-stat"><span>落盘</span><b>{{ activeChapter.timestamp.slice(0, 19).replace('T', ' ') }}</b></div>
       </div>

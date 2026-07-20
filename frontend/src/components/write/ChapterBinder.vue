@@ -12,6 +12,13 @@ const props = defineProps({
 })
 defineEmits(['select'])
 
+/* 高亮口径同 WriteView.resolveChapter：同号多记录（回滚后重生成）只高亮解析出的那条 */
+const activeCh = computed(() => {
+  if (props.activeNo == null) return null
+  const alive = props.chapters.filter(c => c.no === props.activeNo && !c.rolledBack)
+  return alive.at(-1) ?? props.chapters.find(c => c.no === props.activeNo) ?? null
+})
+
 function stateOf(c) {
   if (c.rolledBack) return { cls: '', text: '已回滚' }
   if (props.reviewing.has(c.no)) return { cls: 'ing', text: '审读中' }
@@ -37,9 +44,11 @@ const spark = computed(() => {
   <aside class="binder">
     <div class="b-t">章节</div>
     <div v-if="!chapters.length" class="b-empty">还没有章节。<br>批准方案后，第一章会出现在这里。</div>
-    <div v-for="c in chapters" :key="c.no" class="ch-item"
-         :class="{ active: c.no === activeNo, rb: c.rolledBack }"
-         @click="$emit('select', c.no)">
+    <div v-for="(c, i) in chapters" :key="c.no + '@' + (c.timestamp || i)" class="ch-item"
+         :class="{ active: c === activeCh, rb: c.rolledBack }"
+         tabindex="0" role="button" :aria-pressed="c === activeCh"
+         @click="$emit('select', c.no)"
+         @keydown.enter.prevent="$emit('select', c.no)" @keydown.space.prevent="$emit('select', c.no)">
       <div class="c-no">第 {{ c.no }} 章</div>
       <div class="c-t">{{ c.title }}</div>
       <span class="c-st" :class="stateOf(c).cls">{{ stateOf(c).text }}</span>

@@ -2,7 +2,9 @@
 // 手稿（写作台中栏，story.html :476-479 + :653-667）
 // 只消费 adapter 的 chapter VM（toChapterVM：paras 已按 P6.3 段落协议切分、
 // 标题行不入段）。选中=单选本地态；已读=本地 Set，sessionStorage 记忆不入库。
-// 父组件以 :key="chapter.no" 挂载 —— 换章即重建本组件，选中/已读按章隔离。
+// 父组件以 :key="chapter.no + '@' + chapter.timestamp" 挂载 —— 换章/换记录即重建本组件，
+// 选中/已读按章隔离；存储键带章身份判别（timestamp，空则 tickRange），
+// 防回滚后重生成的同号章继承旧记录的已读标记。
 import { ref, computed } from 'vue'
 
 const props = defineProps({
@@ -12,12 +14,12 @@ const props = defineProps({
 })
 
 const sel = ref(null)          // 选中段序号（0 基，同段落协议）
+const storeKey = `storyos.read.ch${props.chapter.no}@${props.chapter.timestamp || props.chapter.tickRange.join('-')}`
 const readSet = ref(loadRead())
 
-const storeKey = `storyos.read.ch${props.chapter.no}`
 function loadRead() {
   try {
-    const arr = JSON.parse(sessionStorage.getItem(`storyos.read.ch${props.chapter.no}`) || '[]')
+    const arr = JSON.parse(sessionStorage.getItem(storeKey) || '[]')
     return new Set(Array.isArray(arr) ? arr : [])
   } catch { return new Set() }
 }
