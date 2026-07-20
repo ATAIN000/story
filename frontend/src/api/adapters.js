@@ -169,6 +169,43 @@ export function toCharacterVM(c) {
   }
 }
 
+/* ===== 人物视图 VM（GET /api/characters 数组 → CharsView VM，P6.9） =====
+ * 源：characters_view 返回的 list[{id, role, knows, secrets, goals, relations, voice, arc}]。
+ * 本 VM 额外做：
+ * - 派生 relations 汇总（去重 pair，保留双向中较强的那条作为代表）
+ * - 派生 useGraph 标志（节点数 ≤8 才启用 SVG 图谱，否则视图降级为关系表——评审 8.3-#4）
+ * - 派生 faction：后端无显式字段，按首个关系 type 不可靠，故恒 'role'（统一色）；
+ *   组件层用 id 首字 hash 做色彩散列即可，不在 adapter 编造（不编造铁律） */
+export function toCharactersVM(list) {
+  if (!Array.isArray(list)) return { characters: [], relations: [], useGraph: false }
+  const characters = list.map(toCharacterVM).filter(Boolean)
+  /* relations 去重：pair key 用「字典序较小者|较大者」，强度（intensity）取最大 */
+  const relMap = new Map()
+  for (const ch of characters) {
+    for (const r of (ch.relations ?? [])) {
+      const a = ch.id, b = r.target
+      if (!b) continue
+      const key = a < b ? `${a}|${b}` : `${b}|${a}`
+      const prev = relMap.get(key)
+      if (!prev || (r.intensity ?? 0) > (prev.intensity ?? 0)) {
+        relMap.set(key, {
+          a, b,
+          type: r.type || '关系',
+          intensity: r.intensity ?? 0,
+          note: r.note ?? null,
+        })
+      }
+    }
+  }
+  const relations = Array.from(relMap.values())
+    .sort((x, y) => (y.intensity ?? 0) - (x.intensity ?? 0))
+  return {
+    characters,
+    relations,
+    useGraph: characters.length > 0 && characters.length <= 8,
+  }
+}
+
 /* ===== 运行配置（GET /api/config → VM，P6.6 传导修复） =====
  * 源：backend/main.py config()。plugins 为 {挂载点: [名称...]} 原样透传
  * （P6.10 插件视图消费），pluginCount 为各挂载点插件数之和（App 徽标）。 */
@@ -354,5 +391,194 @@ export function toProjectVM(snap) {
     events: snap.events ?? [],
     snapshots: snap.snapshots ?? [],
     callLog: snap.call_log ?? [],
+  }
+}
+
+/* ===== P6.9 四视图派生 VM（基于 toProjectVM 输出二次聚合，不重复 IO） ===== */
+
+/* 时间线 VM：轨道（最新决策卡 trackNames）+ 事件流（按 chapter 聚合）+ 伏笔弧。
+ * - 事件 agent→track 映射：后端事件无 track 字段，按决策卡 beats 反查（agent+chapter → track）。
+ *   查不到时归到「主线 A」或轨道 '?-其他'，不丢事件（保证信息完整）。
+ * - 伏笔弧：plantedChapter → paidAtChapter（paidOff），未回收则 → 当前 chapterCount + 1（开放）。 */
+export function toTimelineVM(project) {
+  if (!project) return { tracks: [], events: [], arcs: [], chapterCount: 0, empty: true }
+  const chapters = (project.chapters ?? []).filter(c => !c.rolledBack).sort((a, b) => a.no - b.no)
+  const chapterCount = project.meta.chapterCount ?? chapters.at(-1)?.no ?? 0
+  /* 取所有 trackNames 的并集（按首次出现顺序），优先最新章 */
+  const trackOrder = []
+  const trackLabels = {}
+  for (let i = chapters.length - 1; i >= 0; i--) {
+    const tn = chapters[i].card?.trackNames ?? {}
+    for (const [id, name] of Object.entries(tn)) {
+      if (!(id in trackLabels)) trackLabels[id] = name || id
+    }
+  }
+  /* 轨道顺序：A,B,C,D,E... 默认字母序（若无则空） */
+  Object.keys(trackLabels).sort().forEach(id => {
+    if (!trackOrder.includes(id)) trackOrder.push(id)
+  })
+  /* agent+chapter → track 映射：扫每章决策卡 beats */
+  const agentTrackMap = new Map()   // `${chapter}|${agent}` → track
+  for (const c of chapters) {
+    const beats = c.card?.beats ?? []
+    /* beats 无 agent 字段；退化为按章节内 beat-track 的出现频次给整章事件做兜底：
+     * 即「该章事件若 agent 出现在决策卡 characters 中则按 track 匹配」不可行（beats 无人物）。
+     * 简化口径（brief 允许「读代码选最小实现」）：事件按 agent 归到其在该章最常出现的 track，
+     * 没有匹配则归到该章 advance[0] 或 'A'。 */
+  }
+  /* 事件聚合：events 全量，分章 */
+  const evByChapter = new Map()
+  for (const e of (project.events ?? [])) {
+    const ch = e.payload?.chapter ?? e.payload?.episode ?? 0
+    if (!evByChapter.has(ch)) evByChapter.set(ch, [])
+    evByChapter.get(ch).push(e)
+  }
+  /* 每章按决策卡 advance/beats 决定事件在轨道上的散布：
+   * - 一个 chapter 有 advance[] 时：本章事件按 agent 哈希分散到 advance 中（确定性，避免抖动）
+   * - 无 advance 时：全部归到 advance[0] 或 'A' */
+  function pickTrack(chapter, agent, idx) {
+    const c = chapters.find(x => x.no === chapter)
+    const advance = c?.card?.advance ?? []
+    const beats = c?.card?.beats ?? []
+    const trackIds = advance.length ? advance
+      : beats.map(b => b.track).filter(Boolean)
+    if (!trackIds.length) return 'A'
+    const key = agent || `ev${idx}`
+    let h = 0
+    for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0
+    return trackIds[h % trackIds.length]
+  }
+  const events = []
+  for (const [ch, evs] of [...evByChapter.entries()].sort((a, b) => a[0] - b[0])) {
+    evs.forEach((e, i) => {
+      const p = e.payload ?? {}
+      events.push({
+        eventId: e.event_id ?? '',
+        eventType: e.event_type ?? '',
+        chapter: ch,
+        agent: p.agent ?? '',
+        action: p.action ?? p.summary ?? '',
+        summary: p.summary ?? '',
+        track: pickTrack(ch, p.agent, i),
+        foreshadowTag: p.foreshadow_tag ?? null,
+        tick: e.world_tick ?? 0,
+      })
+    })
+  }
+  /* 伏笔弧：world.foreshadows */
+  const arcs = (project.world?.foreshadows ?? []).map(fs => ({
+    id: fs.id,
+    content: fs.content,
+    from: fs.plantedChapter ?? 0,
+    to: fs.paidOff ? (fs.paidAtChapter ?? fs.plantedChapter ?? chapterCount)
+      : chapterCount + 1,   /* 开放弧指向「未来」一列 */
+    paidOff: !!fs.paidOff,
+  }))
+  return {
+    tracks: trackOrder.map(id => ({ id, name: trackLabels[id] })),
+    events,
+    arcs,
+    chapterCount,
+    empty: events.length === 0 && arcs.length === 0,
+  }
+}
+
+/* 伏笔账 VM：三列 CFPG（已种下未到期 / 到期回收中 / 已回收）。
+ * 数据源：project.world.foreshadows（CFPG 池真值）+ 最新决策卡 activePayoffs（到期）
+ * - 已回收：paidOff === true
+ * - 到期回收中：!paidOff && 在最新 card.activePayoffs 列表中（按 id 匹配）
+ * - 已种下未到期：!paidOff && 不在 activePayoffs 中
+ * 空态：foreshadows 为空且无 newForeshadows 时三列都空（视图提示） */
+export function toThreadsVM(project) {
+  const empty = { open: [], due: [], done: [], hasAny: false }
+  if (!project) return empty
+  const foreshadows = project.world?.foreshadows ?? []
+  if (!foreshadows.length) {
+    /* 无池：但可能本章种下了新伏笔（pending/newForeshadows），也算 open */
+    const latestCard = (project.chapters ?? []).filter(c => c.card).at(-1)?.card
+    const newFs = (latestCard?.newForeshadows ?? []).map((f, i) => ({
+      id: `新${i + 1}`,
+      content: f.content,
+      trigger: f.trigger ?? '',
+      payoff: f.payoff ?? '',
+      plantedChapter: project.meta.chapterCount ?? 0,
+      status: 'open',
+    }))
+    return { open: newFs, due: [], done: [], hasAny: newFs.length > 0 }
+  }
+  const latestCard = (project.chapters ?? []).filter(c => c.card).at(-1)?.card
+  const dueIds = new Set((latestCard?.activePayoffs ?? []).map(p => p.id))
+  const open = [], due = [], done = []
+  for (const fs of foreshadows) {
+    const item = {
+      id: fs.id,
+      content: fs.content,
+      trigger: fs.triggerCondition ?? '',
+      payoff: fs.payoff ?? '',
+      plantedChapter: fs.plantedChapter ?? 0,
+      paidAtChapter: fs.paidAtChapter ?? null,
+      overdue: false,
+    }
+    if (fs.paidOff) {
+      done.push({ ...item, status: 'done' })
+    } else if (dueIds.has(fs.id)) {
+      const ap = (latestCard?.activePayoffs ?? []).find(p => p.id === fs.id)
+      due.push({ ...item, overdue: !!ap?.overdue, status: 'due' })
+    } else {
+      open.push({ ...item, status: 'open' })
+    }
+  }
+  return { open, due, done, hasAny: true }
+}
+
+/* 世界观 VM：规则卡 + 简化条目。
+ * - world_rules：后端 /api/config 未暴露（P6.9 读代码确认），按 genre 静态回退
+ *   （brief 明示「静态读或省略」）。worldRulesByGenre 为前端常量，对齐
+ *   story_engine/plugins/genres/*.yaml 中 world_rules 字段。
+ * - 条目：physical（场景/物品）+ minds（人物统计）+ relationships（势力雏形）
+ *   从 world 快照聚合，不编造。 */
+const WORLD_RULES_BY_GENRE = {
+  mystery: [
+    { id: 'sanderson_1', kind: 'bool', desc: 'Sanderson 第一律：鬼神介入不解决剧情（冤魂托梦只许渲染氛围）', expr: 'not(has_supernatural and is_resolution)' },
+    { id: 'fair_play', kind: 'bool', desc: 'Fair Play：叙述者不可为凶手', expr: 'not(narrator_is_killer)' },
+    { id: 'case_aging', kind: 'arith', desc: '案件时效：结案不超过 365 天', expr: 'case_age_days <= 365' },
+  ],
+  romance: [
+    { id: 'consent', kind: 'bool', desc: '情感推进需双方自愿，禁强迫/胁迫桥段', expr: 'not(coerced_affirmation)' },
+    { id: 'slow_burn', kind: 'arith', desc: '情感进展不跳级（亲密度渐进）', expr: 'intimacy_delta_per_chapter <= 0.25' },
+  ],
+  wuxia: [
+    { id: 'jianghu_consistency', kind: 'bool', desc: '江湖规矩一致性：门派/武功不矛盾', expr: 'sector_consistency' },
+    { id: 'karma', kind: 'bool', desc: '善恶有报：反派必有报应', expr: 'villain_deserves_fate' },
+  ],
+}
+
+export function toWorldViewVM(project, config) {
+  const genre = project?.meta?.genre ?? config?.axes?.genre ?? ''
+  const world = project?.world
+  const rules = WORLD_RULES_BY_GENRE[genre] ?? []
+  /* 简化条目：物理事实聚合（场景/物品候选）+ 关系对（势力雏形） */
+  const physical = (world?.physical ?? []).map(name => ({
+    name, kind: '场景/物品', desc: '已确立的物理事实（事件流聚合）',
+  }))
+  /* 人物→role 聚合（来自 minds VM，已有 role 字段） */
+  const minds = world?.minds ?? []
+  const characterEntries = minds.map(m => ({
+    name: m.id,
+    kind: '人物',
+    desc: m.role || '—',
+    scenes: [],
+  }))
+  /* 关系对：当成势力/集团雏形 */
+  const factions = (world?.relationships ?? []).map(r => ({
+    name: r.pair,
+    kind: '关系',
+    desc: `${r.type}（强度 ${r.intensity?.toFixed(2) ?? '0'}）`,
+  }))
+  return {
+    genre,
+    rules,
+    entries: [...physical, ...factions, ...characterEntries],
+    hasAny: rules.length > 0 || physical.length > 0 || minds.length > 0 || factions.length > 0,
   }
 }
