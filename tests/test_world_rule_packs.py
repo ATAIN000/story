@@ -56,7 +56,7 @@ def test_rule_packs_reference_merge(tmp_path, monkeypatch):
 # ---------- 用例2：非法 expr / 坏结构规则拒载 + warning ----------
 
 def test_invalid_expr_rules_rejected(tmp_path, monkeypatch, caplog):
-    pack_dir = tmp_path / "packs" / "world.rule"
+    pack_dir = tmp_path / "packs" / "story.world.rule"
     pack_dir.mkdir(parents=True)
     (pack_dir / "broken-rules.yaml").write_text(
         "manifest_version: 1\n"

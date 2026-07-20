@@ -32,7 +32,7 @@
   source: manual
   collected_at: "2026-07-20"
 - pack: fair-play
-  extension_point: world.rule
+  extension_point: story.world.rule
   version: "0.1"
   status: active
   source: manual

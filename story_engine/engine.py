@@ -214,7 +214,7 @@ class StoryEngine:
         if not isinstance(pack_names, list):
             logger.warning("rule_packs 非列表（%r），忽略", pack_names)
             return genre_params
-        packs = {m.name: m for m in self.registry.pack_manifests("world.rule")}
+        packs = {m.name: m for m in self.registry.pack_manifests("story.world.rule")}
         embedded = genre_params.get("world_rules") or []
         merged = list(embedded)
         slot = {r.get("id"): i for i, r in enumerate(merged)

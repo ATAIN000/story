@@ -18,7 +18,7 @@ from story_engine.kernel.registry import ExtensionRegistry
 PACKS_DIR = (Path(__file__).resolve().parent.parent
              / "story_engine" / "plugins" / "packs")
 ALL_BUCKETS = ["story.skill", "story.language", "story.evaluator",
-               "world.rule", "story.character.archetype"]
+               "story.world.rule", "story.character.archetype"]
 
 
 class TestPacksScan(unittest.TestCase):

@@ -1,7 +1,7 @@
 # 世界规则包：fair play 与本格底线
 manifest_version: 1
 name: fair-play
-extension_point: world.rule
+extension_point: story.world.rule
 params:
   rules:
     - id: fair_play
