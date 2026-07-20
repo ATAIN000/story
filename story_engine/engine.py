@@ -1124,6 +1124,40 @@ class StoryEngine:
             self._write_chapters(chapters)
         return await self.generate_chapter()
 
+    def update_chapter_text(self, chapter: int, before, after) -> str:
+        """P6.1(B1)：textual 介入的单章正文回写公开口子（chapters.json 唯一
+        写入口 _write_chapters 之上；供 InterventionRouter textual 路由经
+        backend 以 textual_apply_fn 注入调用）。
+
+        语义：该章 final.text 中 before 首次出现处替换为 after，chapters.json
+        其余字段不动。返回状态字符串（写章本身之外的判定都在这里，router 只
+        负责按状态选 message）：
+          "updated"     正文已更新
+          "miss"        before 为空或未命中（正文不动，由调用方仅留痕）
+          "rolled_back" 命中章全部已 rolled_back（superseded 或 tick_range 尾
+                        超过 head，与 project_snapshot 的 rolled_back 口径一致）
+          "not_found"   无此章号记录
+        同章号可能有多条记录（重生成后旧记录 superseded 并存）：只在 active
+        记录上替换（取最新一条）。IO 失败向上抛，由调用方降级（仅留痕 + log）。
+        """
+        chapters = self._read_chapters()
+        head = self.kernel.query_world("head_tick")
+        matches = [ch for ch in chapters
+                   if str(ch.get("chapter")) == str(chapter)]
+        if not matches:
+            return "not_found"
+        active = [ch for ch in matches
+                  if not ch.get("superseded") and ch["tick_range"][1] <= head]
+        if not active:
+            return "rolled_back"
+        target = active[-1]
+        text = (target.get("final") or {}).get("text") or ""
+        if not before or before not in text:
+            return "miss"
+        target["final"]["text"] = text.replace(before, after, 1)
+        self._write_chapters(chapters)
+        return "updated"
+
     def reset(self) -> dict:
         # 停掉 Actor 循环
         try:

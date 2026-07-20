@@ -10,6 +10,7 @@ API：
   POST /api/intervene          【v0.5 新增】作者介入统一入口（5 类，Module 7.1）
   GET  /api/interventions      【v0.5 新增】介入历史（author_intervention 事件流）
   POST /api/hitl/respond       【v0.5 新增】应答 pending 的 HITL 请求
+  GET  /api/training/stats     【P6.1 新增】训练信号计数（skills/preferences/style）
 静态：/ → frontend/dist（Vue SPA）
 """
 from __future__ import annotations
@@ -87,7 +88,8 @@ def _regenerate_sync() -> None:
 # regenerate_fn async 包装 + TrainingPipeline(kernel, project_dir)。
 training_pipeline = TrainingPipeline(kernel, PROJECT_DIR)
 intervention_router = InterventionRouter(
-    kernel, pipeline=training_pipeline, regenerate_fn=_regenerate_sync)
+    kernel, pipeline=training_pipeline, regenerate_fn=_regenerate_sync,
+    textual_apply_fn=engine.update_chapter_text)  # P6.1(B1)：textual 正文回写口子
 
 
 class RollbackReq(BaseModel):
@@ -205,6 +207,45 @@ async def list_interventions():
     query_world 无现成 predicate，按 all_events 过滤 event_type（任务卡口径）。"""
     return [e for e in kernel.query_world("all_events")
             if e.get("event_type") == "author_intervention"]
+
+
+# ---------- 训练统计（P6.1 B5，支撑前端写作台训练信号计数） ----------
+def _count_jsonl(path: Path) -> int:
+    """jsonl 行数（文件不存在 → 0，不崩）"""
+    if not path.exists():
+        return 0
+    return sum(1 for line in
+               path.read_text(encoding="utf-8").splitlines() if line.strip())
+
+
+def training_stats_snapshot(registry, training_dir: Path) -> dict:
+    """B5 统计纯逻辑（独立于模块单例，便于测试）：
+    skills=story.skill 注册数（Registry.list_plugins 枚举）；
+    preferences/style=training_data 下两个 jsonl 行数（不存在 → 0）；
+    recent_skills=最近 ≤5 条技能描述（created_at 倒序，键缺省补 ""）。"""
+    training_dir = Path(training_dir)
+    skill_names = registry.list_plugins("story.skill")["story.skill"]
+    recent = []
+    for name in skill_names:
+        params = registry.get_params("story.skill", name)
+        recent.append({
+            "name": name,
+            "source_intervention": params.get("source_intervention", ""),
+            "created_at": params.get("created_at", ""),
+        })
+    recent.sort(key=lambda s: s["created_at"], reverse=True)
+    return {
+        "skills": len(skill_names),
+        "preferences": _count_jsonl(training_dir / "preferences.jsonl"),
+        "style": _count_jsonl(training_dir / "style.jsonl"),
+        "recent_skills": recent[:5],
+    }
+
+
+@app.get("/api/training/stats")
+def training_stats():
+    """【P6.1 B5】训练信号计数：{skills, preferences, style, recent_skills}"""
+    return training_stats_snapshot(kernel.registry, training_pipeline.training_dir)
 
 
 @app.post("/api/hitl/respond")

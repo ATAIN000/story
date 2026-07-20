@@ -5,7 +5,9 @@
                 （DecisionCard.author_intent）读取最新一条生效（P5.12 消费接线）
   - structural  Fabula 层重写 → rolled_back + 可选章级重生成（P5.8）
   - character   改角色信念/关系/记忆 → 事件（learn/relations 复用现有 effects 协议）
-  - textual     Sjuzhet 层改写 → 事件 + TrainingPipeline 文风数据（P5.10 接线），不重生成（蓝图：最贵，最小化）
+  - textual     Sjuzhet 层改写 → 事件 + TrainingPipeline 文风数据（P5.10 接线）
+                + P6.1(B1) 同步回写 chapters.json 对应章正文（经注入的
+                textual_apply_fn=engine.update_chapter_text），不重生成（蓝图：最贵，最小化）
   - evaluation  质量标注 → 事件 + TrainingPipeline 偏好数据（P5.9，依赖注入预留）
 
 全部规则化，零 LLM（重生成调用注入的 regenerate_fn 除外——那是 engine 的事）。
@@ -18,12 +20,15 @@ commit 容忍度结论（P5.7 调查，以代码实际为准）：
 """
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 from uuid import uuid4
 
 from ..types import WorldEvent
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -46,7 +51,8 @@ class InterventionResult:
 class InterventionRouter:
     """按介入类型分流处理（P5.7：intent/character/evaluation；P5.8：structural/textual）"""
 
-    def __init__(self, kernel, pipeline=None, regenerate_fn=None):
+    def __init__(self, kernel, pipeline=None, regenerate_fn=None,
+                 textual_apply_fn=None):
         """
         kernel:        Kernel 实例（commit_event / query_world / rollback syscall）
         pipeline:      TrainingPipeline（P5.9）可选依赖注入；有则 evaluation 介入
@@ -55,10 +61,15 @@ class InterventionRouter:
                        无参同步调用；engine 生成系为 async，由调用方包同步包装，
                        接线留 P5.10）。None 时 structural 只标 rolled_back 不重生成。
                        LLM 只存在于该注入 callable 内部，router 自身零 LLM。
+        textual_apply_fn: P6.1(B1) textual 的正文回写入口（engine 侧
+                       update_chapter_text，签名 (chapter, before, after) ->
+                       状态串 "updated"/"miss"/"rolled_back"/"not_found"）。
+                       None 时 textual 退化为 P5.8 旧行为：只记事件不回写。
         """
         self.kernel = kernel
         self.pipeline = pipeline
         self.regenerate_fn = regenerate_fn
+        self.textual_apply_fn = textual_apply_fn
 
     def route(self, intervention: HumanInput) -> InterventionResult:
         handler = {
@@ -308,20 +319,39 @@ class InterventionRouter:
             return after.get("event_type", event_type), dict(after.get("payload") or {})
         return event_type, dict(after) if isinstance(after, dict) else {"text": after}
 
-    # ---------- textual：Sjuzhet 文本编辑（只记录，不重生成） ----------
+    # ---------- textual：Sjuzhet 文本编辑（P6.1 B1：同步回写正文，不重生成） ----------
     def _route_textual(self, intervention: HumanInput) -> InterventionResult:
         # payload: {chapter, before: str, after: str}
-        # 蓝图 7.1：textual 最贵、最小化——只记事件（before/after/reason，
-        # 可回放），不触发重生成（regenerated 恒 False）。
-        # 落盘调查（P5.8）：engine 侧章节持久化只有整文件读写的
-        # _read_chapters/_write_chapters，无干净的单章文本更新公开口子
-        # → 本期只在事件中记录；展示层正文更新留 P5.10 API/前端阶段
-        # （届时可从事件回放应用 before→after）。
+        # 蓝图 7.1：textual 最贵、最小化——不触发重生成（regenerated 恒 False）。
+        # P6.1(B1)：注入 textual_apply_fn（engine.update_chapter_text）时同步
+        # 回写 chapters.json 对应章正文（before 首次出现处替换为 after）：
+        #   updated     → 事件照记，message「正文已更新」
+        #   miss        → 正文不动，事件照记，message 注明「原文未命中，仅留痕」
+        #   not_found   → 无此章记录：事件照记（审计），message 注明章不存在仅留痕
+        #   rolled_back → 回绝（ok=False，不记事件，与既有回绝口径一致）
+        #   写章异常    → 降级仅留痕 + log，不阻塞介入
+        # 未注入 textual_apply_fn → P5.8 旧行为：只记事件（before/after/reason
+        # 可回放），不回写正文。
         p = intervention.payload
         if p.get("chapter") is None or "after" not in p:
             return InterventionResult(
                 ok=False, event_id=None,
                 message="textual 介入缺少 payload.chapter 或 payload.after")
+
+        status = "unwired"
+        if self.textual_apply_fn is not None:
+            try:
+                status = self.textual_apply_fn(
+                    p["chapter"], p.get("before"), p["after"])
+            except Exception:
+                logger.exception(
+                    "textual 正文回写失败（降级为仅留痕，不阻塞介入）")
+                status = "write_failed"
+            if status == "rolled_back":
+                return InterventionResult(
+                    ok=False, event_id=None,
+                    message=f"第{p['chapter']}章已 rolled_back，回绝 textual 介入")
+
         event = self._commit_intervention(intervention, {
             "chapter": p.get("chapter"),
             "before": p.get("before"),
@@ -333,7 +363,17 @@ class InterventionRouter:
             # 与 _route_evaluation 同款调用；pipeline 自身吞异常所以无需 try）
             self.pipeline.process_intervention(event)
             fed = True
+        tail = "，已送入 TrainingPipeline" if fed else ""
+        if status == "updated":
+            msg = f"第{p['chapter']}章正文已更新"
+        elif status == "miss":
+            msg = f"第{p['chapter']}章原文未命中，仅留痕"
+        elif status == "not_found":
+            msg = f"第{p['chapter']}章不存在，仅留痕"
+        elif status == "write_failed":
+            msg = f"第{p['chapter']}章正文写回失败（详见日志），仅留痕"
+        else:  # unwired：未接回写口子（P5.8 旧行为）
+            msg = f"第{p['chapter']}章文本编辑已记录（可回放），不重生成"
         return InterventionResult(
             ok=True, event_id=event.event_id, regenerated=False,
-            message=f"第{p['chapter']}章文本编辑已记录（可回放），不重生成"
-                    + ("，已送入 TrainingPipeline" if fed else ""))
+            message=msg + tail)
