@@ -56,8 +56,24 @@ export function toCardVM(card) {
     })),
     planGoals: card.plan_goals ?? [],
     poolStats: card.pool_stats ?? {},      // {active, overdue, queued}
-    pacing: card.pacing ?? null,
+    /* pacing 区分三态（brief）：undefined=旧数据整区隐藏；null=首章无历史；
+     * object=有实测。?? 会把 undefined 折成 null，故用显式判定保留原值。 */
+    pacing: 'pacing' in card ? card.pacing : undefined,
     trackNames: card.track_names ?? {},    // {轨道id: 展示名}（P3.10）
+    // P3.3+ 补充字段（adapter 透传；旧持久化章无字段 → 空数组/undefined，消费方 v-if 防御）
+    concretenessCurve: card.concreteness_curve ?? [],  // Step 6 CONCOCT 每 beat 具体度（与 beats 同序）
+    queuedForeshadows: (card.queued_foreshadows ?? []).map(q => ({   // Step 9 满池排队
+      track: q.track ?? '',
+      content: q.content ?? '',
+      trigger: q.trigger ?? '',
+      payoff: q.payoff ?? '',
+    })),
+    creativeSeeds: (card.creative_seeds ?? []).map(s => ({   // P3.7 跨域融合（env 门控默认关）
+      domains: s.domains ?? [],
+      emergent: s.emergent ?? '',
+      novelty: s.novelty ?? null,
+      surprise: s.surprise ?? null,
+    })),
   }
 }
 

@@ -12,6 +12,7 @@ import AppIcon from './components/AppIcon.vue'
 import { NAV_ICONS } from './components/icons'
 import ToastHost from './components/ToastHost.vue'
 import WriteView from './views/WriteView.vue'
+import DecisionCardView from './views/DecisionCardView.vue'
 import CharsView from './views/CharsView.vue'
 import WorldView from './views/WorldView.vue'
 import TimelineView from './views/TimelineView.vue'
@@ -30,9 +31,9 @@ function bumpFont(dir) {
   toast(`正文字号 ${fsSize.value}px`)
 }
 
-const VIEWS = { write: WriteView, chars: CharsView, world: WorldView, timeline: TimelineView, threads: ThreadsView, plugins: PluginsView, settings: SettingsView }
+const VIEWS = { write: WriteView, card: DecisionCardView, chars: CharsView, world: WorldView, timeline: TimelineView, threads: ThreadsView, plugins: PluginsView, settings: SettingsView }
 const NAV = [
-  { sec: '创作', items: [{ id: 'write', name: '写作台' }] },
+  { sec: '创作', items: [{ id: 'write', name: '写作台' }, { id: 'card', name: '决策卡' }] },
   { sec: '故事资产', items: [
     { id: 'chars', name: '人物' },
     { id: 'world', name: '世界观' },
@@ -57,6 +58,7 @@ const meta = computed(() => project.value?.meta || {})
 function navCount(id) {
   if (!project.value) return ''
   if (id === 'write') return meta.value.chapterCount ? `第${meta.value.chapterCount}章` : ''
+  if (id === 'card') return meta.value.chapterCount ? `×${meta.value.chapterCount}` : ''
   if (id === 'chars') return String(project.value.world?.minds.length || '')
   if (id === 'threads') return String(project.value.world?.foreshadows.length || '')
   if (id === 'plugins') return String(pluginCount.value || '')

@@ -25,6 +25,6 @@ export const ICONS = {
 
 // 导航图标映射（story.html :562 NAV_ICONS）
 export const NAV_ICONS = {
-  write: 'pen', chars: 'users', world: 'map', timeline: 'clock',
+  write: 'pen', card: 'sparkles', chars: 'users', world: 'map', timeline: 'clock',
   threads: 'bookmark', plugins: 'puzzle', settings: 'sliders',
 }
