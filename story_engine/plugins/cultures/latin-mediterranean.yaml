@@ -1,0 +1,41 @@
+manifest_version: 1
+name: latin-mediterranean
+extension_point: story.culture
+activation_events: ["on_culture:latin-mediterranean"]
+
+params:
+  power_distance: 60            # 中高：教父式权威、家族等级
+  individualism: 40             # 中低：家族共同体>个人
+  masculinity: 65               # 中高：荣誉文化、激情、男子气概
+  uncertainty_avoidance: 75     # 高：天主教的道德确定性
+  long_term_orientation: 35     # 低：活在当下、热情冲动
+  indulgence: 80                # 极高：美食/狂欢/情感外放
+
+  narrative_restraint: 0.2          # 极低：拉丁式激情、大喜大悲
+  social_critique: 0.55             # 中：家族秘密/荣誉谋杀/宗教虚伪
+  supernatural_tolerance: 0.6       # 中高：天主教+民间巫术混合
+  face_save_urgency: 0.75           # 高：荣誉（honor）=性命，受辱=血仇
+  hierarchical_dialogue: 0.6        # 中高：家族中的长幼/性别角色
+
+  archetype_mapping:
+    patriarch: "cold-tycoon"
+    heroine: "strong-female-lead"
+    forbidden_lover: "childhood-sweetheart"
+    rival: "scheming-rival"
+    priest: "wise-mentor"
+
+  pacing_preference: "热情-背叛-复仇（Maria式三段）"
+  cliffhanger_style: "激情冲突截断"
+  resolution_pattern: "荣誉捍卫+悲剧性的爱"
+
+  cultural_taboos:
+    - "不孝敬父母/家族"
+    - "通奸（尤其女性，荣誉文化双重标准）"
+    - "亵渎圣物"
+    - "拒绝分享食物（热情好客是核心）"
+
+  texture_profile:
+    idiom_density: 0.2
+    honorific_register: 0.3
+    register: "浪漫文学"
+    preferred_packs: [en-literary-register]

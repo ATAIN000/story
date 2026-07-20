@@ -1,0 +1,41 @@
+manifest_version: 1
+name: tomb-exploration
+extension_point: story.genre
+activation_events: ["on_genre:tomb-exploration"]
+fusion:
+  type: rule_collision
+  parent_genres: [adventure, folk_horror, mystery]
+  core_conflict: "科学的考古方法 vs 超自然的风水秘术和鬼怪；贪欲驱动探险 vs 死亡如影随形"
+  fusion_formula: "风水秘术/民俗传说 + 探险悬疑 + 团队配置 + 历史谜团"
+culture_bound: true                  # 盗墓流深度绑定中国民俗
+allowed_cultures: ["chinese_folk", "confucian_officialdom"]
+
+params:
+  pacing_curve: "组队→探墓入口→机关谜题→超自然遭遇→真相揭示→逃生"
+  power_system: "fengshui_folkcraft"         # 风水秘术+民间法术
+  emotion_arcs: [man_in_hole, oedipus]
+  conflict_types:
+    - {type: cognitive, weight: 0.35}        # 机关谜题/风水推理
+    - {type: physical, weight: 0.3}          # 生存/战斗
+    - {type: cosmic, weight: 0.2}            # 超自然恐怖
+    - {type: relational, weight: 0.15}       # 团队信任/背叛
+  information_distribution: clue_progressive # 线索逐步揭示墓主秘密
+  max_red_herrings: 3
+  resolution_pattern: "揭开历史真相 + 带着代价逃生（队友可能有伤亡）"
+  taboo_list:
+    - "风水秘术必须有体系——不能随意编造"
+    - "鬼怪必须有规则——不能无中生有"
+    - "不允许全员安全——必须有真实伤亡风险"
+  world_rules_ref: [gongan-taboo]
+  evaluation_weights:
+    设定一致性: 0.25
+    情节连贯: 0.20
+    感官细节: 0.20                            # 氛围营造极重要
+    角色动机: 0.15
+    对话真实度: 0.10
+    套路检测: 0.05
+    主题深度: 0.05
+  active_critics: [setting_consistency, plot_coherence, sensory_detail, character_motivation]
+  fusion_specific_rules:
+    team_roles: ["摸金/风水", "武力/护卫", "医术", "解谜/考古", "情报"]
+    sub_types: ["classic_fengshui", "suspense_mystery", "daoist_craft", "documentary_realism"]

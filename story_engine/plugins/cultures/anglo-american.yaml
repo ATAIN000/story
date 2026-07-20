@@ -1,0 +1,41 @@
+manifest_version: 1
+name: anglo-american
+extension_point: story.culture
+activation_events: ["on_culture:anglo-american"]
+
+params:
+  power_distance: 35            # 中低：平等主义但有阶层
+  individualism: 90             # 极高：美国梦=个人奋斗
+  masculinity: 60               # 中高：竞争导向、赢家通吃
+  uncertainty_avoidance: 40     # 中低：风险容忍、创新鼓励
+  long_term_orientation: 30     # 低：短期导向、季度业绩
+  indulgence: 70                # 中高：消费主义、享乐
+
+  narrative_restraint: 0.3          # 低：美式直接、外放表达
+  social_critique: 0.6              # 中高：制度批判、个人vs系统
+  supernatural_tolerance: 0.5       # 中：恐怖/超自然是主流娱乐
+  face_save_urgency: 0.3            # 低：失败=经验，不怕丢脸
+  hierarchical_dialogue: 0.25       # 低：Title不重要，能力说话
+
+  archetype_mapping:
+    hero: "wandering-swordsman"
+    detective: "neutral-observer"
+    love_interest: "strong-female-lead"
+    villain: "antagonist-mastermind"
+    sidekick: "comic-relief"
+
+  pacing_preference: "三幕剧经典节拍"       # Save the Cat / McKee
+  cliffhanger_style: "行动危机截断"
+  resolution_pattern: "英雄之旅回归+世界改变"
+
+  cultural_taboos:
+    - "公开讨论阶级/种族不平等（表面政治正确）"
+    - "示弱（男性角色尤其）"
+    - "质疑'美国梦'"
+    - "不尊重个人选择和自由"
+
+  texture_profile:
+    idiom_density: 0.15
+    honorific_register: 0.2
+    register: "现代文学"
+    preferred_packs: [en-literary-register]

@@ -1,0 +1,41 @@
+manifest_version: 1
+name: japanese-shinto
+extension_point: story.culture
+activation_events: ["on_culture:japanese-shinto"]
+
+params:
+  power_distance: 52            # 中高：前辈后辈制度严格
+  individualism: 45             # 中低：读空气、和以贵
+  masculinity: 94               # 极高：工作至上、极致追求
+  uncertainty_avoidance: 90     # 极高：规则详尽、礼仪繁复
+  long_term_orientation: 85     # 极高：百年企业、世代传承
+  indulgence: 42                # 低：克制、忧郁美学（物哀）
+
+  narrative_restraint: 0.85         # 极高：日式留白、间（ma）、沉默叙事
+  social_critique: 0.5              # 中：体制压抑的隐性表达
+  supernatural_tolerance: 0.8       # 极高：神道教万物有灵、妖怪文化
+  face_save_urgency: 0.85           # 极高：建前（tatemae）vs本音（honne）
+  hierarchical_dialogue: 0.8        # 高：敬语体系极其复杂
+
+  archetype_mapping:
+    hero: "broken-healer"
+    mentor: "wise-mentor"
+    rival: "genius-junior"
+    villain: "redeemable-villain"
+    observer: "neutral-observer"
+
+  pacing_preference: "间（ma）——静默的张力"   # 日式节奏：用留白制造压力
+  cliffhanger_style: "未说出口的话"
+  resolution_pattern: "物哀——美丽的消逝/遗憾的美学"
+
+  cultural_taboos:
+    - "直接拒绝（用委婉暗示）"
+    - "公开让别人丢脸"
+    - "打破'读空气'的默契"
+    - "触碰禁忌（神道教洁净/污秽观）"
+
+  texture_profile:
+    idiom_density: 0.3
+    honorific_register: 0.8
+    register: "敬语文学"
+    preferred_packs: []

@@ -1,0 +1,22 @@
+manifest_version: 1
+name: rogue-cultivator
+extension_point: story.character.archetype
+params:
+  desc: "散修/凡人流主角：无门无派，资质平庸，靠谨慎和算计在残酷修仙界求生"
+  persona:
+    traits: [谨慎, 务实, 隐忍, 多疑, 不沾因果]
+    taboos: [冲动行事, 轻信他人, 暴露底牌, 沽名钓誉]
+    goals: [长生/存活, 积累资源, 不被卷入大势力的棋局]
+    fears: [被天才碾压, 被大势力利用后灭口, 一招不慎万劫不复]
+  voice_hint: "……（沉默观察许久）此事，容后再议。"
+  speech_patterns:
+    - 极少表态，多用"再看""容我想想"
+    - 习惯性试探对方意图
+    - 做决定前必先算退路
+    - 唯一果断的时刻是逃跑和下杀手
+  typical_relations:
+    - {type: 利用/被利用, target_archetype: sect-leader}
+    - {type: 警惕, target_archetype: genius-junior}
+    - {type: 短暂结盟, target_archetype: wandering-swordsman}
+    - {type: 被追杀, target_archetype: corrupt-elder}
+  typical_arc: "从'苟活'到'在绝境中不得不站出来'——最怕死的人做出了最不怕死的选择"

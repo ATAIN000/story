@@ -1,0 +1,41 @@
+manifest_version: 1
+name: wuxia-steampunk
+extension_point: story.genre
+activation_events: ["on_genre:wuxia-steampunk"]
+fusion:
+  type: rule_collision
+  parent_genres: [wuxia, steampunk]
+  core_conflict: "传统武功（内力气功） vs 蒸汽机械（工业动力）——'武功再高，怕不怕蒸汽锤？'"
+  fusion_formula: "传统武学 + 蒸汽朋克美学 + 侠义精神vs工业文明"
+culture_bound: false
+allowed_cultures: ["*"]
+
+params:
+  pacing_curve: "武林旧序→蒸汽机械入侵→侠客vs机械师→新旧秩序碰撞→融合or消亡"
+  power_system: "qi_vs_steam"                 # 内力 vs 蒸汽动力双体系
+  emotion_arcs: [riches_to_rags, oedipus]    # 旧时代的挽歌
+  conflict_types:
+    - {type: physical, weight: 0.35}         # 武功vs机械战斗
+    - {type: political, weight: 0.3}         # 旧武林vs新工业势力
+    - {type: cognitive, weight: 0.2}         # 技术/武学融合探索
+    - {type: internal, weight: 0.15}         # 侠义精神的现代意义
+  information_distribution: dual_camp        # 武林/工业双视角
+  max_red_herrings: 2
+  resolution_pattern: "新旧融合的新武学诞生 or 旧时代的悲壮落幕"
+  taboo_list:
+    - "内力与蒸汽机械必须有交互规则——不能各玩各的"
+    - "不允许蒸汽机械纯碾压武功——内力有不可替代的优势"
+    - "蒸汽朋克美学必须贯穿——齿轮/蒸汽/铜管的视觉"
+  world_rules_ref: [sanderson-laws, wuxia-taboo]
+  evaluation_weights:
+    设定一致性: 0.25                           # 双体系平衡
+    感官细节: 0.20                             # 蒸汽朋克视觉
+    主题深度: 0.20                             # 传统vs现代
+    情节连贯: 0.15
+    角色动机: 0.10
+    对话真实度: 0.05
+    套路检测: 0.05
+  active_critics: [setting_consistency, sensory_detail, plot_coherence]
+  fusion_specific_rules:
+    tech_collision: "蒸汽机械可复制部分武功效果——但失去'意/道'，永远差一层"
+    era_metaphor: "武林没落=传统手工业被工业革命取代的隐喻"

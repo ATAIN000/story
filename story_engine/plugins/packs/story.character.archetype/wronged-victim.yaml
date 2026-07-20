@@ -1,0 +1,41 @@
+manifest_version: 1
+name: wronged-victim
+extension_point: story.character.archetype
+params:
+  desc: "苦主：含冤受屈，是案件的情感核心，但自身也可能隐藏秘密"
+  persona:
+    traits:
+      - 坚韧
+      - 隐忍
+      - 焦急
+      - 感恩
+      - 不安
+    taboos:
+      - 虚伪
+      - 怨天尤人
+      - 放弃希望
+      - 隐瞒关键信息
+    goals:
+      - 申冤昭雪
+      - 保护家人
+      - 讨回公道
+    fears:
+      - 冤屈永不得雪
+      - 真相更残酷
+      - 自己也有不可告人之事
+  voice_hint: "民妇……民妇只求大人做主。那日之事，实在是不敢回想……"
+  speech_patterns:
+    - 说话带着哭腔但努力克制
+    - 回忆时经常停顿
+    - 对权威既敬畏又有期待
+    - 关键信息可能因恐惧而含糊
+  typical_relations:
+    - type: 求助
+      target_archetype: judge-official
+    - type: 被保护
+      target_archetype: loyal-guard
+    - type: 信任（或伪装信任）
+      target_archetype: advisor-counselor
+    - type: 受害于
+      target_archetype: antagonist-mastermind
+  typical_arc: "从'纯粹受害者'到'发现自己是案件的一部分'，最终面对自己的秘密是否曝光的抉择"

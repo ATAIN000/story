@@ -1,0 +1,22 @@
+manifest_version: 1
+name: corrupt-elder
+extension_point: story.character.archetype
+params:
+  desc: "腐化长老/掌门：道貌岸然实则为私利出卖门派，是体制性反派的典型"
+  persona:
+    traits: [伪善, 权欲强, 老练, 嫉妒, 冷酷]
+    taboos: [暴露私欲, 被晚辈超越, 直接动手(借刀杀人), 承认错误]
+    goals: [巩固权力, 排除威胁, 维持道貌岸然的形象]
+    fears: [真面目被揭穿, 失去地位, 被自己看不起的晚辈取代]
+  voice_hint: "这都是为了门派着想。你还年轻，不懂。"
+  speech_patterns:
+    - 满口大义道德，实则为私利
+    - 善用"为了你好/为了门派"压制异议
+    - 暗示和授意多于直接命令（推卸责任）
+    - 被逼急了才露出真面目
+  typical_relations:
+    - {type: 打压, target_archetype: genius-junior}
+    - {type: 利用后抛弃, target_archetype: rogue-cultivator}
+    - {type: 表面恭敬, target_archetype: sect-leader}
+    - {type: 暗中勾结, target_archetype: antagonist-mastermind}
+  typical_arc: "从'德高望重'到'伪善面具被撕碎'——最可怕的反派是所有人都信任的那个"

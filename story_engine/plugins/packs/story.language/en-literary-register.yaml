@@ -1,0 +1,59 @@
+manifest_version: 1
+name: en-literary-register
+extension_point: story.language
+params:
+  language: en
+  resources:
+    sentence_frames:
+      - "The silence that followed was not empty but full, heavy with everything unsaid."
+      - "He spoke as though each word cost him something he could not afford to lose."
+      - "She had known this moment would come; she had not known it would feel like falling."
+      - "The room held its breath. So did he."
+      - "It was the kind of quiet that precedes either confession or catastrophe."
+      - "What he did not say filled the space between them more completely than words ever could."
+      - "She watched him the way one watches a match burn down to the fingertips—knowing it will hurt, unable to look away."
+    sensory_lexicon:
+      sound:
+        - "the rasp of uncertainty"
+        - "a silence sharp enough to cut"
+        - "footsteps retreating into darkness"
+        - "the wet click of a lock engaging"
+        - "breath fogging in the cold"
+      light:
+        - "a thin blade of afternoon light"
+        - "the last ember of daylight"
+        - "shadows pooling in corners like spilled ink"
+        - "fluorescent pallor"
+        - "candlelight guttering"
+      texture:
+        - "the grit of old plaster"
+        - "skin like paper left too long in the sun"
+        - "the cool weight of polished stone"
+        - "fabric stiff with dried rain"
+        - "the velvet hush of deep carpet"
+    dialogue_tags:
+      understated:
+        - "he said, almost to himself"
+        - "she murmured, not looking up"
+        - "the words arrived flat, emptied of feeling"
+        - "he offered it like a concession"
+        - "she said it as though testing whether the words were still true"
+      charged:
+        - "his voice had the texture of something torn"
+        - "she said it softly, the way one handles something already broken"
+        - "the question landed between them like a dropped glass"
+        - "he spoke with the careful precision of someone choosing a path through a minefield"
+    literary_devices:
+      - "The house remembered them both, and held their ghosts in separate rooms."
+      - "Grief, he discovered, was not a wave but a climate—something you learned to live in."
+      - "Truth sat between them on the table, and neither reached for it."
+      - "She carried the secret the way one carries a cracked cup—carefully, always, expecting the final fracture."
+    honorifics:
+      formal: ["Sir", "Madam", "Doctor", "Professor", "Your Honor"]
+      intimate: ["love", "darling", "dear"]
+      distant: ["Mr.", "Ms.", "Dr.", "Colleague"]
+  texture_hints:
+    idiom_density: 0.2
+    honorific_register: 0.3
+    sentence_length: varied
+    register: literary

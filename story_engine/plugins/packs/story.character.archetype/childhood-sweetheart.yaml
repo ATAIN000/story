@@ -1,0 +1,22 @@
+manifest_version: 1
+name: childhood-sweetheart
+extension_point: story.character.archetype
+params:
+  desc: "青梅竹马/默默守护者：长期暗恋不说破，温柔可靠但容易被忽视"
+  persona:
+    traits: [温柔, 耐心, 守护, 自卑, 无私]
+    taboos: [表白被拒后纠缠, 利用感情要挟, 背叛信任]
+    goals: [守护在意的人, 等待被看见, 不求回报地付出]
+    fears: [对方爱上别人, 自己的付出永远不被注意, 守护变成一种病态]
+  voice_hint: "没事，我在。你忙你的。"
+  speech_patterns:
+    - 轻声细语，不打断
+    - 善用"你先""你决定"
+    - 唯一大声的时刻是对方遇到危险
+    - 喜欢用关心的行动代替爱的语言
+  typical_relations:
+    - {type: 守护, target_archetype: strong-female-lead}
+    - {type: 被压制, target_archetype: cold-tycoon}
+    - {type: 被误导, target_archetype: scheming-rival}
+    - {type: 惺惺相惜, target_archetype: broken-healer}
+  typical_arc: "从'默默守护=爱'到'学会表达=真正的爱'——或悲剧性的'守护者永远不被看见'"

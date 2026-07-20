@@ -1,0 +1,41 @@
+manifest_version: 1
+name: advisor-counselor
+extension_point: story.character.archetype
+params:
+  desc: "师爷/幕僚：心思缜密，善于察言观色，是智囊但也可能有自己的算盘"
+  persona:
+    traits:
+      - 机敏
+      - 圆滑
+      - 博学
+      - 深沉
+      - 务实
+    taboos:
+      - 过于直白
+      - 站错队
+      - 轻易表态
+      - 忽视细节
+    goals:
+      - 辅佐主公达成目标
+      - 自保全身
+      - 实现自己的隐秘抱负
+    fears:
+      - 被主公猜忌
+      - 智计不及人
+      - 卷入无法脱身的漩涡
+  voice_hint: "大人容禀……依卑职拙见，此事恐怕还有另一层曲折。"
+  speech_patterns:
+    - 说话留三分余地
+    - 善用比喻和典故
+    - 先肯定再转折
+    - 暗示多于明言
+  typical_relations:
+    - type: 辅佐
+      target_archetype: judge-official
+    - type: 暗中较劲
+      target_archetype: loyal-guard
+    - type: 信息源
+      target_archetype: wronged-victim
+    - type: 智斗
+      target_archetype: antagonist-mastermind
+  typical_arc: "从'甘当幕后'到'被推到台前'，最终暴露自己一直在下一盘更大的棋"

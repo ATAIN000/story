@@ -1,0 +1,25 @@
+manifest_version: 1
+name: dialogue-authenticity
+extension_point: story.evaluator
+params:
+  dimension: dialogue_authenticity
+  guide: |
+    评估对白的真实性和角色区分度（补充核心循环 state-checker 无法覆盖的文本质量盲区）：
+    1. 声音一致性（Voice Consistency）——每个角色的说话方式是否符合其 VoiceProfile（用词习惯、句式偏好、语气特征）
+    2. 潜台词（Subtext）——角色说的是一回事，意思是另一回事。检查是否存在过度直白（on-the-nose）的对白
+    3. Grice 合作原则——对话是否违反量/质/关系/方式准则（违反必须有戏剧理由，不是作者失误）
+    4. 重复检测——同一场景内是否有用不同措辞重复表达相同意思的对白（冗余）
+    5. 角色区分度测试——遮住角色名后，能否仅凭说话方式判断是谁在说？如果所有角色声音一样 → FAIL
+
+    FAIL 条件：
+    - 角色说话方式与其 VoiceProfile 矛盾（如粗犷武夫突然使用书面语修辞）
+    - 对白过度直白，完全没有潜台词层（「我很伤心因为我失去了你」）
+    - 多个角色声音不可区分
+    - 同一场景内对白内容重复
+
+    注：此维度是核心循环（WorldState checker）的结构性盲区，由深度验证 Phase C 确认为 8.3% recall 的失效点。必须单独评估。
+  examples:
+    pass: "「你不用送了。」「路不好走。」——两句话表面是送别和回应，潜台词是「我不想你走」和「我偏要多待一刻」。声音区分度清晰。"
+    fail: "「我非常伤心，因为你离开了我。失去你让我的内心充满了痛苦。」「我也很伤心，因为我也失去了你。」——过度直白，无潜台词，声音不可区分。"
+  priority: after:dialogue
+  blocking: false

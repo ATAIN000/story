@@ -1,0 +1,40 @@
+manifest_version: 1
+name: historical-system
+extension_point: story.genre
+activation_events: ["on_genre:historical-system"]
+fusion:
+  type: rule_collision
+  parent_genres: [historical_fiction, litrpg]
+  core_conflict: "系统的'游戏化任务' vs 历史的'沉重真实'——用做任务心态改变历史，但后果是真实的"
+  fusion_formula: "系统任务 + 历史关键节点 + 蝴蝶效应的伦理负担"
+culture_bound: false
+allowed_cultures: ["*"]
+
+params:
+  pacing_curve: "系统绑定→新手任务（小事）→历史节点任务→蝴蝶效应→系统vs历史的矛盾"
+  power_system: "history_quest_system"       # 任务驱动历史干预
+  emotion_arcs: [cinderella, oedipus]
+  conflict_types:
+    - {type: cognitive, weight: 0.3}         # 任务策略
+    - {type: political, weight: 0.3}         # 历史权谋
+    - {type: internal, weight: 0.25}         # 改变历史的伦理负担
+    - {type: relational, weight: 0.15}       # 历史人物关系
+  information_distribution: system_gated
+  max_red_herrings: 2
+  resolution_pattern: "系统真相揭示 + 选择忠于历史还是忠于系统"
+  taboo_list:
+    - "系统任务不能与历史逻辑矛盾——任务必须嵌入历史因果"
+    - "蝴蝶效应必须体现——改变历史有连锁后果"
+    - "历史人物不能沦为NPC——必须有自主意志"
+  evaluation_weights:
+    设定一致性: 0.25
+    情节连贯: 0.20
+    主题深度: 0.20                             # 历史伦理
+    角色动机: 0.15
+    对话真实度: 0.10
+    套路检测: 0.05
+    感官细节: 0.05
+  active_critics: [setting_consistency, plot_coherence, character_motivation]
+  fusion_specific_rules:
+    butterfly_accounting: "每完成一个历史任务，后续章节必须体现至少1个连锁变化"
+    npc_autonomy: "历史关键人物可拒绝配合系统——触发'世界修正力'"

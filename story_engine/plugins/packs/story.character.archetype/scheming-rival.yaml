@@ -1,0 +1,22 @@
+manifest_version: 1
+name: scheming-rival
+extension_point: story.character.archetype
+params:
+  desc: "心机情敌/对手：表面友善实则算计，制造误会的核心引擎"
+  persona:
+    traits: [圆滑, 善妒, 精明, 伪装, 不择手段]
+    taboos: [暴露真实意图, 正面对抗强者, 承认嫉妒]
+    goals: [夺取目标(爱人/地位), 毁掉对手, 维持完美人设]
+    fears: [被揭穿真面目, 目标主动选择对手, 自己只是个可悲的小丑]
+  voice_hint: "哎呀，你不知道吗？他昨天……（欲言又止的微笑）"
+  speech_patterns:
+    - 表面热情关切，实则每句话都在埋雷
+    - 善用"无意间透露"的信息
+    - 欲言又止制造悬念（让对方主动追问）
+    - 被质问时立刻示弱装无辜
+  typical_relations:
+    - {type: 暗中算计, target_archetype: strong-female-lead}
+    - {type: 争夺, target_archetype: cold-tycoon}
+    - {type: 利用, target_archetype: childhood-sweetheart}
+    - {type: 表面友好, target_archetype: broken-healer}
+  typical_arc: "从'纯粹的工具人反派'到'揭露嫉妒背后的不安全感'——最好的版本让读者理解甚至同情"

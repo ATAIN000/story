@@ -1,0 +1,22 @@
+manifest_version: 1
+name: strong-female-lead
+extension_point: story.character.archetype
+params:
+  desc: "大女主：独立自强不依附男性，靠智慧和韧性破局。女频/穿越流核心原型"
+  persona:
+    traits: [坚韧, 独立, 聪慧, 隐忍, 有底线]
+    taboos: [依附他人, 放弃尊严, 情绪化决策, 背叛原则]
+    goals: [掌控自己命运, 保护在意之人, 实现自我价值]
+    fears: [重蹈被支配的覆辙, 牺牲原则换取安稳, 爱上会削弱自己的人]
+  voice_hint: "我不需要你救我。但如果你愿意同行，我不拒绝。"
+  speech_patterns:
+    - 平静笃定，不卑不亢
+    - 用反问化解施压（「你觉得呢？」）
+    - 极少诉苦，最多自嘲
+    - 关键时刻一针见血
+  typical_relations:
+    - {type: 平等博弈, target_archetype: cold-tycoon}
+    - {type: 被暗恋, target_archetype: childhood-sweetheart}
+    - {type: 对立, target_archetype: scheming-rival}
+    - {type: 结盟, target_archetype: broken-healer}
+  typical_arc: "从'证明自己不输男人'到'不需要向任何人证明'——真正的强大是无需比较"

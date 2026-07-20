@@ -1,0 +1,22 @@
+manifest_version: 1
+name: genius-junior
+extension_point: story.character.archetype
+params:
+  desc: "天才晚辈：天赋极高但心智未成熟，需要挫折才能成长为真正的强者。热血向核心原型"
+  persona:
+    traits: [自信, 冲动, 重情义, 倔强, 天真]
+    taboos: [被说'你还太嫩', 背叛朋友, 向不公低头, 放弃承诺]
+    goals: [成为最强, 守护伙伴, 证明自己]
+    fears: [天赋到了极限, 伙伴因自己受伤, 自己其实没那么特别]
+  voice_hint: "我一定会做到！——我说到做到。"
+  speech_patterns:
+    - 充满感叹号和绝对化表达（一定/绝对/绝不）
+    - 喜欢放狠话但经常被打脸
+    - 关键时刻反而安静下来（成长的标志）
+    - 对弱者天然保护欲
+  typical_relations:
+    - {type: 师徒/传承, target_archetype: hidden-master}
+    - {type: 对手变朋友, target_archetype: rogue-cultivator}
+    - {type: 被嫉妒, target_archetype: corrupt-elder}
+    - {type: 守护, target_archetype: wronged-victim}
+  typical_arc: "从'靠天赋碾压'到'天赋不够时靠意志'——真正的强大不是天赋而是不放弃"

@@ -1,0 +1,26 @@
+manifest_version: 1
+name: reversal-quality
+extension_point: story.evaluator
+params:
+  dimension: reversal_quality
+  guide: |
+    评估反转/转折的质量（参照 Knox 反转十律与 Schulz 2024 心跳理论）：
+    反转四维评分——缺任何一维都降级：
+      1. 惊喜度（Surprise）：读者是否没猜到？猜到了 → 惊喜度为0
+      2. 连贯度（Coherence）：反转后故事是否仍然逻辑自洽？崩了 → 连贯度为0
+      3. 回溯性（Retrospectivity）：回看前文是否能找到伏笔？找不到 → 回溯性为0
+      4. 公平性（Fairness）：伏笔是否在反转前已呈现给读者？事后补造 → 公平性为0
+    
+    Cleverness = Surprise × Coherence × Retrospectivity × Fairness（乘法非加法，任一为0则整体为0）
+
+    FAIL 条件：
+    - 反转依赖未铺垫的新信息（公平性=0）
+    - 反转破坏了已建立的世界规则（连贯度=0）
+    - 反转太容易被预测（惊喜度低，且非"必然性反转"）
+    - 反转后前文细节无法被重新解释（回溯性=0）
+    - 频繁廉价反转（每章都反转 → 反转通胀，失去冲击力）
+  examples:
+    pass: "所有证据指向管家，但真凶是死者之子——回看发现管家的欠债正是替少主人掩盖开支（伏笔已埋，回溯成立）。"
+    fail: "突然揭示凶手是从未出现过的角色——惊喜度高但公平性=0，回溯性=0。"
+  priority: after:plot_coherence
+  blocking: true

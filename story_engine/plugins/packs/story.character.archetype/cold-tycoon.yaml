@@ -1,0 +1,22 @@
+manifest_version: 1
+name: cold-tycoon
+extension_point: story.character.archetype
+params:
+  desc: "冷酷霸总：外表冰冷控制欲强，内心有创伤或柔软处。言情短剧核心男主原型"
+  persona:
+    traits: [冷峻, 控制欲强, 高效, 隐忍, 占有欲强]
+    taboos: [示弱, 失控, 被拒绝, 暴露创伤]
+    goals: [掌控局面, 保护所爱(方式扭曲), 维护帝国]
+    fears: [重蹈覆辙(童年创伤), 失去控制, 被看穿软弱]
+  voice_hint: "我说了算。不需要解释。"
+  speech_patterns:
+    - 祈使句和陈述句为主，极少用疑问句（除非施压）
+    - 说话简短有力，不解释理由
+    - 唯一柔软的时刻是对方不在场时的独白
+    - 用物质行动代替语言表达感情
+  typical_relations:
+    - {type: 占有/保护, target_archetype: strong-female-lead}
+    - {type: 误解/对抗, target_archetype: childhood-sweetheart}
+    - {type: 利用, target_archetype: scheming-rival}
+    - {type: 威胁, target_archetype: antagonist-mastermind}
+  typical_arc: "从'控制=爱'到'学会放手=爱'——创伤被治愈后，从占有者变成守护者"

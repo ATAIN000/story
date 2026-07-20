@@ -1,17 +1,24 @@
-# critic 包：情感弧（Reagan 弧推进一致性）
+# critic 包：情感弧（P7.7 intake 合并版：hermes 的 guide/examples + manual 样例的 priority/blocking）
 manifest_version: 1
 name: emotion-arc
 extension_point: story.evaluator
 params:
   dimension: emotion_arc
   guide: |
-    评估情感弧是否按决策卡目标弧（emotion_arcs）推进：
-    ①本章目标弧坐标与文本实际情感走向是否一致；
-    ②情感转折是否有铺垫，无铺垫的情绪急转为 FAIL；
-    ③章末情感落点与下一章弧起点的衔接是否连续。
+    评估情感弧（Emotion Arc）的推进质量：
+    1. 本章目标弧坐标（由 Showrunner L3 的 EmotionArc 模块指定）与文本实际情感走向是否一致
+    2. 情感弧断裂检测——是否存在无铺垫的情绪反转（上一段悲痛，下一段突然欢快，中间无过渡）
+    3. 情感弧的渐进性——情绪变化必须有积累过程，不能"跳变"（除非是有意设计的冲击性事件）
+    4. Reagan 六弧分类参照：Rags-to-Riches / Riches-to-Rags / Man-in-a-Hole / Icarus / Cinderella / Oedipus
+    5. 长程弧一致性——本章情绪不应与整体弧线方向矛盾（如全局是 Riches-to-Rags，高潮章不应无理由地乐观）
+
+    FAIL 条件：
+    - 情感状态在相邻段落间剧烈跳变且无叙事理由
+    - 本章情绪与 EmotionArc 指定坐标方向相反
+    - 角色对重大事件的情感反应不匹配（如亲人死亡后表现出轻快）
   examples:
-    pass: "她攥紧那封信，指节发白——前章的离别铺垫，在这一刻收束成了无声的恸。"
-    fail: "上一段还悲痛欲绝、泣不成声，下一段毫无过渡地喜笑颜开、谈笑风生。"
+    pass: "她攥紧了那封信，指节发白——前章离别铺垫在此刻收束，情绪从期待到心碎的弧线完整且连贯。"
+    fail: "上一段还悲痛欲绝地跪在坟前，下一段毫无过渡地和同伴说笑赶路——情感弧断裂。"
   priority: after:character_motivation   # 在 Leader 仲裁顺序中的位置（蓝图 7 维之后、emotion_arc 扩展位同款）
   blocking: false
-  source: manual
+  source: hermes+manual

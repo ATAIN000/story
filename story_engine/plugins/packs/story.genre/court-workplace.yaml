@@ -1,0 +1,40 @@
+manifest_version: 1
+name: court-workplace
+extension_point: story.genre
+activation_events: ["on_genre:court-workplace"]
+fusion:
+  type: perspective_misalignment
+  parent_genres: [palace_drama, workplace_comedy]
+  core_conflict: "古代宫廷规则映射现代职场——'妃子争宠'='同事竞争'，用宫斗技能搞职场"
+  fusion_formula: "宫廷生存逻辑 + 现代职场映射 + '用宫斗技能在职场逆袭'"
+culture_bound: false
+allowed_cultures: ["*"]
+
+params:
+  pacing_curve: "入职/入宫→摸清规则→站队→宫斗/职场战→上位→权力反思"
+  power_system: "social_strategy"            # 社交策略是核心能力
+  emotion_arcs: [cinderella, icarus]
+  conflict_types:
+    - {type: political, weight: 0.45}        # 办公室政治/后宫政治
+    - {type: relational, weight: 0.3}        # 同事/妃嫔关系
+    - {type: cognitive, weight: 0.15}        # 规则破解
+    - {type: internal, weight: 0.1}          # 手段vs底线
+  information_distribution: gossip_network   # 八卦网=情报网
+  max_red_herrings: 2
+  resolution_pattern: "上位 + 反思'变成自己讨厌的人'（or 保持底线地赢）"
+  taboo_list:
+    - "宫斗/职场规则映射必须清晰——每个宫廷元素有职场对应"
+    - "不允许纯爽文——必须有'赢了但失去了什么'的反思"
+    - "对手不能纯降智——必须有真实的政治智慧"
+  evaluation_weights:
+    角色动机: 0.25
+    情节连贯: 0.20
+    对话真实度: 0.20                           # 宫廷/职场双声道的台词
+    套路检测: 0.15
+    主题深度: 0.10                             # 职场异化
+    设定一致性: 0.05
+    感官细节: 0.05
+  active_critics: [character_motivation, plot_coherence, dialogue_authenticity, cliche_detection]
+  fusion_specific_rules:
+    dual_register: "对话和旁白可随时在'宫廷腔'和'职场腔'间切换——制造喜剧效果"
+    moral_cost: "每次用宫斗手段赢，主角必须付出一个道德代价（失去一个真朋友/良心不安）"

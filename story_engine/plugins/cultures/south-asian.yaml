@@ -1,0 +1,41 @@
+manifest_version: 1
+name: south-asian
+extension_point: story.culture
+activation_events: ["on_culture:south-asian"]
+
+params:
+  power_distance: 77            # 高：种姓残余、长辈权威
+  individualism: 48             # 中低：大家庭、包办婚姻
+  masculinity: 56               # 中：传统性别角色在变化
+  uncertainty_avoidance: 40     # 中低：命运/业力文化容忍不确定
+  long_term_orientation: 51     # 中：精神追求与世俗成功并存
+  indulgence: 26                # 低：禁欲传统vs宝莱坞狂欢的两极
+
+  narrative_restraint: 0.45         # 中：宝莱坞式外放，但有哲学内省
+  social_critique: 0.65             # 高：种姓/贫富/性别不平等
+  supernatural_tolerance: 0.9       # 极高：多神教、轮回、因果报应
+  face_save_urgency: 0.8            # 高：家族荣誉（izzat）>一切
+  hierarchical_dialogue: 0.75       # 高：种姓/辈分/性别决定对话方式
+
+  archetype_mapping:
+    heroine: "strong-female-lead"
+    patriarch: "sect-leader"
+    forbidden_match: "cold-tycoon"
+    sage: "hidden-master"
+    villain: "corrupt-elder"
+
+  pacing_preference: "宝莱坞三幕——设定/中断/盛大回归"
+  cliffhanger_style: "命运转折截断"
+  resolution_pattern: "因果报应+超越世俗的爱"
+
+  cultural_taboos:
+    - "跨种姓恋爱（核心戏剧冲突源）"
+    - "不敬牛（神圣动物）"
+    - "女性独立生活（传统社区中）"
+    - "左手递物（不洁）"
+
+  texture_profile:
+    idiom_density: 0.2
+    honorific_register: 0.6
+    register: "诗意文学"
+    preferred_packs: []

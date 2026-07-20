@@ -1,0 +1,41 @@
+manifest_version: 1
+name: fantasy-mystery
+extension_point: story.genre
+activation_events: ["on_genre:fantasy-mystery"]
+fusion:
+  type: rule_collision
+  parent_genres: [mystery, high_fantasy]
+  core_conflict: "魔法的存在颠覆推理公平性——如果任何人都能用魔法杀人，密室推理还有意义吗？"
+  fusion_formula: "魔法体系（有限制） + 推理逻辑 + '谁用了什么魔法'的谜题"
+culture_bound: false
+allowed_cultures: ["*"]
+
+params:
+  pacing_curve: "魔法社会日常→密室/不可能犯罪→魔法规则排查→锁定可能性→真相"
+  power_system: "constrained_magic"          # 必须有明确限制的魔法
+  emotion_arcs: [man_in_hole]
+  conflict_types:
+    - {type: cognitive, weight: 0.5}         # 推理主导
+    - {type: political, weight: 0.2}         # 魔法社会权力结构
+    - {type: relational, weight: 0.2}        # 嫌疑人关系网
+    - {type: physical, weight: 0.1}          # 魔法对抗
+  information_distribution: fair_play
+  max_red_herrings: 3
+  resolution_pattern: "排除所有不可能的魔法→唯一可能的真相"
+  taboo_list:
+    - "魔法规则必须预先建立——破案不能用未铺垫的魔法"
+    - "不允许'万能魔法'——每种魔法必须有明确限制（Sanderson第一法则）"
+    - "凶手用的魔法必须在前文已建立规则内"
+  world_rules_ref: [fair-play-knox, sanderson-laws]
+  evaluation_weights:
+    情节连贯: 0.30                             # 推理严密性
+    设定一致性: 0.25                           # 魔法规则一致性
+    角色动机: 0.15
+    套路检测: 0.10
+    对话真实度: 0.10
+    感官细节: 0.05
+    主题深度: 0.05
+  active_critics: [plot_coherence, setting_consistency, character_motivation, cliche_detection]
+  fusion_specific_rules:
+    magic_audit: "每个嫌疑人必须做'魔法能力审计'——他能不能做到这个犯罪？"
+    fair_clue: "指向凶手魔法的线索必须在前文出现"

@@ -1,0 +1,41 @@
+manifest_version: 1
+name: loyal-guard
+extension_point: story.character.archetype
+params:
+  desc: "忠卫：沉默寡言，武力值高，忠诚是核心驱动力但也是致命弱点"
+  persona:
+    traits:
+      - 忠诚
+      - 沉默
+      - 果断
+      - 隐忍
+      - 警觉
+    taboos:
+      - 背叛信任
+      - 多言
+      - 感情用事
+      - 怠忽职守
+    goals:
+      - 保护主君/目标
+      - 完成使命
+      - 不负所托
+    fears:
+      - 未能保护重要之人
+      - 忠诚被利用
+      - 自己的判断与主命冲突
+  voice_hint: "……属下明白。"
+  speech_patterns:
+    - 极少主动开口
+    - 发言时简短直接
+    - 用行动代替语言
+    - 唯一多话的时刻是关于职责
+  typical_relations:
+    - type: 效忠
+      target_archetype: judge-official
+    - type: 惺惺相惜
+      target_archetype: advisor-counselor
+    - type: 本能保护
+      target_archetype: wronged-victim
+    - type: 警惕
+      target_archetype: antagonist-mastermind
+  typical_arc: "从'无条件服从'到'发现效忠对象的道德缺陷'，最终在忠诚与正义之间做痛苦选择"

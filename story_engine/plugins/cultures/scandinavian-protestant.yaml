@@ -1,0 +1,41 @@
+manifest_version: 1
+name: scandinavian-protestant
+extension_point: story.culture
+activation_events: ["on_culture:scandinavian-protestant"]
+
+params:
+  power_distance: 25            # 极低：平权社会，Janteloven（不要觉得自己了不起）
+  individualism: 85             # 极高：个人主义至上
+  masculinity: 15               # 极低：性别平等、生活品质>成就
+  uncertainty_avoidance: 50     # 中：喜欢规则但也接受模糊
+  long_term_orientation: 65     # 中高：可持续、长线思维
+  indulgence: 70                # 中高：Hygge（舒适惬意）文化
+
+  narrative_restraint: 0.9          # 极高：北欧冷峻极简叙事，情绪极度克制
+  social_critique: 0.8              # 高：福利社会的阴影面、移民问题、孤独
+  supernatural_tolerance: 0.3       # 低：路德宗理性传统，超自然令人不安
+  face_save_urgency: 0.2            # 极低：犯错公开承认是美德（透明度社会）
+  hierarchical_dialogue: 0.15       # 极低：直呼其名、平等对话
+
+  archetype_mapping:
+    detective: "neutral-observer"
+    victim: "wronged-victim"
+    suspect: "cold-tycoon"
+    mentor: "wise-mentor"
+    antagonist: "antagonist-mastermind"
+
+  pacing_preference: "慢烧（Nordic noir式）"  # 极慢开头，中途爆发
+  cliffhanger_style: "沉默式截断"               # 一个未说出口的秘密
+  resolution_pattern: "沉重真相+没有完全的正义"
+
+  cultural_taboos:
+    - "自夸（违反Janteloven）"
+    - "情感外露（尤其负面情绪）"
+    - "打断他人说话"
+    - "询问私人问题（收入/信仰/政治）"
+
+  texture_profile:
+    idiom_density: 0.05
+    honorific_register: 0.0
+    register: "极简文学"
+    preferred_packs: [en-literary-register]

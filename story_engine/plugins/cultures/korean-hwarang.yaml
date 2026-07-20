@@ -1,0 +1,41 @@
+manifest_version: 1
+name: korean-hwarang
+extension_point: story.culture
+activation_events: ["on_culture:korean-hwarang"]
+
+params:
+  power_distance: 60            # 中高：长幼/前后辈制度（sunbae-hubae）
+  individualism: 18             # 极低：集体和谐、nunchi（눈치读空气）
+  masculinity: 39               # 低：情感表达细腻、韩流柔情美学
+  uncertainty_avoidance: 85     # 极高：规则严格、外貌焦虑
+  long_term_orientation: 75     # 高：恨（han）——世代累积的悲愤
+  indulgence: 29                # 低：压抑+爆发（火病hwabyung）
+
+  narrative_restraint: 0.65         # 中高：韩式含蓄，欲言又止
+  social_critique: 0.75             # 高：财阀/阶级/教育不平等
+  supernatural_tolerance: 0.6       # 中高：鬼神/前世/降神是常见设定
+  face_save_urgency: 0.85           # 极高：体面（chedmyon）=社会面具
+  hierarchical_dialogue: 0.85       # 极高：敬语体系与日语同级
+
+  archetype_mapping:
+    hero_male: "cold-tycoon"
+    heroine: "strong-female-lead"
+    second_lead: "childhood-sweetheart"
+    rival: "scheming-rival"
+    mentor: "wise-mentor"
+
+  pacing_preference: "恨（han）的慢烧——隐忍→爆发→悲壮"
+  cliffhanger_style: "情感炸弹——一个眼神改变一切"
+  resolution_pattern: "苦尽甘来（或唯美的悲剧）"
+
+  cultural_taboos:
+    - "不敬前辈（sunbae）"
+    - "当众顶撞长辈"
+    - "破坏体面（chedmyon崩塌=社会性死亡）"
+    - "谈论日本殖民（深层创伤）"
+
+  texture_profile:
+    idiom_density: 0.25
+    honorific_register: 0.75
+    register: "敬语情感"
+    preferred_packs: [zh-romance-texture]

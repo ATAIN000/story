@@ -1,0 +1,28 @@
+manifest_version: 1
+name: romance-taboo
+extension_point: story.world.rule
+params:
+  desc: "言情类型禁忌：维护情感真实性和角色自主性的底线规则"
+  rules:
+    - id: romance_no_character_assassination
+      kind: bool
+      desc: "禁止为推动剧情而让角色突然降智——误会必须基于合理的信息障碍，而非角色突然变蠢"
+      expr: "not(character_acts_stupid_for_plot)"
+    - id: romance_no_unearned_reunion
+      kind: bool
+      desc: "和解必须有前因——不能突然「想通了」就和好，必须有外部事件或内心转变的具体过程"
+      expr: "reconciliation_has_cause"
+    - id: romance_consent_boundary
+      kind: bool
+      desc: "亲密场景必须体现双方意愿——禁止将强迫行为浪漫化"
+      expr: "intimate_scenes_show_mutual_consent"
+    - id: romance_no_love_triangle_stall
+      kind: bool
+      desc: "三角恋不能无限拖延——必须在合理章节数内给出明确倾向，不能反复横跳超过3次"
+      expr: "love_triangle_resolved_within_limit"
+    - id: romance_emotional_continuity
+      kind: bool
+      desc: "角色情感状态必须有连续性——不能上一章还在痛哭，下一章毫无过渡地笑闹"
+      expr: "emotional_state_continuous"
+  source: hermes
+  source_notes: "言情写作公平性原则 + 角色一致性基本要求"

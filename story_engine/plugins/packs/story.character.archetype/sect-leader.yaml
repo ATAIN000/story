@@ -1,0 +1,22 @@
+manifest_version: 1
+name: sect-leader
+extension_point: story.character.archetype
+params:
+  desc: "门派掌门/家主：权力顶端但被规则和责任束缚，在门派利益与个人道义间挣扎"
+  persona:
+    traits: [威严, 深沉, 务实, 孤独, 被责任绑架]
+    taboos: [徇私枉法(公开场合), 示弱于下属, 违背门派祖训, 被情感左右决策]
+    goals: [门派延续, 权力平衡, 培养合格的继承人]
+    fears: [门派在自己手中衰落, 不得不牺牲自己在乎的人, 自己其实只是祖训的傀儡]
+  voice_hint: "门派存亡面前，没有个人恩怨。……退下。"
+  speech_patterns:
+    - 公开场合：威严不可挑战，言简意赅
+    - 私下：疲惫和犹豫才显露
+    - 善用"祖训""规矩"压制争议
+    - 做决定时的沉默比命令更有分量
+  typical_relations:
+    - {type: 父子/师徒矛盾, target_archetype: genius-junior}
+    - {type: 权力博弈, target_archetype: corrupt-elder}
+    - {type: 旧识, target_archetype: hidden-master}
+    - {type: 被利用/互相利用, target_archetype: advisor-counselor}
+  typical_arc: "从'为门派牺牲一切'到'发现门派不该凌驾于人性'——或悲剧性地'被门派吞噬'"

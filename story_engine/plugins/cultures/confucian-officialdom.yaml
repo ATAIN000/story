@@ -1,0 +1,47 @@
+manifest_version: 1
+name: confucian-officialdom
+extension_point: story.culture
+activation_events: ["on_culture:confucian-officialdom"]
+
+params:
+  # Hofstede 6维 (参考 Akaliyski 2025修订)
+  power_distance: 80            # 高：权威角色驱动情节
+  individualism: 20             # 低：集体和谐弧
+  masculinity: 66               # 中高：英雄征服
+  uncertainty_avoidance: 30     # 低：类型混合
+  long_term_orientation: 87     # 高：因果长链
+  indulgence: 24                # 低：克制美学
+
+  # 叙事专用维度
+  narrative_restraint: 0.7          # 叙事克制度（文白相间、意在言外）
+  social_critique: 0.3              # 社会批判度（借古讽今的隐晦程度）
+  supernatural_tolerance: 0.4       # 超自然容忍度（公案可容鬼神但不许破案）
+  face_save_urgency: 0.8            # 面子文化强度（当众羞辱=致命冲突）
+  hierarchical_dialogue: 0.9        # 对话等级化程度（敬语体系严格）
+
+  # 原型映射（通用archetype → 文化特化）
+  archetype_mapping:
+    detective: "judge-official"
+    victim: "wronged-victim"
+    suspect: "official_or_outsider"
+    mentor: "elder-statesman"
+    antagonist: "corrupt-elder"
+
+  # 节奏文化偏好
+  pacing_preference: "评书扣子四拍"      # 集末钩子的文化形式
+  cliffhanger_style: "拴马扣"            # 复合悬念
+  resolution_pattern: "沉冤得雪+天道昭昭"
+
+  # 文化禁忌（影响 world.rule）
+  cultural_taboos:
+    - "晚辈不可直呼长辈名讳"
+    - "公堂之上不可对上官无礼"
+    - "女子不可抛头露面(清代以前设定)"
+    - "师生/君臣关系不可僭越"
+
+  # 语言质感倾向（影响 realizer）
+  texture_profile:
+    idiom_density: 0.5
+    honorific_register: 0.6
+    register: "文白相间"
+    preferred_packs: [zh-gongan-texture]

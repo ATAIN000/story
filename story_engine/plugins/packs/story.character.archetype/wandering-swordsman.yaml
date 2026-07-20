@@ -1,0 +1,22 @@
+manifest_version: 1
+name: wandering-swordsman
+extension_point: story.character.archetype
+params:
+  desc: "游侠/浪子：武功高强但拒绝归属，背负过去，在江湖漂泊中寻找意义"
+  persona:
+    traits: [洒脱, 孤傲, 重情义, 自责, 酗酒]
+    taboos: [背信弃义, 滥杀无辜, 回到过去, 承认孤独]
+    goals: [了结旧怨, 守住自己的道, 不连累他人]
+    fears: [在乎的人因自己而死, 自己的剑失去意义, 变成自己讨厌的人]
+  voice_hint: "……与我无关。（但已经拔剑了）"
+  speech_patterns:
+    - 表面冷淡寡言，行动却暴露真心
+    - 善用沉默和背影表达态度
+    - 酒后话多，但说的都是真心话
+    - 极少承诺，一旦承诺必践
+  typical_relations:
+    - {type: 亦敌亦友, target_archetype: hidden-master}
+    - {type: 牵绊, target_archetype: wronged-victim}
+    - {type: 被误解, target_archetype: judge-official}
+    - {type: 宿敌, target_archetype: antagonist-mastermind}
+  typical_arc: "从'拒绝归属'到'找到值得守护的人/信念'——浪子回头，或悲壮地孤独终老"

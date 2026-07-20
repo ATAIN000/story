@@ -1,0 +1,28 @@
+manifest_version: 1
+name: narrative-structure-laws
+extension_point: story.world.rule
+params:
+  desc: "通用叙事结构法则：跨类型适用的故事质量底线规则"
+  rules:
+    - id: setup_payoff_balance
+      kind: bool
+      desc: "每个重大payoff必须有对应的setup——禁止无铺垫的高潮或解决方案"
+      expr: "all_payoffs_have_setup"
+    - id: chekhov_gun
+      kind: bool
+      desc: "契诃夫之枪：在前文重点描写的物件/信息必须在后文发挥作用"
+      expr: "implies(element_emphasized, element_used_later)"
+    - id: no_convenient_coincidence
+      kind: bool
+      desc: "禁止便利巧合解决核心冲突——巧合可以制造问题，但不能解决问题（除非是喜剧）"
+      expr: "not(coincidence_resolves_core_conflict)"
+    - id: stakes_escalation
+      kind: bool
+      desc: "赌注必须递进——后段的危机不能比前段更轻"
+      expr: "stakes_monotonically_increasing"
+    - id: character_agency
+      kind: bool
+      desc: "角色主动性：关键转折必须由角色的选择驱动，不能由纯外部事件决定"
+      expr: "key_turning_points_driven_by_character_choice"
+  source: hermes
+  source_notes: "综合 McKee 'Story' + 契诃夫之枪 + 角色主动性原则"

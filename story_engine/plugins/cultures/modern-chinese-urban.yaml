@@ -1,0 +1,41 @@
+manifest_version: 1
+name: modern-chinese-urban
+extension_point: story.culture
+activation_events: ["on_culture:modern-chinese-urban"]
+
+params:
+  power_distance: 55            # 中：职场等级存在但可被能力打破
+  individualism: 50             # 中：个人奋斗vs家庭期望的拉扯
+  masculinity: 55               # 中：男女平等意识提升
+  uncertainty_avoidance: 40     # 中低：拥抱变化但求安稳
+  long_term_orientation: 60     # 中高：买房/结婚/养老的长线焦虑
+  indulgence: 50                # 中：加班文化与消费享乐并存
+
+  narrative_restraint: 0.4          # 中低：现代直白表达为主
+  social_critique: 0.7              # 高：阶层固化/996/房价是社会痛点
+  supernatural_tolerance: 0.2       # 低：现代都市灵异是异常非日常
+  face_save_urgency: 0.6            # 中高：朋友圈/社交媒体面子经济
+  hierarchical_dialogue: 0.4        # 中低：职场有等级但私下平等
+
+  archetype_mapping:
+    protagonist_male: "cold-tycoon"
+    protagonist_female: "strong-female-lead"
+    rival: "scheming-rival"
+    friend: "comic-relief"
+    healer: "broken-healer"
+
+  pacing_preference: "快节奏+每15秒钩子"   # 短剧适配
+  cliffhanger_style: "情感反转截断"
+  resolution_pattern: "逆袭/和解/找到自我"
+
+  cultural_taboos:
+    - "当众让人下不来台（尤其长辈/领导）"
+    - "议论他人收入"
+    - "催婚催生的正面冲突"
+    - "职场越级举报（除非主角已无退路）"
+
+  texture_profile:
+    idiom_density: 0.2
+    honorific_register: 0.15
+    register: "现代口语"
+    preferred_packs: [zh-romance-texture]

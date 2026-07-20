@@ -1,0 +1,27 @@
+manifest_version: 1
+name: reader-engagement
+extension_point: story.evaluator
+params:
+  dimension: reader_engagement
+  guide: |
+    评估读者代入感与续读驱动力（行为预测，非打分——对应 Story Engine 的 Reader Proxy 模块）：
+    预测三个行为信号：
+      1. continue_reading（是否会继续读）——章节末读者是否想翻下一页？
+      2. prediction（读者会预测什么）——读者此刻最期待发生什么？用于设置反预期。
+      3. emotional_curves（张力/好奇/投入度曲线）——三章内是否单调？需要波峰波谷。
+    
+    三大驱动引擎评估：
+      - 张力（Tension）：角色是否面临真实威胁/抉择？无张力段落 >3段 → 续读欲下降
+      - 好奇（Curiosity）：是否抛出了读者想知道答案的问题？连续2章无新悬念 → 降分
+      - 投入（Engagement）：读者是否在乎角色的命运？角色无代入点 → 全局降分
+
+    FAIL 条件：
+    - 连续3段无任何张力/好奇/投入驱动
+    - 章末既无悬念也无情感钩子（读者可以放下书）
+    - 主角缺乏代入点（无弱点/无渴望/无困境）
+    - 读者的预测与作者意图完全错位（说明铺垫误导了方向）
+  examples:
+    pass: "章末：凶手身份即将揭晓但被打断——张力拉满+好奇激增+读者必然翻页。"
+    fail: "章末：主角们吃完饭回房睡觉，明天再继续调查——零钩子，读者放下书。"
+  priority: after:emotion_arc
+  blocking: false

@@ -1,0 +1,41 @@
+manifest_version: 1
+name: isekai-romance
+extension_point: story.genre
+activation_events: ["on_genre:isekai-romance"]
+fusion:
+  type: value_inversion
+  parent_genres: [isekai, romance]
+  core_conflict: "现代女性独立意识 vs 古代从属地位——'爱上这个时代的人，是否背叛了我的价值观？'"
+  fusion_formula: "现代价值观 + 古代爱情 + 女性意识觉醒 + '改变还是适应'的抉择"
+culture_bound: false
+allowed_cultures: ["*"]
+
+params:
+  pacing_curve: "穿越落地→身份困境→情感萌芽→价值观冲突→觉醒抉择→爱情与自我和解"
+  power_system: "modern_mindset"             # 现代思维是核心"武器"
+  emotion_arcs: [cinderella, man_in_hole]
+  conflict_types:
+    - {type: relational, weight: 0.4}        # 情感主线
+    - {type: internal, weight: 0.25}         # 价值观挣扎
+    - {type: political, weight: 0.2}         # 身份/阶级
+    - {type: cognitive, weight: 0.15}        # 现代知识应用
+  information_distribution: dual_perspective
+  max_red_herrings: 2
+  resolution_pattern: "在不放弃自我的前提下找到爱情 + 推动小范围观念改变"
+  taboo_list:
+    - "不允许女主为爱情完全放弃现代价值观——必须有底线"
+    - "古代男主不能纯霸道——必须有理解/成长弧线"
+    - "不允许'用现代知识秒杀古人'——价值观冲突才是核心"
+  world_rules_ref: [romance-taboo]
+  evaluation_weights:
+    角色动机: 0.25
+    情感弧: 0.20
+    主题深度: 0.15                             # 女性意识
+    对话真实度: 0.15
+    情节连贯: 0.15
+    套路检测: 0.05
+    感官细节: 0.05
+  active_critics: [character_motivation, emotion_arc, dialogue_authenticity, plot_coherence]
+  fusion_specific_rules:
+    value_test: "至少3次'价值观测试'场景——女主必须在现代vs古代之间做选择"
+    male_growth: "男主必须有'被女主改变'的成长弧——不能原地踏步"

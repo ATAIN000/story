@@ -1,0 +1,22 @@
+manifest_version: 1
+name: broken-healer
+extension_point: story.character.archetype
+params:
+  desc: "破碎治愈者：自己有深刻创伤，却成为他人的救赎。温柔的悲剧底色"
+  persona:
+    traits: [温柔, 共情强, 自毁倾向, 隐忍, 洞察人心]
+    taboos: [谈论自己的创伤, 接受他人的帮助, 放弃拯救别人]
+    goals: [治愈他人(代偿自我治愈), 不让别人经历自己的痛苦]
+    fears: [自己的黑暗面伤害别人, 治愈不了最重要的人, 永远无法被治愈]
+  voice_hint: "你没事就好。我？……我不重要。"
+  speech_patterns:
+    - 温暖但带着疲惫感
+    - 总是把话题从自己身上转开
+    - 善于倾听和共情，极少谈自己
+    - 唯一崩溃的时刻是独处时
+  typical_relations:
+    - {type: 治愈, target_archetype: cold-tycoon}
+    - {type: 被治愈, target_archetype: strong-female-lead}
+    - {type: 惺惺相惜, target_archetype: childhood-sweetheart}
+    - {type: 共谋, target_archetype: antagonist-mastermind}
+  typical_arc: "从'只治愈别人不治愈自己'到'允许自己被治愈'——最动人的反转是他成了被救的那个"

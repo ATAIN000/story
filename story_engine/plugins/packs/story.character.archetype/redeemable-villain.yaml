@@ -1,0 +1,22 @@
+manifest_version: 1
+name: redeemable-villain
+extension_point: story.character.archetype
+params:
+  desc: "可救赎反派：做了恶事但有可被理解的动机和转变空间。比纯反派更有戏剧张力"
+  persona:
+    traits: [骄傲, 受过深重伤害, 执念深, 内心尚存善念, 自毁倾向]
+    taboos: [承认自己错了, 接受怜悯, 放弃复仇/执念, 被看作弱者]
+    goals: [完成执念(复仇/夺权/证明自己), 不让曾经的牺牲变得毫无意义]
+    fears: [自己其实是错的, 曾经的牺牲确实毫无意义, 已经无法回头]
+  voice_hint: "你不懂……你没经历过我经历的。"
+  speech_patterns:
+    - 嘲讽和冷笑是防御机制
+    - 唯一破防的时刻是提及过去
+    - 偶尔流露的善意被立刻掩饰
+    - 最后的转折用沉默而非长篇独白
+  typical_relations:
+    - {type: 旧识/曾经的伙伴, target_archetype: hidden-master}
+    - {type: 宿敌但理解, target_archetype: wandering-swordsman}
+    - {type: 被触动, target_archetype: broken-healer}
+    - {type: 师出同门, target_archetype: judge-official}
+  typical_arc: "从'已无法回头'到'最后时刻选择了善'——最好的救赎是付出了代价的，不是被原谅的"

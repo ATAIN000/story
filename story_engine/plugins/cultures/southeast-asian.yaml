@@ -1,0 +1,41 @@
+manifest_version: 1
+name: southeast-asian
+extension_point: story.culture
+activation_events: ["on_culture:southeast-asian"]
+
+params:
+  power_distance: 70            # 高：长辈/上位者权威
+  individualism: 30             # 低：家族共同体、关系网（guanxi/koneksi）
+  masculinity: 50               # 中：男女角色灵活（母系社会残留）
+  uncertainty_avoidance: 55     # 中：接受命运/业力（karma）
+  long_term_orientation: 40     # 中低：活在当下、及时行乐
+  indulgence: 65                # 中高：节日文化、饮食社交、享乐
+
+  narrative_restraint: 0.5          # 中：情感表达热烈但仪式化
+  social_critique: 0.6              # 中高：贫富悬殊/华裔身份/后殖民
+  supernatural_tolerance: 0.85      # 极高：万物有灵/降头术/鬼节/神灵附体
+  face_save_urgency: 0.7            # 高：家族面子>个人
+  hierarchical_dialogue: 0.65       # 中高：长幼有序但比东亚灵活
+
+  archetype_mapping:
+    protagonist_female: "strong-female-lead"
+    matriarch: "sect-leader"
+    antagonist: "scheming-rival"
+    spirit: "neutral-observer"
+    healer: "broken-healer"
+
+  pacing_preference: "高情绪浓度+反转密集"   # 短剧黄金适配文化
+  cliffhanger_style: "身份反转/情感炸弹"
+  resolution_pattern: "家族荣耀+因果报应"
+
+  cultural_taboos:
+    - "亵渎神灵/降头术（即使是虚构）"
+    - "不敬祖先"
+    - "公开羞辱家族"
+    - "触碰他人头部（头部神圣）"
+
+  texture_profile:
+    idiom_density: 0.25
+    honorific_register: 0.5
+    register: "热带现代"
+    preferred_packs: [zh-romance-texture]

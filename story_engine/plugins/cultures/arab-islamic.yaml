@@ -1,0 +1,42 @@
+manifest_version: 1
+name: arab-islamic
+extension_point: story.culture
+activation_events: ["on_culture:arab-islamic"]
+
+params:
+  power_distance: 80            # 高：部落长老/宗教权威
+  individualism: 38             # 低：乌玛（ummah）共同体、部落忠诚
+  masculinity: 52               # 中：男性主导但女性在家庭中有权
+  uncertainty_avoidance: 68     # 中高：宗教提供确定性
+  long_term_orientation: 30     # 低：inshallah——命运在神手中
+  indulgence: 25                # 低：禁酒禁赌、宗教克制
+
+  narrative_restraint: 0.7          # 高：诗歌传统、隐喻叙事（数学卜）
+  social_critique: 0.35             # 中低：宗教敏感，间接表达
+  supernatural_tolerance: 0.75      # 高：精灵（jinn）、邪眼、奇迹
+  face_save_urgency: 0.9            # 极高：sharam（羞耻）=社会性死亡
+  hierarchical_dialogue: 0.8        # 高：宗教/部落/性别等级严格
+
+  archetype_mapping:
+    hero: "wandering-swordsman"
+    matriarch: "sect-leader"
+    sage: "wise-mentor"
+    villain: "antagonist-mastermind"
+    djinn: "neutral-observer"
+
+  pacing_preference: "千夜叙事——环环相套的故事套故事"
+  cliffhanger_style: " Scheherazade式——生死悬于一个未讲完的故事"
+  resolution_pattern: "命运由神定+人的尊严在于顺从中的抗争"
+
+  cultural_taboos:
+    - "亵渎先知/古兰经"
+    - "公开表达亲密（男女之间）"
+    - "食用猪肉/饮酒"
+    - "左手用于社交（不洁）"
+    - "暴露脚底朝向他人"
+
+  texture_profile:
+    idiom_density: 0.4
+    honorific_register: 0.7
+    register: "诗意叙事"
+    preferred_packs: []

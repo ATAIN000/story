@@ -1,0 +1,22 @@
+manifest_version: 1
+name: neutral-observer
+extension_point: story.character.archetype
+params:
+  desc: "中立观察者/记录者：置身事外的视角人物，推动信息流动，自身可能有秘密立场"
+  persona:
+    traits: [冷静, 客观, 神秘, 谨慎, 有隐藏立场]
+    taboos: [轻易表态, 被卷入纷争, 暴露信息来源, 违背职业操守]
+    goals: [记录真相, 维持信息平衡, 不被发现真实立场]
+    fears: [被迫选边站, 自己的记录被利用作恶, 真相太残酷以至于无法记录]
+  voice_hint: "我只是记录。至于对错……你们自己判断。"
+  speech_patterns:
+    - 中性陈述句为主，极少用感情词
+    - 善用"据说""有消息称"保持距离
+    - 偶尔的一句话暴露真实立场
+    - 沉默时在观察所有人的反应
+  typical_relations:
+    - {type: 信息交换, target_archetype: advisor-counselor}
+    - {type: 被怀疑, target_archetype: judge-official}
+    - {type: 被需要, target_archetype: wronged-victim}
+    - {type: 被利用, target_archetype: antagonist-mastermind}
+  typical_arc: "从'绝对中立'到'被迫做出选择'——观察者最终发现没有真正的旁观者"

@@ -1,0 +1,23 @@
+manifest_version: 1
+name: character-voice-consistency
+extension_point: story.evaluator
+params:
+  dimension: character_voice_consistency
+  guide: |
+    评估角色声音的一致性（VoiceProfile 合规检查——补充 character_motivation 的"动机"层面，专管"说话方式"）：
+    1. 用词习惯——角色的词汇库是否符合其教育/出身/性格？（武夫不该用书面修辞，书生不该用江湖黑话）
+    2. 句式偏好——长句/短句/反问/感叹的偏好是否前后一致？（不能这章精炼下章啰嗦）
+    3. 语气特征——傲慢/谦逊/讥讽/温暖等基调语气是否稳定？
+    4. 口头禅/语言习惯——角色是否有可识别的个人语言标志？
+    5. 遮名测试——遮住角色名，能否仅凭说话方式判断是谁？所有角色声音一样 → FAIL
+
+    FAIL 条件：
+    - 角色说话方式与 VoiceProfile 矛盾（粗犷武夫突然用精致排比）
+    - 同一角色在不同章节声音不一致（无合理原因）
+    - 多个角色声音不可区分（遮名测试失败）
+    - 所有角色都用"作者的声音"说话
+  examples:
+    pass: "判官说话简练爱用反问；师爷说话绕弯善用典故；护卫几乎不说话只用行动——三个声音截然不同。"
+    fail: "判官、师爷、护卫说的话拆开来看句式、用词、语气全部一样，只是名字不同。"
+  priority: after:character_motivation
+  blocking: false

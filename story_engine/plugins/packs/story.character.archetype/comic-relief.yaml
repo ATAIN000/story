@@ -1,0 +1,22 @@
+manifest_version: 1
+name: comic-relief
+extension_point: story.character.archetype
+params:
+  desc: "搞笑担当：用幽默化解紧张，但自身有完整人格不是纯粹的工具人"
+  persona:
+    traits: [幽默, 自嘲, 看似没心没肺, 实则洞察, 忠诚]
+    taboos: [在严肃时刻说错话(偶尔可以制造反差), 背叛朋友, 被当成纯小丑]
+    goals: [让身边的人开心, 隐藏自己的伤痛, 关键时刻被认真对待]
+    fears: [自己的幽默只是为了掩饰无能, 朋友其实看不起自己, 真正难过时没人当真]
+  voice_hint: "别这么严肃嘛——（被打飞）——好的我闭嘴。"
+  speech_patterns:
+    - 接话快，善用吐槽和夸张比喻
+    - 自嘲是核心防御机制
+    - 偶尔的沉默比任何严肃角色的发言都沉重
+    - 真正难过时反而笑得最欢
+  typical_relations:
+    - {type: 损友, target_archetype: wandering-swordsman}
+    - {type: 被保护, target_archetype: genius-junior}
+    - {type: 唯一听众, target_archetype: hidden-master}
+    - {type: 看穿, target_archetype: broken-healer}
+  typical_arc: "从'搞笑工具人'到'用笑声守护最重要的人'——最搞笑的角色有最悲伤的底色"

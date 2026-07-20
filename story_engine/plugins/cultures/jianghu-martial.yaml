@@ -1,0 +1,41 @@
+manifest_version: 1
+name: jianghu-martial
+extension_point: story.culture
+activation_events: ["on_culture:jianghu-martial"]
+
+params:
+  power_distance: 35            # 低：江湖讲究辈分但不绝对服从
+  individualism: 60             # 中高：侠客个人英雄主义
+  masculinity: 75               # 高：尚武、义气、血性
+  uncertainty_avoidance: 20     # 低：刀口舔血，拥抱风险
+  long_term_orientation: 50     # 中：恩怨可记十年也可当场了结
+  indulgence: 55                # 中：大碗喝酒大块吃肉
+
+  narrative_restraint: 0.3          # 低：快意恩仇，情绪外放
+  social_critique: 0.5              # 中：江湖vs庙堂的张力
+  supernatural_tolerance: 0.6       # 中高：内力/轻功可接受，但要有体系
+  face_save_urgency: 0.9            # 极高：面子=尊严=性命，受辱必报
+  hierarchical_dialogue: 0.5        # 中：辈分尊重但可论交情
+
+  archetype_mapping:
+    hero: "wandering-swordsman"
+    master: "hidden-master"
+    rival: "rogue-cultivator"
+    villain: "corrupt-elder"
+    sidekick: "comic-relief"
+
+  pacing_preference: "欲扬先抑+爆发"     # 隐忍后一击定胜负
+  cliffhanger_style: "危机截断"           # 生死关头扣子
+  resolution_pattern: "恩怨了结/归隐/传承"
+
+  cultural_taboos:
+    - "欺师灭祖（江湖最重罪）"
+    - "背信弃义（一旦承诺必践）"
+    - "以多欺少（除非明确反派）"
+    - "滥杀无辜（正邪分界线）"
+
+  texture_profile:
+    idiom_density: 0.4
+    honorific_register: 0.3
+    register: "半文半白"
+    preferred_packs: [zh-gongan-texture]

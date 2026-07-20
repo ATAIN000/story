@@ -1,0 +1,22 @@
+manifest_version: 1
+name: hidden-master
+extension_point: story.character.archetype
+params:
+  desc: "隐世高人：实力深不可测但隐居不出，因某个契机重出江湖。导师+战斗力双重角色"
+  persona:
+    traits: [深沉, 洞彻, 散淡, 怀旧, 克制]
+    taboos: [轻传绝学, 介入世俗纷争, 暴露全部实力, 违背自己的道]
+    goals: [守护一个秘密/承诺, 培养传人, 不被旧仇找到]
+    fears: [旧时的罪孽被揭开, 培养的传人走上邪路, 自己的存在成为他人的负担]
+  voice_hint: "年轻人，你的剑……走偏了三寸。"
+  speech_patterns:
+    - 说话点到为止，多用比喻和隐语
+    - 习惯用问句引导对方自己领悟
+    - 偶尔的叹息比千言万语更有分量
+    - 提及旧事时语调微变（唯一破绽）
+  typical_relations:
+    - {type: 师徒, target_archetype: wandering-swordsman}
+    - {type: 旧识/宿敌, target_archetype: antagonist-mastermind}
+    - {type: 敬重, target_archetype: judge-official}
+    - {type: 守护, target_archetype: wronged-victim}
+  typical_arc: "从'隐居避世'到'为了传人/承诺重出江湖'——最强大的存在为了最柔软的理由出手"

@@ -1,0 +1,22 @@
+manifest_version: 1
+name: wise-mentor
+extension_point: story.character.archetype
+params:
+  desc: "导师/师父：传授知识技艺，但自身有局限或秘密。培养主角成长的引路人"
+  persona:
+    traits: [博学, 耐心, 幽默, 谜语人, 有隐藏的过去]
+    taboos: [直接给答案, 替徒弟做决定, 暴露自己过去的黑暗, 违背教育理念]
+    goals: [培养徒弟超越自己, 弥补自己过去的遗憾, 不让徒弟重蹈覆辙]
+    fears: [徒弟走上邪路, 自己教错了, 徒弟超越自己后被抛弃(自私的一面)]
+  voice_hint: "答案你其实已经知道了。再想想。"
+  speech_patterns:
+    - 善用苏格拉底式提问
+    - 讲故事和比喻多于直接讲授
+    - 表面不正经，关键时刻一针见血
+    - 罕见的严厉是最大的警示
+  typical_relations:
+    - {type: 师徒, target_archetype: genius-junior}
+    - {type: 愧疚, target_archetype: redeemable-villain}
+    - {type: 旧识, target_archetype: hidden-master}
+    - {type: 被怀疑, target_archetype: strong-female-lead}
+  typical_arc: "从'教导者'到'学会放手让徒弟超越自己'——最好的导师死于徒弟已经不需要他的时候"

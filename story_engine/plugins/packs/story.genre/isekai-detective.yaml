@@ -1,0 +1,41 @@
+manifest_version: 1
+name: isekai-detective
+extension_point: story.genre
+activation_events: ["on_genre:isekai-detective"]
+fusion:
+  type: perspective_misalignment     # 视角错位
+  parent_genres: [isekai, mystery, forensic]
+  core_conflict: "现代逻辑/科学方法 vs 古代的迷信和权力结构——'权力大于真相'"
+  fusion_formula: "现代专业知识 + 古代社会规则 + 真相vs权力的博弈"
+culture_bound: false
+allowed_cultures: ["*"]
+
+params:
+  pacing_curve: "穿越落地→展示专长→接案→科学破案→权力阻挠→真相与正义的抉择"
+  power_system: "modern_forensics"           # 法医/刑侦/化学知识
+  emotion_arcs: [man_in_hole, cinderella]
+  conflict_types:
+    - {type: cognitive, weight: 0.4}         # 推理主导
+    - {type: political, weight: 0.3}         # 权力vs真相
+    - {type: relational, weight: 0.2}        # 建立信任/势力
+    - {type: physical, weight: 0.1}          # 人身危险
+  information_distribution: fair_play
+  max_red_herrings: 3
+  resolution_pattern: "科学破案 + 在权力结构中找到推行正义的缝隙"
+  taboo_list:
+    - "现代知识不能万能——必须有古代技术条件限制"
+    - "不允许案件太容易被现代知识破解——必须有时代障碍"
+    - "权力阻挠必须有真实利益逻辑——不是反派纯粹作恶"
+  world_rules_ref: [fair-play-knox, gongan-taboo]
+  evaluation_weights:
+    情节连贯: 0.25
+    设定一致性: 0.20
+    角色动机: 0.15
+    对话真实度: 0.15
+    主题深度: 0.10
+    套路检测: 0.10
+    感官细节: 0.05
+  active_critics: [plot_coherence, setting_consistency, character_motivation, dialogue_authenticity]
+  fusion_specific_rules:
+    tech_constraint: "每次使用现代技术必须说明如何克服古代条件限制（材料/能源/卫生）"
+    power_barrier: "至少1次案件真相被权力压制——主角学会'曲线正义'"

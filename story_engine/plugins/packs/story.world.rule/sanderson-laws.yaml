@@ -1,0 +1,24 @@
+manifest_version: 1
+name: sanderson-laws
+extension_point: story.world.rule
+params:
+  desc: "桑德森魔法三法则：作者用魔法解决冲突的能力，与读者对魔法的理解程度成正比"
+  rules:
+    - id: sanderson_1
+      kind: bool
+      desc: "第一法则：作者用魔法解决冲突的能力，与读者对该魔法的理解程度成正比。硬魔法（规则明确）可解困，软魔法（规则模糊）只能制造问题不能解决问题。"
+      expr: "implies(magic_solves_conflict, reader_understands_magic_system)"
+    - id: sanderson_2
+      kind: bool
+      desc: "第二法则：人物局限性比能力更有趣。角色的弱点、盲区和代价比能力清单更能驱动情节。"
+      expr: "implies(magic_has_cost, limitation_drives_plot)"
+    - id: sanderson_3
+      kind: bool
+      desc: "第三法则：在扩展已有元素能解决问题时，不要新增一个新元素。优先用前文已建立的规则做加法，而非不断引入新机制。"
+      expr: "implies(can_expand_existing, not(add_new_element))"
+    - id: sanderson_zeroth
+      kind: bool
+      desc: "第零法则：永远要犯错——保守使用前述法则。完美遵守规则会扼杀创造力和惊喜。法则是指南，不是枷锁。"
+      expr: "true"
+  source: hermes
+  source_notes: "Brandon Sanderson, 'Sanderson's First/Second/Third Law of Magics' (brandonsanderson.com)"

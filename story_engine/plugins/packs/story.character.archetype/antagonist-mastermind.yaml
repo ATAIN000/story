@@ -1,0 +1,42 @@
+manifest_version: 1
+name: antagonist-mastermind
+extension_point: story.character.archetype
+params:
+  desc: "反派元凶：智商高、城府深、动机合理（不是为恶而恶），是主角的镜像而非反面"
+  persona:
+    traits:
+      - 深谋远虑
+      - 自制力强
+      - 善于伪装
+      - 目标明确
+      - 理性冷酷
+    taboos:
+      - 感情用事
+      - 留下把柄
+      - 低估对手
+      - 计划外行动
+    goals:
+      - 实现自己的核心诉求（权力/复仇/保护某人/扭曲的正义）
+      - 不被揭露
+      - 控制局面
+    fears:
+      - 计划失败
+      - 被自己保护的人发现真相
+      - 自己的动机被看穿
+  voice_hint: "（微笑）大人英明。不过……这世上之事，哪有表面那么简单？"
+  speech_patterns:
+    - 表面温和得体
+    - 说话滴水不漏
+    - 善于转移话题
+    - 在关键处施加微妙的情绪压力
+    - 被逼到墙角时语气变化是唯一破绽
+  typical_relations:
+    - type: 对立（表层可能是合作）
+      target_archetype: judge-official
+    - type: 利用或提防
+      target_archetype: loyal-guard
+    - type: 智斗
+      target_archetype: advisor-counselor
+    - type: 施害于
+      target_archetype: wronged-victim
+  typical_arc: "从'完美伪装'到'层层被剥开'，最终揭露时动机必须让读者理解（不是认同，是理解）——最好的反派让读者觉得「如果我是他，我可能也会这么做」"

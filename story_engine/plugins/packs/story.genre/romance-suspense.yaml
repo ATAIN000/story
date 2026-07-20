@@ -1,0 +1,40 @@
+manifest_version: 1
+name: romance-suspense
+extension_point: story.genre
+activation_events: ["on_genre:romance-suspense"]
+fusion:
+  type: value_inversion
+  parent_genres: [romance, psychological_thriller]
+  core_conflict: "信任（爱情的基石） vs 怀疑（推理的引擎）——你最爱的人可能是凶手/间谍/骗子"
+  fusion_formula: "情感线 + 悬疑推理 + '信任/怀疑'的持续拉扯"
+culture_bound: false
+allowed_cultures: ["*"]
+
+params:
+  pacing_curve: "相遇相爱→疑点初现→信任动摇→真相逼近→终极抉择（爱还是揭穿）"
+  power_system: "psychological"               # 心理博弈为主
+  emotion_arcs: [icarus, oedipus]             # 升起后坠落
+  conflict_types:
+    - {type: relational, weight: 0.4}        # 情感信任线
+    - {type: cognitive, weight: 0.35}        # 悬疑推理线
+    - {type: internal, weight: 0.25}         # 爱vs怀疑的内心战
+  information_distribution: unreliable_beloved # 爱人可能是不可靠叙述者
+  max_red_herrings: 3
+  resolution_pattern: "真相揭晓——爱人确实有秘密，但秘密的性质出人意料"
+  taboo_list:
+    - "悬疑线不能完全压过情感线——读者必须真的希望两人在一起"
+    - "不允许情感线无悬念——必须始终存在'他/她是不是骗我'的张力"
+    - "反转不能廉价——爱人的'秘密'必须有深度，不是单纯的'是坏人'"
+  world_rules_ref: [romance-taboo]
+  evaluation_weights:
+    角色动机: 0.25
+    情感弧: 0.20
+    情节连贯: 0.20
+    对话真实度: 0.15                           # 情侣间的潜台词
+    套路检测: 0.10
+    主题深度: 0.05
+    感官细节: 0.05
+  active_critics: [character_motivation, emotion_arc, plot_coherence, dialogue_authenticity]
+  fusion_specific_rules:
+    push_pull_truth: "每次情感靠近都伴随一个疑点——亲密感和怀疑感同步升级"
+    secret_quality: "爱人的秘密必须是'道德灰色地带'的——不是纯善或纯恶"

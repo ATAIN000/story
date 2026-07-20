@@ -1,0 +1,40 @@
+manifest_version: 1
+name: folk-cthulhu
+extension_point: story.genre
+activation_events: ["on_genre:folk-cthulhu"]
+fusion:
+  type: promise_subversion
+  parent_genres: [chinese_folk_belief, cosmic_horror]
+  core_conflict: "亲切的日常神灵（灶神/土地公/城隍）其实都是不可名状的古老存在——'熟悉的'变成'最恐怖的'"
+  fusion_formula: "民间俗神信仰 + 不可名状恐怖 + '熟悉的日常神灵其实是……'"
+culture_bound: true
+allowed_cultures: ["chinese_folk", "confucian_officialdom"]
+
+params:
+  pacing_curve: "民俗日常→仪式异常→神灵真面目→信仰崩塌→在疯狂中寻找生路"
+  power_system: "folk_shrine_system"         # 俗神信仰体系（灶王/床婆/哭丧娘/城隍）
+  emotion_arcs: [riches_to_rags, man_in_hole]
+  conflict_types:
+    - {type: cosmic, weight: 0.4}            # 不可名状的日常化
+    - {type: cognitive, weight: 0.3}         # 信仰真相的解谜
+    - {type: internal, weight: 0.2}          # 认知崩溃
+    - {type: physical, weight: 0.1}          # 逃避/生存
+  information_distribution: folk_clue_layered
+  max_red_herrings: 2
+  resolution_pattern: "在'不可名状'面前找到东方式的应对（不是击败，是'敬而远之'或'以俗克诡'）"
+  taboo_list:
+    - "俗神体系必须有考据基础——不能随意编造"
+    - "恐怖不能脱离'日常亲切感'——越日常越恐怖"
+    - "不允许西式克苏鲁直接照搬——必须是东方化的"
+  world_rules_ref: [sanderson-laws]
+  evaluation_weights:
+    设定一致性: 0.25                           # 民俗考据
+    感官细节: 0.25                             # 日常中的诡异
+    情节连贯: 0.20
+    主题深度: 0.15                             # 信仰本质
+    角色动机: 0.10
+    对话真实度: 0.05
+  active_critics: [setting_consistency, sensory_detail, plot_coherence]
+  fusion_specific_rules:
+    familiarity_horror: "恐怖感=日常物件的异常（灶台上的牙印/土地庙的呼吸声）"
+    folk_countermeasure: "对抗方式用民俗逻辑（请神/送煞/纸扎/符咒），不用科学"
