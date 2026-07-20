@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import copy
 import json
+import logging
 import os
 import time
 import warnings
@@ -48,6 +49,8 @@ from .validator import ConsistencyValidator
 from . import mock_script
 
 PLUGIN_DIR = Path(__file__).parent / "plugins"
+
+logger = logging.getLogger(__name__)
 
 # P3.8：题材插件缺 prompt 段（或缺键）时的通用兜底 —— 不含任何具体作品/角色名
 _GENERIC_PROMPT = {
@@ -148,14 +151,17 @@ class StoryEngine:
         self.registry.validate_combo(genre_name, culture_name)
         self.genre = self.registry.get("story.genre", genre_name)
         self.culture = self.registry.get("story.culture", culture_name)
+        # P7.4 L5：rule_packs 显式引用的 world.rule 包合并进 world_rules
+        #（genre params 未配置 rule_packs 时返回 params 本体，行为与现状逐字一致）
+        genre_params = self._merge_world_rule_packs(self.genre.params)
         # 权威 GenreBundle 构建一次：Showrunner 决策卡与 spawn_director 共用
         self.bundle = GenreBundle(
             genre=genre_name, culture=culture_name,
-            genre_params=self.genre.params, culture_params=self.culture.params)
+            genre_params=genre_params, culture_params=self.culture.params)
 
         # 子系统（与原版一致）
         self.validator = ConsistencyValidator(
-            world_rules=self.genre.get("world_rules"))
+            world_rules=genre_params.get("world_rules"))
         # P3.4：event_source 供 Showrunner 量化上一章节奏（all_events 含 active 标记）
         # P3.7：ConceptualBlending（决策7，env 门控默认关）；recent_texts_source
         # 懒读 chapters.json 取最近 3 章正文供 novelty 比对（构造时 chapters_path
@@ -187,6 +193,62 @@ class StoryEngine:
         # 键：eval_enabled / ir_first / eval_max_rounds；值为 None 表示未覆盖（落 env）。
         # mock/剧本路径不受影响（_eval_enabled/_ir_first_enabled 仍检查 SCRIPTED_DEMO/llm.is_mock）。
         self._runtime_overrides: dict[str, object | None] = {}
+
+    # ============ P7.4 L5：world.rule 素材包引用合并 ============
+    def _merge_world_rule_packs(self, genre_params: dict) -> dict:
+        """genre params 声明 rule_packs: [pack名] 时，把 world.rule 素材包规则
+        合并进 world_rules，返回含合并结果的 params 副本；未配置 rule_packs
+        时返回 params 本体（genre yaml 不加该键则行为与现状逐字一致）。
+
+        合并语义（与 story.evaluator critic pack 同款 pack-wins）：
+        - 同 id → pack 规则覆盖内嵌规则（保持内嵌原位）；内嵌没有的规则追加
+        - pack 未注册 / params.rules 非列表 → warning + 跳过该包
+        - 规则非映射 / 缺 id / 缺 expr → warning + 跳过该条
+        - expr 过 Z3 语法校验（ConsistencyValidator.check_rule_expr，与
+          validator Step 6 同一解析路径）：非法 → 该条拒载 + warning，
+          其余规则不受影响
+        """
+        pack_names = genre_params.get("rule_packs")
+        if not pack_names:
+            return genre_params
+        if not isinstance(pack_names, list):
+            logger.warning("rule_packs 非列表（%r），忽略", pack_names)
+            return genre_params
+        packs = {m.name: m for m in self.registry.pack_manifests("world.rule")}
+        embedded = genre_params.get("world_rules") or []
+        merged = list(embedded)
+        slot = {r.get("id"): i for i, r in enumerate(merged)
+                if isinstance(r, dict)}
+        for name in pack_names:
+            manifest = packs.get(str(name))
+            if manifest is None:
+                logger.warning(
+                    "rule_packs 引用的 world.rule 包「%s」未注册，跳过", name)
+                continue
+            rules = manifest.params.get("rules")
+            if not isinstance(rules, list):
+                logger.warning("world.rule 包「%s」缺 rules 列表，跳过", name)
+                continue
+            for rule in rules:
+                if not isinstance(rule, dict) \
+                        or not rule.get("id") or not rule.get("expr"):
+                    logger.warning(
+                        "world.rule 包「%s」含缺 id/expr 的规则（%r），跳过该条",
+                        name, rule)
+                    continue
+                if not ConsistencyValidator.check_rule_expr(rule["expr"]):
+                    logger.warning(
+                        "world.rule 包「%s」规则「%s」expr 非法（%r），拒载",
+                        name, rule["id"], rule["expr"])
+                    continue
+                if rule["id"] in slot:
+                    merged[slot[rule["id"]]] = rule   # 同 id：pack 覆盖内嵌
+                else:
+                    slot[rule["id"]] = len(merged)
+                    merged.append(rule)               # 新规则追加
+        params = dict(genre_params)
+        params["world_rules"] = merged
+        return params
 
     # ============ 创世（seed 世界） ============
     @staticmethod

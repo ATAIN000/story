@@ -24,6 +24,19 @@ PERIOD_ORDER = {"子时": 0, "丑时": 1, "寅时": 2, "卯时": 3, "辰时": 4,
                 "午时": 6, "未时": 7, "申时": 8, "酉时": 9, "戌时": 10, "亥时": 11,
                 "清晨": 3.5, "上午": 4.5, "正午": 6, "午后": 7, "傍晚": 9, "入夜": 10.5, "深夜": 0}
 
+# Step 6 事件事实词汇表：事实名 → Python 类型（bool→z3.Bool，其他→z3.Int）。
+# Z3 编码（_check_world_rules_smt）与 P7.4 规则 expr 加载校验
+#（check_rule_expr）共用同一份声明，保证「能过加载校验的规则运行时必可编译」。
+# P7.4：补充 introduces_new_key_clue（fair-play 包 no_late_clue 规则引用）；
+# 对不引用它的既有规则零影响 —— 新事实变量不进任何既有规则的约束。
+WORLD_FACT_TYPES = {
+    "has_supernatural": bool,
+    "is_resolution": bool,
+    "narrator_is_killer": bool,
+    "case_age_days": int,
+    "introduces_new_key_clue": bool,
+}
+
 
 class ConsistencyValidator:
     """生成任何新剧情前必经的 7 步验证管线"""
@@ -144,12 +157,11 @@ class ConsistencyValidator:
         关键是分解为布尔变量（has_supernatural ∧ is_resolution → ⊥）。
         """
         label = "世界规则 (Z3 SMT)"
-        # 1. 从事件 payload 提取事实（布尔/算术）
+        # 1. 从事件 payload 提取事实（布尔/算术，词汇表见 WORLD_FACT_TYPES）
         facts = {
-            "has_supernatural": bool(event.payload.get("has_supernatural", False)),
-            "is_resolution": bool(event.payload.get("is_resolution", False)),
-            "narrator_is_killer": bool(event.payload.get("narrator_is_killer", False)),
-            "case_age_days": int(event.payload.get("case_age_days", 0)),
+            k: (bool(event.payload.get(k, False)) if t is bool
+                else int(event.payload.get(k, 0)))
+            for k, t in WORLD_FACT_TYPES.items()
         }
         # 2. 符号化编码进 Z3：符号变量 + 事实断言 + 全部规则约束
         sym = {k: (z3.Bool(k) if isinstance(v, bool) else z3.Int(k))
@@ -194,6 +206,25 @@ class ConsistencyValidator:
         if expr.startswith("not("):
             return z3.Not(sym[expr[4:-1].strip()])
         return eval(expr, {"__builtins__": {}}, env)
+
+    @staticmethod
+    def check_rule_expr(expr) -> bool:
+        """P7.4 L5：规则 expr 加载期语法校验（rule_packs 合并入口用）。
+
+        复用 _compile_rule 的 Z3 解析路径：按 Step 6 同一事实词汇表
+        （WORLD_FACT_TYPES）声明符号后试编译，并要求结果是布尔约束。
+        语法错误 / 引用未声明事实 / 非字符串 / 非布尔结果 → False。
+        只做加载校验，不做可满足性判定。
+        """
+        if not isinstance(expr, str):
+            return False
+        sym = {k: (z3.Bool(k) if t is bool else z3.Int(k))
+               for k, t in WORLD_FACT_TYPES.items()}
+        try:
+            compiled = ConsistencyValidator._compile_rule(expr, sym)
+        except Exception:
+            return False
+        return isinstance(compiled, z3.BoolRef)
 
     # ---------- Step 7: LLM 软判定兜底 ----------
     def _check_soft(self, event: WorldEvent, state: WorldState) -> Check:

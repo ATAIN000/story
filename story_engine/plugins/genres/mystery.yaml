@@ -27,6 +27,7 @@ params:
     - {id: D, name: "单元剧·案中案",   arc_type: Anthology,  archetype: Monster, progress: 0.0, last_touched: 0, min_main_progress: 0.7}
     - {id: E, name: "主题·律法与情",   arc_type: Serialized, archetype: Quest,   progress: 0.0, last_touched: 0}
 
+  rule_packs: [fair-play]  # P7.4 L5：显式引用 world.rule 包（同 id 时 pack 覆盖内嵌）
   # 世界规则（Z3 SMT 硬约束 — 赌注1验证通过）
   world_rules:
     - id: sanderson_1
