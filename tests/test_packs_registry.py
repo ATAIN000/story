@@ -1,8 +1,10 @@
 """P7.1 测试：L1 素材包扫描（draft 跳过 / 宽松校验）+ L2 story.skill 接线
 
 核心用例（用户指令：只保留核心）：
-1. packs 扫描：packs("story.skill") 含 3 个样例；P7.5 L6 起 judge-official
-   转 active，出现在 story.character.archetype 桶（注册可见，消费二期）
+1. packs 扫描：packs("story.skill") 桶内容符合预期（P7.7 hermes intake 后
+   为 3 个 manual 样例 + 12 个 hermes 包 - 1 个同名覆盖 = 14 个）；
+   judge-official 出现在 story.character.archetype 桶（P7.7 起为 20 个
+   hermes 原型，judge-official 取内容更全的 hermes 版覆盖 manual 样例）
 1b. draft 语义：_index.yaml 标 draft 的 pack 不加载（合成 tmp 目录）
 2. 容错：缺 name 键的坏 pack → warning + 跳过不崩，其余正常加载
 3. skill 接线：StoryEngine 启动后 story.skill 注册可见（registry 最短真实路径）
@@ -26,12 +28,22 @@ class TestPacksScan(unittest.TestCase):
         reg = ExtensionRegistry()
         reg.load_packs(PACKS_DIR)
         skills = {p.name for p in reg.packs("story.skill")}
-        self.assertEqual(skills, {"courtroom-interrogation",
-                                  "deliberate-slip", "foreshadow-echo"})
-        # P7.5 L6：judge-official 已转 active，archetype 桶注册可见
-        self.assertEqual([p.name for p in
-                          reg.packs("story.character.archetype")],
-                         ["judge-official"])
+        # P7.7 hermes intake：3 manual 样例 + 12 hermes（courtroom-interrogation
+        # 同名，hermes 版覆盖）= 14
+        self.assertEqual(skills, {
+            "courtroom-interrogation", "deliberate-slip", "foreshadow-echo",
+            "cliffhanger-split", "concealed-sacrifice-reveal",
+            "escalating-misunderstanding", "evidence-chain-buildup",
+            "false-lead-redirection", "hidden-thread-foreshadow",
+            "identity-reversal-impact", "jianghu-debt-escalation",
+            "martial-as-metaphor", "martial-combat-pacing",
+            "push-pull-tension"})
+        # P7.5 L6 + P7.7：judge-official 在 archetype 桶注册可见；
+        # intake 后桶内为 20 个 hermes 原型（judge-official 取 hermes 版覆盖）
+        archetypes = {p.name for p in
+                      reg.packs("story.character.archetype")}
+        self.assertEqual(len(archetypes), 20)
+        self.assertIn("judge-official", archetypes)
 
     def test_1b_draft_status_skipped(self):
         tmp = Path(tempfile.mkdtemp())

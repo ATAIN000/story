@@ -43,18 +43,23 @@ def test_pack_guide_overrides_hardcoded_dimension():
     p = CriticParliament(registry=reg)
 
     # pack 的 guide/examples 覆盖硬编码三元组
+    # （P7.7 intake：emotion-arc 为 hermes+manual 合并版，guide/examples 取 hermes）
     assert p.dimension_guide is not DIMENSION_GUIDE
     desc, good, bad = p.dimension_guide["emotion_arc"]
-    assert desc.startswith("评估情感弧是否按决策卡目标弧")
-    assert good.startswith("正例：她攥紧那封信")
+    assert desc.startswith("评估情感弧（Emotion Arc）的推进质量")
+    assert good.startswith("正例：她攥紧了那封信")
     assert bad.startswith("反例：上一段还悲痛欲绝")
     # 其余维度原样；模块级硬编码不被污染
     assert p.dimension_guide["plot_coherence"] == DIMENSION_GUIDE["plot_coherence"]
     assert DIMENSION_GUIDE["emotion_arc"][0].startswith("情感弧线：")
 
-    # 样例 pack 声明 after:character_motivation / blocking: false
-    assert p.leader_insertions == [("emotion_arc", "after", "character_motivation")]
-    assert p.leader_blocking == set()
+    # 合并版 pack 声明 after:character_motivation / blocking: false
+    # （P7.7 intake 后桶内 13 个 evaluator 包均带 priority 声明，
+    #   emotion_arc 的插入规则仍在其中）
+    assert ("emotion_arc", "after", "character_motivation") in p.leader_insertions
+    # blocking: true 仅 reversal-quality / worldbuilding-coherence 两个 hermes 包
+    assert "emotion_arc" not in p.leader_blocking
+    assert p.leader_blocking == {"reversal_quality", "worldbuilding_coherence"}
     # emotion_arc 已在硬编码位（同位声明）→ 幂等：仲裁序行为与基线一致
     leader = LeaderArbiter(insertions=p.leader_insertions,
                            blocking_extra=p.leader_blocking)

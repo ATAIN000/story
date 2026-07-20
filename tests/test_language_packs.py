@@ -106,11 +106,12 @@ def test_pack_entries_reach_prompt():
 
 def test_pack_first_order_makes_pack_idioms_reachable():
     # 合并顺序：pack 词条（按包序）在前，代码常量去重后随其后
+    # （P7.7 intake：zh-gongan-texture 为 hermes+manual 并集版，hermes 词条在前）
     r = ChineseRealizer(registry=_real_pack_registry())
     assert (r.LANGUAGE_RESOURCES["四字格"][:3]
-            == ["明察秋毫", "铁面无私", "蛛丝马迹"])
+            == ["步履沉稳", "神色不动", "洞若观火"])
 
-    # idiom_density=1.0 → n_idiom=10：采样窗（前 10 条）全落在 pack 段（12 条），
+    # idiom_density=1.0 → n_idiom=10：采样窗（前 10 条）全落在 pack 段（25 条），
     # pack 独有的四字格确定性进 prompt（append-after 时窗内只有常量，永不可达）
     llm = FakeLLM({"realize_chapter": "包拯升堂。"})
     r2 = ChineseRealizer(llm_call=llm.call, registry=_real_pack_registry())
@@ -118,8 +119,8 @@ def test_pack_first_order_makes_pack_idioms_reachable():
     ir.texture.idiom_density = 1.0
     run(r2.realize(ir, None, _bundle()))
     prompt = llm.calls[0][1]
-    for word in ("铁面无私", "蛛丝马迹", "沉吟半晌", "执法如山"):
-        assert word in prompt                     # pack 独有词条（常量中无）
+    for word in ("威仪凛然", "胸有成竹", "按部就班", "顺藤摸瓜"):
+        assert word in prompt                     # pack 独有词条（常量中无）且在窗内
 
 
 # ---------- 用例3：无 registry / 语言不匹配 / 未知键 兜底 ----------
