@@ -85,8 +85,16 @@ async function confirmEdit() {
       emit('text-updated')
       emit('intervened')
     }
-    /* 区分口径：message 含「已更新」→ 已改定；其它 → 仅留痕（brief） */
-    if (/已更新/.test(r.message || '')) {
+    /* 区分口径：后端 InterventionResult.message 区分回写是否命中。
+       后端（hitl/intervention.py _route_textual）目前对 status 取值给出：
+         updated      → "第{N}章正文已更新"               ← 真正改定
+         miss         → "第{N}章原文未命中，仅留痕"          ← 仅留痕
+         not_found    → "第{N}章不存在，仅留痕"             ← 仅留痕
+         write_failed → "第{N}章正文写回失败（详见日志），仅留痕"
+         unwired      → "第{N}章文本编辑已记录（可回放），不重生成"
+       后端未在响应里单独暴露 status 字段，故此处以「正文已更新」为信号；
+       改后端 message 文案时请同步此处（grep 「正文已更新」可定位本依赖）。 */
+    if (/正文已更新/.test(r.message || '')) {
       toast('已改定 — 文风偏好已记录')
     } else {
       toast(`未真正改定（${r.message || '原文未命中，仅留痕'}）`)
@@ -205,7 +213,8 @@ async function adoptRewrite() {
       emit('text-updated')
       emit('intervened')
     }
-    if (/已更新/.test(r.message || '')) toast('已采用重写稿 — 文风偏好已记录')
+    /* 信号同改字通道：后端 message 含「正文已更新」才算真正回写（详见 confirmEdit 注释） */
+    if (/正文已更新/.test(r.message || '')) toast('已采用重写稿 — 文风偏好已记录')
     else toast(`采用未真正回写（${r.message || '原文未命中，仅留痕'}）`)
     rwDirection.value = ''; rwOriginal.value = ''; rwRewritten.value = ''
     close()
@@ -298,12 +307,9 @@ function jumpToRewrite() {
     </div>
   </div>
 
-  <!-- 3. 改字面板下还要显示原段文本（让用户看到对照）—— 不显示，textarea 已含原文 -->
-
-  <!-- 4. 记一笔 / 重写 / 诊断 面板：先显示段文本（让用户看到上下文），再展开面板 -->
-  <template v-if="panel && panel !== 'edit'">
-    <div class="para-text" :class="{ fixed: fixedSet.has(paraIndex) }">{{ text }}</div>
-  </template>
+  <!-- 3. 段文本本体：fab-only 与 note/rewrite/wrong 面板下都要显示（用户需看到上下文）。
+       仅 editing（panel==='edit'）时不显示——textarea 已含原文，取代段文本本体。 -->
+  <div class="para-text" v-if="!editing" :class="{ fixed: fixedSet.has(paraIndex) }">{{ text }}</div>
 
   <!-- 记一笔 -->
   <div v-if="panel === 'note'" class="diag">
