@@ -14,6 +14,7 @@ API：
   POST /api/hitl/respond       【v0.5 新增】应答 pending 的 HITL 请求
   GET  /api/training/stats     【P6.1 新增】训练信号计数（skills/preferences/style）
   POST /api/paragraph/rewrite  【P6.3 新增】段落重写（Realizer 单段渲染，只读不写）
+  GET  /api/characters         【P6.4 新增】角色卡聚合（minds/关系/voice/arc，只增）
 静态：/ → frontend/dist（Vue SPA）
 """
 from __future__ import annotations
@@ -309,6 +310,15 @@ async def paragraph_rewrite(req: ParagraphRewriteReq):
                    f"（本章共 {result.get('para_count', 0)} 段）")
     return {k: result[k]
             for k in ("chapter", "para_index", "original", "rewritten", "note")}
+
+
+# ---------- 角色卡（P6.4 B4，支撑前端人物视图） ----------
+@app.get("/api/characters")
+def characters():
+    """【P6.4】角色卡聚合列表（按 id 排序，空项目 → []）。
+    每角色 {id, role, knows, secrets, goals, relations, voice, arc}；
+    voice/arc 不可得 → null（不编造，口径见 engine.characters_view docstring）。"""
+    return engine.characters_view()
 
 
 @app.post("/api/hitl/respond")

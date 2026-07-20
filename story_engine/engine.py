@@ -1291,6 +1291,67 @@ class StoryEngine:
                 "para_index": para_index, "original": paras[para_index],
                 "rewritten": rewritten, "note": note}
 
+    # ============ P6.4：角色卡聚合（B4，支撑前端人物视图） ============
+    def characters_view(self) -> list[dict]:
+        """GET /api/characters 的组装逻辑：世界状态投影 → 角色卡列表（按 id 排序，
+        空项目 → []）。数据源全部真实可查，不编造：
+        - knows/secrets/goals/role：state.minds + state.characters
+          （与 _present_world_state 的 minds 投影同口径：knows=beliefs 真值键）
+        - relations：state.relationships（键 "A|B" 拆对，note=history 末条，无 → None）
+        - voice：Actor 声音档案 VoiceProfile.voice_hint（经 _actor_voice_hints 取
+          scheduler._character_actors；仅 Actor 路径生成后进程内存活）。Actor 不可得
+          时回退 state.characters 的 seed voice 串 —— 即 VoiceProfile.from_seed 的
+          同源数据（voice_hint 正是由它构造）；两者皆无 → None
+        - arc：恒 None —— 已核 mystery.yaml/romance.yaml 的 tracks 只有
+          id/name/arc_type/archetype/progress，无角色↔轨道显式绑定，不猜测
+        """
+        state = self.kernel.query_world("current_state")
+        return self._characters_view(state, self._actor_voice_hints())
+
+    def _actor_voice_hints(self) -> dict[str, str]:
+        """存活 CharacterActor 的 VoiceProfile.voice_hint（无 Actor/无 hint → 不含该键）"""
+        hints = {}
+        actors = getattr(self.kernel.scheduler, "_character_actors", None) or {}
+        for cid, actor in actors.items():
+            hint = getattr(getattr(actor, "voice", None), "voice_hint", "")
+            if hint:
+                hints[cid] = hint
+        return hints
+
+    @staticmethod
+    def _characters_view(state: WorldState,
+                         voice_hints: dict[str, str] | None = None) -> list[dict]:
+        """角色卡纯组装（静态，便于空态单测）；voice_hints 见 characters_view"""
+        voice_hints = voice_hints or {}
+        cards = []
+        for cid in sorted(state.minds):
+            m = state.minds[cid]
+            relations = []
+            for key in sorted(state.relationships):
+                pair = key.split("|")
+                if len(pair) != 2 or cid not in pair:
+                    continue
+                r = state.relationships[key]
+                relations.append({
+                    "target": pair[1] if pair[0] == cid else pair[0],
+                    "type": r.type,
+                    "intensity": r.intensity,
+                    "note": r.history[-1] if r.history else None,
+                })
+            voice = (voice_hints.get(cid)
+                     or state.characters.get(cid, {}).get("voice") or None)
+            cards.append({
+                "id": cid,
+                "role": state.characters.get(cid, {}).get("role", ""),
+                "knows": [f for f, v in m.beliefs.items() if v],
+                "secrets": list(m.secrets),
+                "goals": list(m.goals),
+                "relations": relations,
+                "voice": voice,
+                "arc": None,
+            })
+        return cards
+
     def reset(self) -> dict:
         # 停掉 Actor 循环
         try:
