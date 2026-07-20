@@ -134,6 +134,21 @@ class ParagraphRewriteReq(BaseModel):
     direction: str = ""
 
 
+class SettingsReq(BaseModel):
+    """P6.10 B9：设置覆盖 body；三键全可选，仅这三个生效（其余忽略）。"""
+    eval_enabled: bool | None = None
+    ir_first: bool | None = None
+    eval_max_rounds: int | None = None
+
+
+class TestLlmReq(BaseModel):
+    """P6.10 B10：LLM 测试连接 body；三键全可选，缺省用当前配置。
+    key 永不回前端（响应只 ok+latency+model+error）。"""
+    base_url: str | None = None
+    key: str | None = None
+    model: str | None = None
+
+
 @app.get("/api/config")
 def config():
     return {
@@ -319,6 +334,71 @@ def characters():
     每角色 {id, role, knows, secrets, goals, relations, voice, arc}；
     voice/arc 不可得 → null（不编造，口径见 engine.characters_view docstring）。"""
     return engine.characters_view()
+
+
+# ---------- 设置（P6.10 B9/B10） ----------
+@app.get("/api/settings")
+def settings_get():
+    """【P6.10 B9】读取当前设置（env + 进程内覆盖合并后的生效值）。
+    api_key 永不返回；base_url 仅返回 masked 版本。"""
+    return engine.settings_view()
+
+
+@app.post("/api/settings")
+def settings_post(req: SettingsReq):
+    """【P6.10 B9】写进程内覆盖（不写 .env、不持久化，重启后失效）。
+    仅 eval_enabled / ir_first / eval_max_rounds 三键生效；返回更新后视图。"""
+    patch = {k: v for k, v in {
+        "eval_enabled": req.eval_enabled,
+        "ir_first": req.ir_first,
+        "eval_max_rounds": req.eval_max_rounds,
+    }.items() if v is not None}
+    return engine.apply_settings_overrides(patch)
+
+
+@app.post("/api/settings/test_llm")
+async def settings_test_llm(req: TestLlmReq | None = None):
+    """【P6.10 B10】一次性 ping LLM —— 最小请求「请回复：好」max_tokens=10。
+    body 缺省用当前 engine.llm 配置；mock 模式直接返回 ok=true。
+    响应只 {ok, latency_ms, model, error?} —— key 永不回前端。"""
+    import time as _time
+    import httpx
+    src = req or TestLlmReq()
+    client = engine.llm
+    base_url = (src.base_url or client.base_url).rstrip("/")
+    model = src.model or client.model
+    key = src.key or client.api_key
+    # mock 模式：直接 ok（不构造 client）
+    if client.is_mock and not src.key and not src.base_url:
+        return {"ok": True, "latency_ms": 0.0, "model": client.model}
+    if not key:
+        return {"ok": False, "error": "未配置 API key（环境变量 STORY_ENGINE_LLM_API_KEY 为空）",
+                "latency_ms": None, "model": model}
+    headers = {"Authorization": f"Bearer {key}"}
+    if client.user_agent:
+        headers["User-Agent"] = client.user_agent
+    body = {
+        "model": model,
+        "messages": [{"role": "user", "content": "请回复：好"}],
+        "max_tokens": 10,
+    }
+    if "kimi.com/coding" in base_url:
+        body["temperature"] = 0.6
+        body["thinking"] = {"type": "disabled"}
+    t0 = _time.perf_counter()
+    try:
+        async with httpx.AsyncClient(timeout=30) as http:
+            r = await http.post(f"{base_url}/chat/completions",
+                                headers=headers, json=body)
+    except httpx.HTTPError as e:
+        return {"ok": False, "error": f"网络错误：{e.__class__.__name__}",
+                "latency_ms": None, "model": model}
+    latency = round((_time.perf_counter() - t0) * 1000, 1)
+    if r.status_code != 200:
+        return {"ok": False,
+                "error": f"HTTP {r.status_code}：{r.text[:200]}",
+                "latency_ms": latency, "model": model}
+    return {"ok": True, "latency_ms": latency, "model": model}
 
 
 @app.post("/api/hitl/respond")

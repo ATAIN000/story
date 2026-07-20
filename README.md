@@ -138,8 +138,33 @@ tests/test_engine.py         赌注1/赌注4/核心循环回归测试
 | GET | /api/config | 运行配置（LLM 模式、插件、三轴） |
 | GET | /api/project | 项目完整快照（世界状态/事件/伏笔/章节/决策卡） |
 | POST | /api/project/generate | 生成下一章（核心循环） |
+| POST | /api/project/plan | 两阶段生成：只产决策卡（不生成正文） |
+| DELETE | /api/project/plan | 作废待批准方案 |
 | POST | /api/project/rollback | 回滚到指定 tick（`{"tick": 14}`） |
 | POST | /api/project/reset | 重置项目 |
+| POST | /api/intervene | 作者介入统一入口（textual/structural/character/intent/evaluation） |
+| GET | /api/interventions | 介入历史（author_intervention 事件流） |
+| POST | /api/hitl/respond | 应答 pending 的 HITL 请求 |
+| GET | /api/training/stats | 训练信号计数（skills/preferences/style + recent_skills） |
+| POST | /api/paragraph/rewrite | 段落重写（Realizer 单段渲染，只读不写） |
+| GET | /api/characters | 角色卡聚合（minds/关系/voice/arc） |
+| POST | /api/meta/config | UserIntent → StoryConfig（Module 8 Meta-Generator） |
+| GET | /api/settings | 设置视图（env+进程内覆盖；api_key 永不返回） |
+| POST | /api/settings | 写进程内覆盖（eval_enabled/ir_first/eval_max_rounds；重启失效） |
+| POST | /api/settings/test_llm | LLM 一次性测试连接（ok/延迟/model，key 永不回前端） |
+
+## Phase 6：前端重做（editorial 控制台）
+
+旧版单页 `story.html`（四个可视化面板）重做为 Vue 3 SPA，关键变化：
+
+- **双主题**：日间/夜读（CSS 变量 + 主题切换事件，图表类组件订阅重绘）
+- **七视图**：写作台（章节 binder + 手稿 + 两阶段生成）/ 决策卡 / 人物 / 世界观 / 时间线 / 伏笔账 / 插件 + 题材实验室 / 设置
+- **段落操作**：改字 / 记一笔 / 重写（Realizer 单段渲染）/ 诊断 四操作直达介入流
+- **两阶段生成**：plan 先产决策卡 → confirm 后生成正文（看方案再动笔）
+- **介入即事件**：所有作者操作进事件流（可回放、可审计），不直接改状态
+
+后端补量端点见 `docs/接口规范_part2.md` §9.4（P6.1–P6.10）。
+
 
 ## 已知边界（下一步路线）
 

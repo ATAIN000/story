@@ -370,7 +370,39 @@ export function toChapterContextVM(chapter) {
   }
 }
 
-/* ===== 项目快照（GET /api/project → VM） ===== */
+/* ===== 设置（GET/POST /api/settings → VM，P6.10 B9） =====
+ * 源：engine.settings_view() — {eval_enabled, ir_first, eval_max_rounds,
+ * llm_mode, llm_model, base_url_masked}。POST 返回同结构（更新后）。
+ * 这里只做字段名规整（snake→camel），不改语义。 */
+export function toSettingsVM(s) {
+  if (!s) return null
+  return {
+    evalEnabled: s.eval_enabled ?? false,
+    irFirst: s.ir_first ?? false,
+    evalMaxRounds: s.eval_max_rounds ?? 3,
+    llmMode: s.llm_mode ?? '',
+    llmModel: s.llm_model ?? '',
+    baseUrlMasked: s.base_url_masked ?? '',
+  }
+}
+
+/* ===== MetaConfig 预览（POST /api/meta/config 返回 → VM，P6.10 题材实验室） =====
+ * 源：StoryConfig.to_dict() — {genre, culture, language, target_length, ...}。
+ * 后端未暴露 validate_combo 字段（简化的：本视图只展示配置 + 前端再请求 /api/config
+ * 不行——validate_combo 已在 generate_config 内调用，失败抛异常）。这里只取展示字段。 */
+export function toMetaConfigVM(cfg) {
+  if (!cfg) return null
+  return {
+    genre: cfg.genre ?? '',
+    culture: cfg.culture ?? '',
+    language: cfg.language ?? 'zh',
+    targetLength: cfg.target_length ?? 12,
+    theme: cfg.theme ?? '',
+    platform: cfg.platform ?? 'novel',
+    rawKeys: Object.keys(cfg),
+  }
+}
+
 export function toProjectVM(snap) {
   if (!snap) return null
   const meta = snap.meta ?? {}

@@ -60,6 +60,29 @@ _GENERIC_PROMPT = {
 }
 
 
+def _mask_url(url: str) -> str:
+    """P6.10 B9：base_url 脱敏展示（隐藏 host 之间的子路径细节，
+    保留协议+域名首尾字符，评审意见 8 安全要求）。"""
+    if not url:
+        return ""
+    # 只留协议 + 域名首段 + 末段，路径部分打码
+    if "://" in url:
+        proto, rest = url.split("://", 1)
+    else:
+        proto, rest = "https", url
+    if "/" in rest:
+        host, path = rest.split("/", 1)
+    else:
+        host, path = rest, ""
+    host_parts = host.split(".")
+    if len(host_parts) > 2:
+        masked_host = ".".join([host_parts[0], "**", host_parts[-1]])
+    else:
+        masked_host = host
+    masked_path = ("/" + path[:3] + "***") if path else ""
+    return f"{proto}://{masked_host}{masked_path}"
+
+
 class _ChapterClosingKernelView:
     """P5.6 IR-first 专用 kernel 视图：给 all_events 虚拟追加本章闭合
     narrative_beat 标记（不落库、不占 tick、不改世界状态）。
@@ -163,6 +186,11 @@ class StoryEngine:
         # P6.2：两阶段生成 — plan 端点缓存的待批准决策卡（DecisionCard | None）；
         # generate(mode="confirm") 优先消费并清除，rollback/reset 时作废
         self._pending_plan = None
+        # P6.10 B9：进程内覆盖 dict（settings 端点写）— 优先级高于 env，不持久化
+        # （重启失效，前端 POST 即时生效，仅当前后端进程生命周期）。
+        # 键：eval_enabled / ir_first / eval_max_rounds；值为 None 表示未覆盖（落 env）。
+        # mock/剧本路径不受影响（_eval_enabled/_ir_first_enabled 仍检查 SCRIPTED_DEMO/llm.is_mock）。
+        self._runtime_overrides: dict[str, object | None] = {}
 
     # ============ 创世（seed 世界） ============
     @staticmethod
@@ -389,10 +417,16 @@ class StoryEngine:
     def _ir_first_enabled(self) -> bool:
         """IR-first 门控：SCRIPTED_DEMO=0 且 llm 非 mock 且 IR_FIRST!=0（默认开）。
         三条件任一不满足 → 走现有路径原样（mock/剧本零变化）；
-        IR_FIRST=0 是质量漂移逃生门（回退 P3.8 prompt 路径）。"""
-        return (os.environ.get("STORY_ENGINE_SCRIPTED_DEMO", "1") == "0"
-                and not self.llm.is_mock
-                and os.environ.get("STORY_ENGINE_IR_FIRST", "1") != "0")
+        IR_FIRST=0 是质量漂移逃生门（回退 P3.8 prompt 路径）。
+        P6.10 B9：进程内覆盖 _runtime_overrides['ir_first'] 优先于 env
+        （settings 端点写，不持久化；SCRIPTED_DEMO/llm.is_mock 仍兜底）。"""
+        if not (os.environ.get("STORY_ENGINE_SCRIPTED_DEMO", "1") == "0"
+                and not self.llm.is_mock):
+            return False
+        ov = self._runtime_overrides.get("ir_first")
+        if ov is not None:
+            return bool(ov)
+        return os.environ.get("STORY_ENGINE_IR_FIRST", "1") != "0"
 
     async def _produce_draft_text(self, chapter_no: int, card,
                                   state: WorldState) -> str:
@@ -512,14 +546,26 @@ class StoryEngine:
     # ============ Phase 4：自评迭代（决策5/6，env 门控） ============
     def _eval_enabled(self) -> bool:
         """自评门控：SCRIPTED_DEMO=0 且 llm 非 mock 且 EVAL_ENABLED!=0。
-        三条件任一不满足 → 走现有路径原样（mock/剧本路径零变化）。"""
-        return (os.environ.get("STORY_ENGINE_SCRIPTED_DEMO", "1") == "0"
-                and not self.llm.is_mock
-                and os.environ.get("STORY_ENGINE_EVAL_ENABLED", "1") != "0")
+        三条件任一不满足 → 走现有路径原样（mock/剧本路径零变化）。
+        P6.10 B9：进程内覆盖 _runtime_overrides['eval_enabled'] 优先于 env
+        （settings 端点写，不持久化；SCRIPTED_DEMO/llm.is_mock 仍兜底）。"""
+        if not (os.environ.get("STORY_ENGINE_SCRIPTED_DEMO", "1") == "0"
+                and not self.llm.is_mock):
+            return False
+        ov = self._runtime_overrides.get("eval_enabled")
+        if ov is not None:
+            return bool(ov)
+        return os.environ.get("STORY_ENGINE_EVAL_ENABLED", "1") != "0"
 
-    @staticmethod
-    def _eval_max_rounds() -> int:
-        """EVAL_MAX_ROUNDS 默认 3，钳 [1, 5] 防失控（决策5）"""
+    def _eval_max_rounds(self) -> int:
+        """EVAL_MAX_ROUNDS 默认 3，钳 [1, 5] 防失控（决策5）。
+        P6.10 B9：进程内覆盖 _runtime_overrides['eval_max_rounds'] 优先于 env。"""
+        ov = self._runtime_overrides.get("eval_max_rounds")
+        if ov is not None:
+            try:
+                return max(1, min(5, int(ov)))
+            except (TypeError, ValueError):
+                pass
         try:
             n = int(os.environ.get("STORY_ENGINE_EVAL_MAX_ROUNDS", "3"))
         except ValueError:
@@ -1132,6 +1178,52 @@ class StoryEngine:
             "pending_plan": (self._pending_plan.to_dict()
                              if self._pending_plan is not None else None),
         }
+
+    def settings_view(self) -> dict:
+        """P6.10 B9：设置面板只读视图（GET /api/settings 返回此结构）。
+
+        返回当前生效值（覆盖优先于 env），api_key/base_url 不在此暴露——
+        base_url_masked 仅给前端展示（key 永不出后端，评审意见 8 安全要求）。
+        """
+        return {
+            "eval_enabled": self._eval_enabled_gate(),
+            "ir_first": self._ir_first_gate(),
+            "eval_max_rounds": self._eval_max_rounds(),
+            "llm_mode": "mock" if self.llm.is_mock else "openai",
+            "llm_model": self.llm.model,
+            "base_url_masked": _mask_url(self.llm.base_url),
+        }
+
+    def _eval_enabled_gate(self) -> bool:
+        """裸 EVAL_ENABLED 门控（不管 SCRIPTED_DEMO/llm.is_mock）—给 settings_view
+        展示开关当前值；_eval_enabled（实际生成时调用）仍含三条件兜底。"""
+        ov = self._runtime_overrides.get("eval_enabled")
+        if ov is not None:
+            return bool(ov)
+        return os.environ.get("STORY_ENGINE_EVAL_ENABLED", "1") != "0"
+
+    def _ir_first_gate(self) -> bool:
+        """裸 IR_FIRST 门控（同 _eval_enabled_gate 口径）。"""
+        ov = self._runtime_overrides.get("ir_first")
+        if ov is not None:
+            return bool(ov)
+        return os.environ.get("STORY_ENGINE_IR_FIRST", "1") != "0"
+
+    def apply_settings_overrides(self, patch: dict) -> dict:
+        """P6.10 B9：写进程内覆盖（POST /api/settings），不写 .env 不持久化。
+        仅认三个键；非法值忽略（保持原覆盖/默认），返回更新后的 settings_view。"""
+        if "eval_enabled" in patch:
+            self._runtime_overrides["eval_enabled"] = bool(patch["eval_enabled"])
+        if "ir_first" in patch:
+            self._runtime_overrides["ir_first"] = bool(patch["ir_first"])
+        if "eval_max_rounds" in patch:
+            try:
+                n = int(patch["eval_max_rounds"])
+            except (TypeError, ValueError):
+                n = None
+            if n is not None:
+                self._runtime_overrides["eval_max_rounds"] = max(1, min(5, n))
+        return self.settings_view()
 
     def rollback(self, to_tick: int) -> dict:
         self.kernel.rollback(to_tick)

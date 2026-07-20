@@ -53,4 +53,9 @@ export const api = {
 
   /* --- Meta-Generator（题材配置，FE-4 用） --- */
   metaConfig: (intent) => post('/api/meta/config', intent),
+
+  /* --- 设置（P6.10 B9/B10） --- */
+  settings: () => req('/api/settings'),
+  updateSettings: (patch) => post('/api/settings', patch),
+  testLlm: (body = {}) => post('/api/settings/test_llm', body),
 }
