@@ -21,7 +21,7 @@ from typing import Any
 from uuid import uuid4
 
 from ..kernel.actor import ActorRef, CharacterConfig
-from ..types import WorldEvent, WorldState
+from ..types import WorldEvent, WorldState, normalize_learn
 from .memory_banks import SemanticMemoryBanks
 from .retrieval import MemoryRetrieval
 from .voice import VoiceProfile, ReflectionTrigger
@@ -258,7 +258,9 @@ class CharacterActor:
                     summary=str(d.get("summary") or d["action"]),
                     serves_goal=str(d.get("serves_goal") or (self.goals[0] if self.goals else "")),
                     motivation=str(d.get("motivation") or ""),
-                    effects=d.get("effects") if isinstance(d.get("effects"), dict) else {},
+                    effects=normalize_learn(
+                        d.get("effects") if isinstance(d.get("effects"), dict) else {},
+                        self.id),
                     raw=d,
                 ))
             if out:

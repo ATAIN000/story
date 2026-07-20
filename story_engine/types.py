@@ -179,9 +179,55 @@ class WorldState:
 
 # ============ 事件 → 状态 的 fold 逻辑 ============
 
+# LLM 产出 effects 的 learn 字段形态归一（热修复 2026-07-20：
+# 真实 GLM 偶发把 learn 写成 ["包拯得知…", "公孙策得知…"] 平铺 list 而非
+# {"角色": ["事实"]} dict，fold 在 .items() 处崩溃 → plan/generate 500）
+_LEARN_PREFIX_RE = None
+
+
+def normalize_learn(effects, agent: str, known: set[str] | None = None) -> dict:
+    """把 effects["learn"] 归一为 dict[who, list[str]]。
+
+    - dict：值统一包成 list
+    - list[str]：按「X得知/知道/获悉/听闻/听说」前缀归属（known 非空时校验），
+      无前缀或归属失败 → 计入 agent
+    - 其他：忽略该键
+    """
+    global _LEARN_PREFIX_RE
+    if not isinstance(effects, dict):
+        return {}
+    out = dict(effects)
+    learn = effects.get("learn")
+    if learn is None:
+        return out
+    if isinstance(learn, dict):
+        out["learn"] = {w: (v if isinstance(v, list) else [v])
+                        for w, v in learn.items()}
+        return out
+    if isinstance(learn, list):
+        import re
+        if _LEARN_PREFIX_RE is None:
+            _LEARN_PREFIX_RE = re.compile(
+                r"^(.{2,4}?)(?:得知|知道|获悉|听闻|听说)")
+        merged: dict[str, list] = {}
+        for item in learn:
+            if not isinstance(item, str):
+                continue
+            m = _LEARN_PREFIX_RE.match(item)
+            if m and (known is None or m.group(1) in known):
+                who, fact = m.group(1), item[m.end():]
+            else:
+                who, fact = agent, item
+            merged.setdefault(who, []).append(fact)
+        out["learn"] = merged
+        return out
+    out.pop("learn", None)
+    return out
+
+
 def _h_character_action(state: WorldState, p: dict) -> None:
     agent = p.get("agent")
-    effects = p.get("effects", {})
+    effects = normalize_learn(p.get("effects", {}), agent or "world")
     # 物理效果：set_fluents / unset_fluents
     for f in effects.get("set_fluents", []):
         state.physical[f] = True

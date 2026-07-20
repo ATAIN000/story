@@ -44,7 +44,7 @@ from .narrative import (FabulaBuilder, IRBuilder, Narrativizer,
 from .showrunner import Showrunner
 from .types import (WorldEvent, WorldState, CharacterMind, Relation,
                     NarrativeState, ForeshadowTriple, Check, StoryEngineError,
-                    GenreBundle)
+                    GenreBundle, normalize_learn)
 from .validator import ConsistencyValidator
 from . import mock_script
 
@@ -1614,8 +1614,15 @@ class StoryEngine:
                 return []
         if not isinstance(data, list):
             return []
-        return [e for e in data
-                if isinstance(e, dict) and "event_type" in e and "payload" in e]
+        events = [e for e in data
+                  if isinstance(e, dict) and "event_type" in e and "payload" in e]
+        # LLM 偶发把 effects.learn 写成平铺 list——提交前归一（防 fold 崩溃）
+        for e in events:
+            payload = e.get("payload")
+            if isinstance(payload, dict) and "effects" in payload:
+                payload["effects"] = normalize_learn(
+                    payload.get("effects"), payload.get("agent") or "world")
+        return events
 
     def _read_chapters(self) -> list[dict]:
         return json.loads(self.chapters_path.read_text(encoding="utf-8"))
