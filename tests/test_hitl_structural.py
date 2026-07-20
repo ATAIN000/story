@@ -109,6 +109,21 @@ class TestStructuralTextual(unittest.TestCase):
         self.assertTrue(state.minds["包拯"].beliefs["新线索"])
         self.assertNotIn("旧线索", state.minds["包拯"].beliefs)
 
+    def test_edit_event_missing_after_rejected(self):
+        """edit_event 缺 after：ok=False 提前拒绝，不回滚旧事件、不提交空替换"""
+        target = self._commit(payload={"field": "f1", "new_value": "v1"})
+        r = self.router.route(HumanInput(
+            type="structural", reason="改写",
+            payload={"action": "edit_event", "event_id": target.event_id}))
+        self.assertFalse(r.ok)
+        self.assertIsNone(r.event_id)
+        self.assertIn("after", r.message)
+        self.assertEqual(len(self.regen_calls), 0)
+        # 目标事件仍 active，事件流无任何新事件（未回滚、未提交）
+        events = self.kernel.query_world("all_events")
+        self.assertEqual(len(events), 1)
+        self.assertTrue(events[0]["active"])
+
     def test_textual_records_only_and_structural_without_regen_fn(self):
         """textual：before/after/reason 进事件流 + 不触发重生成；
         无 regenerate_fn 注入时 structural 也不崩（message 注明待重生成）"""

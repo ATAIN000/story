@@ -57,6 +57,17 @@ class TestInterventionRouter(unittest.TestCase):
         # 审计事件也在事件流中（介入即事件，可回放）
         self.assertEqual(len(self._intervention_events()), 1)
 
+    def test_character_relation_missing_keys_rejected(self):
+        """character：relation 缺 target/type/intensity → ok=False，不提交任何事件"""
+        r = self.router.route(HumanInput(
+            type="character", reason="作者设定",
+            payload={"character": "包拯",
+                     "relation": {"target": "展昭", "type": "信任"}}))  # 缺 intensity
+        self.assertFalse(r.ok)
+        self.assertIsNone(r.event_id)
+        self.assertIn("intensity", r.message)
+        self.assertEqual(len(self.kernel.query_world("all_events")), 0)
+
     def test_evaluation_pipeline_injection(self):
         """evaluation：quality=high 进事件流 + 注入的 pipeline 收到调用（无 pipeline 不崩）"""
 

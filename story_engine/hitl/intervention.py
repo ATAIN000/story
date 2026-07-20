@@ -1,7 +1,7 @@
 """HITL 介入路由（Module 7.1，P5.7 前 3 类 + P5.8 structural/textual）
 
 蓝图 7.1：介入即事件，可回放。作者介入统一走 InterventionRouter.route 分流：
-  - intent      改目标/约束 → author_intervention 事件，下章决策卡生效
+  - intent      改目标/约束 → author_intervention 事件，仅记录可回放（决策卡消费接线留后续任务）
   - structural  Fabula 层重写 → rolled_back + 可选章级重生成（P5.8）
   - character   改角色信念/关系/记忆 → 事件（learn/relations 复用现有 effects 协议）
   - textual     Sjuzhet 层改写 → 事件 + TrainingPipeline 文风数据（P5.10 接线），不重生成（蓝图：最贵，最小化）
@@ -104,14 +104,14 @@ class InterventionRouter:
         # payload: {goal_update?: str, constraint?: str}
         # 现状：决策卡（showrunner/decision.py）没有读取外部 intent 覆盖的消费口子
         # （章级 AuthorIntent 由 advance 轨道构造），本任务只保证「记录可回放」
-        # （query_world("all_events") 可查）；消费接线留 P5.11 / 后续任务。
+        # （query_world("all_events") 可查）；决策卡消费接线留后续任务。
         event = self._commit_intervention(intervention, {
             "goal_update": intervention.payload.get("goal_update"),
             "constraint": intervention.payload.get("constraint"),
         })
         return InterventionResult(
             ok=True, event_id=event.event_id,
-            message="intent 已记入事件流（可回放；决策卡消费接线留 P5.11）")
+            message="intent 已记入事件流（仅记录可回放；决策卡消费接线留后续任务）")
 
     # ---------- character：改信念/关系/记忆 ----------
     def _route_character(self, intervention: HumanInput) -> InterventionResult:
@@ -130,6 +130,13 @@ class InterventionRouter:
             effects["learn"] = {cid: [p["belief"]]}
         rel = p.get("relation")
         if rel:
+            missing = ([k for k in ("target", "type", "intensity") if k not in rel]
+                       if isinstance(rel, dict) else ["target", "type", "intensity"])
+            if missing:
+                return InterventionResult(
+                    ok=False, event_id=None,
+                    message=f"character 介入 relation 缺少键 {missing}"
+                            "（需要 target/type/intensity）")
             r = {"type": rel["type"], "intensity": rel["intensity"]}
             if intervention.reason:
                 r["note"] = f"作者介入: {intervention.reason}"
@@ -194,6 +201,14 @@ class InterventionRouter:
         # 下游一并失效——正好契合蓝图「从改动点重生成下游」的语义。
         p = intervention.payload
         action = p.get("action")
+
+        # edit_event 缺 after = 无新内容可写；提前拒绝，避免回滚旧事件后
+        # 提交空替换（{"text": None}）造成静默内容改写
+        if action == "edit_event" and p.get("after") is None:
+            return InterventionResult(
+                ok=False, event_id=None,
+                message="structural edit_event 缺少 payload.after（新事件内容），"
+                        "未执行回滚/提交")
 
         # 1. 定位受影响位置 → 回滚目标 tick
         if action in ("remove_event", "edit_event"):
