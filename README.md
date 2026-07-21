@@ -205,6 +205,34 @@ tests/test_engine.py         赌注1/赌注4/核心循环回归测试
 
 端点契约：`POST /api/gacha/draw`、`POST /api/gacha/confirm`、`POST /api/project/init`，见 `docs/接口规范_part2.md` §9.5。
 
+## 世界观向导（Worldview Wizard）
+
+抽卡确认前的第三段——10 层世界观向导，让用户从骨架或空白逐层选参数，级联校验后
+注入生成管线。架构定义 10 层 71 参数（存在论/宇宙学/物理环境/力量体系/物种生态/
+社会结构/文化与信仰/历史与时间线/认知与真相/存在级冲突），所有取值均为合法枚举。
+
+- **三段式向导**（抽卡页内 stage 状态机）：①题材四栏（P8.6 原貌）→ ②骨架选择
+  （十卡 + 随机 + 空白自定义）→ ③十层分步向导（左进度轨 + 右参数卡片）
+- **十骨架**：现实本格 / 修真问道 / 武侠江湖 / 克苏鲁神话 / 赛博朋克 / 西幻史诗 /
+  山海志怪 / 无限流 / 末日废土 / 都市灵异——每骨架预填全部 71 参数，选中即预填进
+  向导可逐层微调；「随机骨架」从十骨架掷骰子，「空白自定义」从零逐层选
+- **动态渲染**：层/参数/选项/连锁全部来自 `GET /api/worldview/schema`，前端无
+  硬编码——`layers_covered` 决定哪些层已上线（不在集合中的层显示「即将上线」灰色
+  占位，当前 L0-L9 全上线）
+- **级联校验**：每次改选 debounce 300ms 调 `POST /api/worldview/evaluate`，
+  收窄后的合法值集实时灰掉越界 chip（带原因 tooltip），已选值命中违例则标红；
+  进度轨标记每层状态（done/current/todo/violation）
+- **确认拦截**：确认开工前全量 evaluate，violations 非空则 toast 拦截并跳到首个
+  违例所在层；通过则 confirm 携带 `worldview: {layers, preset?}` 落盘
+- **双通道融合**（P12.3）：落盘的世界观档案通过两条独立通道进入生成管线——
+  - **prompt 注入（软）**：`to_prompt_text()` 生成 `## 世界观设定` 段拼进章节
+    生成 prompt，让 LLM 在选词/场景/氛围上贴合世界观
+  - **world_rules 合并（硬）**：`to_world_rules()` 把可表达为布尔事实的设定
+    （限 5 事实词汇表）翻译成 validator 可执行规则，追加进统一 world_rules 列表
+
+端点契约：`GET /api/worldview/schema`、`POST /api/worldview/evaluate`、
+`POST /api/gacha/confirm` 的 `worldview` 扩展，见 `docs/接口规范_part2.md` §11.6。
+
 ## 多项目管理（Projects）
 
 每个项目是一个独立目录 `data/projects/<name>/`（自带 story.db 事件溯源库 + chapters.json +

@@ -470,13 +470,13 @@ export function toGachaCardVM(card) {
   }
 }
 
-/* ===== 世界观架构（P12.5：GET /api/worldview/schema → VM） =====
- * 源：story_engine/worldview/layers.py LAYERS（L0-L3，共 31 参数）+
+/* ===== 世界观架构（P12.5：GET /api/worldview/schema → VM；P12.7：L4-L9 激活） =====
+ * 源：story_engine/worldview/layers.py LAYERS（L0-L9，共 71 参数）+
  *     presets.py preset_summaries()（10 骨架）+ evaluate 端点返回。
  * schema 端点带出 {layers, presets, param_count, layers_covered}；
- * 这里把 layers 拍平成「按层分组、每参数带 options+label+hint+chain」的视图，
- * 并补齐 L4-L9 占位层（前端 brief：未数据化层显示「即将上线」灰色占位），
- * 由 PLACEHOLDER_LAYERS 静态注入。
+ * 这里把 layers 拍平成「按层分组、每参数带 options+label+hint+chain」的视图。
+ * 后端已全量暴露 L0-L9，前端不再硬编码占位：covered 由 layers_covered 决定，
+ * 未在 layers_covered 中的层才显示为「即将上线」灰色占位（向防御性回退）。
  *
  * 返回的 VM 结构（GachaView 向导消费）::
  *
@@ -492,15 +492,6 @@ export function toGachaCardVM(card) {
  *
  * option_label 不可得（前端无映射表）→ 改由后端已带 label/options 直接使用。
  */
-const PLACEHOLDER_LAYERS = [
-  { id: 'L4', name: '物种生态', desc: '生命形态、物种关系、生态位与共生结构（即将上线）' },
-  { id: 'L5', name: '社会结构', desc: '政治、经济、阶层、组织形态（即将上线）' },
-  { id: 'L6', name: '文化与信仰', desc: '宗教、价值观、知识体系、艺术（即将上线）' },
-  { id: 'L7', name: '历史与时间线', desc: '起源叙事、纪元划分、重大事件（即将上线）' },
-  { id: 'L8', name: '认知与真相', desc: '信息不对称、知识禁忌、不可靠叙事（即将上线）' },
-  { id: 'L9', name: '存在级冲突', desc: '世界级张力和主题锚点（即将上线）' },
-]
-
 export function toWorldviewSchemaVM(raw) {
   if (!raw) return null
   const srcLayers = raw.layers ?? []
@@ -513,12 +504,13 @@ export function toWorldviewSchemaVM(raw) {
        前端展示用做副标；键值中文映射留待视图按 paramMap 解析 */
     summary: p.summary ?? '',
   }))
-  /* 拍平每层参数：透传 options 数组，确保 hint/chain 字段在 */
-  const realLayers = srcLayers.map(layer => ({
+  /* 拍平每层参数：透传 options 数组，确保 hint/chain 字段在；
+     covered 由后端 layers_covered 决定（不在集合中的层视为即将上线占位） */
+  const layers = srcLayers.map(layer => ({
     id: layer.id ?? '',
     name: layer.name ?? '',
     desc: layer.desc ?? '',
-    covered: true,
+    covered: covered.has(layer.id),
     params: (layer.params ?? []).map(p => ({
       key: p.key ?? '',
       label: p.label ?? p.key ?? '',
@@ -530,11 +522,6 @@ export function toWorldviewSchemaVM(raw) {
       })),
     })),
   }))
-  /* 占位层（即将上线） */
-  const placeholder = PLACEHOLDER_LAYERS.map(l => ({
-    id: l.id, name: l.name, desc: l.desc, covered: false, params: [],
-  }))
-  const layers = [...realLayers, ...placeholder]
   /* 反查表：param_key → layer VM */
   const paramMap = {}
   const paramMeta = {}
