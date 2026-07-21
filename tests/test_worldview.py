@@ -243,6 +243,11 @@ def test_worldview_to_world_rules_passes_validator_check():
 
     # power_existence=common → has_supernatural=True
     p2 = WorldviewProfile(layers={"L3": {"power_existence": "common"}})
+    exprs = [r["expr"] for r in p2.to_world_rules() if r.get("kind") == "bool"]
+    assert "has_supernatural" in exprs
+    assert ConsistencyValidator.check_rule_expr("has_supernatural")
+
+
 # ---------- P12.4 十骨架预设（2 核心） ----------
 def test_all_ten_presets_pass_evaluate_no_violations():
     """十骨架每个 preset：参数键=ALL_PARAMS 全集、值在合法枚举内、evaluate 无违例。"""
