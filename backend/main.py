@@ -170,13 +170,17 @@ def _switch_to(project_dir: Path, genre_name: str | None = None,
     env/内置默认（gacha confirm 新建项目随后走 init 覆盖，行为不变）。"""
     global _stack, kernel, llm_client, engine, meta_gen
     global training_pipeline, intervention_router
+    # 先建后关（终审 fast-follow）：新栈建好前不关旧 kernel——若 _build_stack
+    # 抛异常（如题材包构造期缺陷），全局仍指向完好的旧栈，不会降级
+    new_stack = _build_stack(Path(project_dir), genre_name=genre_name,
+                             culture_name=culture_name)
+    old_kernel = kernel
     try:
-        kernel.close()
+        old_kernel.close()
     except Exception:
         logger.warning("项目切换：旧 kernel close 失败（尽力继续）",
                        exc_info=True)
-    _stack = _build_stack(Path(project_dir), genre_name=genre_name,
-                          culture_name=culture_name)
+    _stack = new_stack
     kernel = _stack["kernel"]
     llm_client = kernel.llm
     engine = _stack["engine"]
@@ -408,8 +412,10 @@ def open_project(req: ProjectOpenReq):
     except StoryEngineError as e:
         raise HTTPException(status_code=422, detail=str(e))
     _switch_to(project_dir, genre_name=genre, culture_name=culture)
+    # 回写解析出的 genre/culture（终审 Minor 1：手工拷入的外部项目目录缺
+    # project.json 时，列表/下次 open 才能稳定显示与恢复同一题材）
     _write_project_meta(
-        project_dir, name=req.name,
+        project_dir, name=req.name, genre=genre, culture=culture,
         last_opened_at=datetime.now().isoformat(timespec="seconds"))
     return {"ok": True, "project": engine.project_snapshot()["meta"]}
 
