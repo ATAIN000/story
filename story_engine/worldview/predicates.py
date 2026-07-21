@@ -1,4 +1,4 @@
-"""worldview predicates — 跨层一致性谓词（批2：L0-L7 相关）
+"""worldview predicates — 跨层一致性谓词（L0-L9 相关）
 
 素材唯一来源：docs/世界观架构_参数全表.md
   - 各参数的「谓词」段（显式标记）
@@ -483,6 +483,131 @@ PREDICATES: list[dict] = [
         "then": {"require_note": "历史被篡改：L8 真相vs官方说法，揭露=高潮"},
         "message": "被篡改的历史：真相与官方说法对立",
         "source": "P7.2 revised 连锁 / 行 730",
+    },
+
+    # ====================================================================
+    # L8-L9 跨层一致性谓词（批3）
+    # 素材：docs/世界观架构_参数全表.md L8-L9 各参数的「连锁影响」段
+    #          + 横切动态 D2 规则透明度光谱谓词
+    # 仅录入可机器执行的约束（when/then 均引用已数据化参数）；
+    # 指向叙事效果/不可量化的连锁以 require_note 软约束记录。
+    # ====================================================================
+
+    # ---- L8 → L0：memory_system → consciousness_nature ----
+    {
+        "when": {"memory_system": "collective"},
+        "then": {"consciousness_nature": {"require": ["collective"]}},
+        "message": "集体记忆（蜂巢/心灵网络）要求意识本质为集体意识",
+        "source": "P8.7 collective 连锁 / 行 868",
+    },
+
+    # ---- L8 内部：truth_structure → hidden_truths ----
+    {
+        "when": {"truth_structure": "manufactured"},
+        "then": {"hidden_truths": {"require": ["nature_hidden"]}},
+        "message": "真相被制造（宣传/记忆篡改/模拟）：隐藏的核心真相须为世界本质被隐瞒",
+        "source": "P8.1 manufactured 连锁 / 行 799",
+    },
+    {
+        "when": {"truth_structure": "fragmented"},
+        "then": {"information_asymmetry": {"disallow": ["none", "egalitarian"]}},
+        "message": "真相碎片化：必然存在信息不对称（每人知道不同碎片）",
+        "source": "P8.1 fragmented 连锁 / 行 796",
+    },
+
+    # ---- L8 软约束（指向叙事效果/跨层引用未数据化项） ----
+    {
+        "when": {"memory_system": "manipulable"},
+        "then": {"require_note": "记忆可被篡改：L3 记忆魔法 → 身份认同危机"},
+        "message": "记忆可篡改的世界将引发身份认同危机",
+        "source": "P8.7 manipulable 连锁 / 行 866",
+    },
+    {
+        "when": {"memory_system": "inherited"},
+        "then": {"require_note": "记忆可遗传：L4 血脉=知识，L7 历史在基因里"},
+        "message": "可遗传记忆：血脉承载知识，历史在基因里",
+        "source": "P8.7 inherited 连锁 / 行 867",
+    },
+    {
+        "when": {"memory_system": "tradeable"},
+        "then": {"require_note": "记忆可交易：L3 记忆=货币，L5 记忆经济"},
+        "message": "可交易的记忆成为经济资源",
+        "source": "P8.7 tradeable 连锁 / 行 869",
+    },
+    {
+        "when": {"information_asymmetry": "elite"},
+        "then": {"require_note": "少数精英知道真相：L5 精英统治，L9 精英vs大众"},
+        "message": "精英垄断真相将驱动精英vs大众冲突",
+        "source": "P8.2 elite 连锁 / 行 806",
+    },
+    {
+        "when": {"information_asymmetry": "class_divided"},
+        "then": {"require_note": "不同阶层知道不同真相：L5 知识=阶层，L9 阶级冲突"},
+        "message": "阶层化的知识将驱动阶级冲突",
+        "source": "P8.2 class_divided 连锁 / 行 807",
+    },
+    {
+        "when": {"truth_structure": "shifting"},
+        "then": {"require_note": "真相会变：L0 reality=unstable → 认知恐慌"},
+        "message": "不断变化的真相将引发认知恐慌",
+        "source": "P8.1 shifting 连锁 / 行 798",
+    },
+
+    # ---- L9 → L3：conflict_resolution → cost_structure / progression_model ----
+    {
+        "when": {"conflict_resolution": "sacrifice"},
+        "then": {"cost_structure": {"require": ["sacrifice", "multiple"]}},
+        "message": "需牺牲才能解决冲突：力量代价结构须包含牺牲",
+        "source": "P9.4 sacrifice 连锁 / 行 927",
+    },
+    {
+        "when": {"conflict_resolution": "transcendent"},
+        "then": {"progression_model": {"require": ["transformation", "boundless"]}},
+        "message": "超越冲突（升维/进化/领悟）：力量进阶须为质变/无上限",
+        "source": "P9.4 transcendent 连锁 / 行 929",
+    },
+
+    # ---- L9 → L5：conflict_resolution → legal_system ----
+    {
+        "when": {"conflict_resolution": "law"},
+        "then": {"legal_system": {"disallow": ["none"]}},
+        "message": "法律/审判解决冲突：须存在正式法律体系（非丛林法则）",
+        "source": "P9.4 law 连锁 / 行 925",
+    },
+
+    # ---- D2 横切动态：规则透明度光谱谓词 ----
+    # 谓词：conflict_solved_by[power_system] → transparency ∈ {hard,semi_hard,medium}
+    {
+        "when": {"conflict_resolution": "ritual"},
+        "then": {"system_transparency": {"require": ["hard", "semi_hard", "medium"]}},
+        "message": "仪式化解决（决斗/比武/审判_by_combat）：规则须透明可推演（D2 规则透明度光谱）",
+        "source": "D2 谓词段 / 行 970 + P9.4 ritual 连锁 / 行 926",
+    },
+
+    # ---- L9 软约束（conflict_types 多选，驱动跨层引用以软约束记录） ----
+    {
+        "when": {"conflict_types": "existential"},
+        "then": {"require_note": "存在级威胁：L1 eschatology + L8 hidden_truths 驱动"},
+        "message": "存在级冲突由末日论与隐藏真相驱动",
+        "source": "P9.1 existential 连锁 / 行 890",
+    },
+    {
+        "when": {"conflict_types": "species_survival"},
+        "then": {"require_note": "种族存亡冲突：L4 species_hierarchy 驱动"},
+        "message": "种族存亡冲突由种族等级关系驱动",
+        "source": "P9.1 species_survival 连锁 / 行 888",
+    },
+    {
+        "when": {"conflict_types": "epistemological"},
+        "then": {"require_note": "真相vs谎言冲突：L8 全部参数驱动"},
+        "message": "认知论冲突由 L8 认知论设计全部参数驱动",
+        "source": "P9.1 epistemological 连锁 / 行 892",
+    },
+    {
+        "when": {"conflict_types": "resource"},
+        "then": {"resource_paradigm": {"disallow": ["none"]}},
+        "message": "稀缺资源争夺冲突：须存在稀缺资源（非无特殊稀缺资源）",
+        "source": "P9.1 resource 连锁 / 行 885",
     },
 ]
 

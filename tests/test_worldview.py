@@ -62,9 +62,9 @@ def test_evaluate_tolerates_empty_and_unknown_keys():
 
 # ---------- 数据完整性（轻量校验：素材忠实录入） ----------
 def test_layers_data_integrity():
-    # 8 层齐全（L0-L7）
+    # 10 层齐全（L0-L9）
     assert [l["id"] for l in LAYERS] == [
-        "L0", "L1", "L2", "L3", "L4", "L5", "L6", "L7"]
+        "L0", "L1", "L2", "L3", "L4", "L5", "L6", "L7", "L8", "L9"]
     # 每参数至少 4 个枚举值，每值含 value/label
     for layer in LAYERS:
         for p in layer["params"]:
@@ -79,13 +79,21 @@ def test_layers_data_integrity():
     assert "theocracy" in [o["value"] for o in ALL_PARAMS["political_system"]["options"]]
     assert "language_is_magic" in [o["value"] for o in ALL_PARAMS["language_paradigm"]["options"]]
     assert "precursor" in [o["value"] for o in ALL_PARAMS["lost_civilizations"]["options"]]
-    # 谓词条数符合预期（批1 ≥40，批2 L4-L7 追加后 >40）
-    assert len(PREDICATES) > 40
+    # L8-L9 关键枚举值抽检（素材原文）
+    assert "manufactured" in [o["value"] for o in ALL_PARAMS["truth_structure"]["options"]]
+    assert "collective" in [o["value"] for o in ALL_PARAMS["memory_system"]["options"]]
+    assert "nature_hidden" in [o["value"] for o in ALL_PARAMS["hidden_truths"]["options"]]
+    assert "transcendent" in [o["value"] for o in ALL_PARAMS["conflict_resolution"]["options"]]
+    assert "cosmic" in [o["value"] for o in ALL_PARAMS["conflict_types"]["options"]]
+    # 10 层参数总数：59（L0-L7）+ 12（L8-L9）= 71
+    assert len(ALL_PARAMS) == 71
+    # 谓词条数符合预期（批1 ≥40，批2 L4-L7 追加 >40，批3 L8-L9 追加 >55）
+    assert len(PREDICATES) > 55
 
 
 # ---------- P12.2 端点测试（3 核心） ----------
 def test_schema_endpoint_layers_and_param_count():
-    """GET /api/worldview/schema：layers 含 L0-L7、param_count 与 ALL_PARAMS 一致、
+    """GET /api/worldview/schema：layers 含 L0-L9、param_count 与 ALL_PARAMS 一致、
     layers_covered 为当前已数据化层。"""
     from fastapi.testclient import TestClient
     from conftest import import_backend_main
@@ -94,10 +102,10 @@ def test_schema_endpoint_layers_and_param_count():
     assert r.status_code == 200, r.text
     body = r.json()
     assert [l["id"] for l in body["layers"]] == [
-        "L0", "L1", "L2", "L3", "L4", "L5", "L6", "L7"]
-    assert body["param_count"] == len(ALL_PARAMS)  # 59
+        "L0", "L1", "L2", "L3", "L4", "L5", "L6", "L7", "L8", "L9"]
+    assert body["param_count"] == len(ALL_PARAMS)  # 71
     assert body["layers_covered"] == [
-        "L0", "L1", "L2", "L3", "L4", "L5", "L6", "L7"]
+        "L0", "L1", "L2", "L3", "L4", "L5", "L6", "L7", "L8", "L9"]
 
 
 def test_evaluate_endpoint_materialist_narrows_consciousness_nature():
