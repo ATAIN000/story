@@ -30,9 +30,11 @@ import json
 import logging
 import os
 import re
+import shutil
 import sqlite3
 import sys
 import tempfile
+import zipfile
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
@@ -44,6 +46,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from starlette.background import BackgroundTask
 from starlette.concurrency import run_in_threadpool
 
 # 让 backend 能 import story_engine（项目根在上一级）
@@ -408,6 +411,69 @@ def open_project(req: ProjectOpenReq):
         project_dir, name=req.name,
         last_opened_at=datetime.now().isoformat(timespec="seconds"))
     return {"ok": True, "project": engine.project_snapshot()["meta"]}
+
+
+# ---------- 项目导出（P10.3：一致快照 zip 分发） ----------
+def _build_project_zip(project_dir: Path, name: str, work_dir: Path) -> Path:
+    """在 work_dir 组装 <name>-story.zip，返回 zip 路径（调用方负责清理 work_dir）。
+
+    一致性：story.db 经 sqlite3 backup API 落到 work_dir 再打包——WAL 模式下
+    直拷主文件可能丢 wal 中未 checkpoint 的提交，backup 拿到的是完整一致快照
+    （story.db-wal/shm 无需单独打）。源连接按普通读写打开：真只读（mode=ro）
+    打开残留 wal 的非当前项目库可能因需 recovery 而失败（SQLITE_CANTOPEN）。
+    附带文件：chapters.json/project.json 有则打、无则跳过不崩；
+    training_data/ 有则整目录打（保持相对路径）；README.txt 一行解压说明。"""
+    backup_db = Path(work_dir) / "story.db"
+    src = sqlite3.connect(str(Path(project_dir) / "story.db"))
+    try:
+        dst = sqlite3.connect(str(backup_db))
+        try:
+            src.backup(dst)
+        finally:
+            dst.close()
+    finally:
+        src.close()
+    zip_path = Path(work_dir) / f"{name}-story.zip"
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.write(backup_db, "story.db")
+        for extra in ("chapters.json", "project.json"):
+            p = Path(project_dir) / extra
+            if p.is_file():
+                zf.write(p, extra)
+        training = Path(project_dir) / "training_data"
+        if training.is_dir():
+            for f in sorted(training.rglob("*")):
+                if f.is_file():
+                    zf.write(f, "training_data/"
+                             f"{f.relative_to(training).as_posix()}")
+        zf.writestr("README.txt",
+                    f"解压到 data/projects/{name}/ 即可；story.db 为 sqlite "
+                    "backup 一致快照（无需 wal/shm）。")
+    return zip_path
+
+
+@app.get("/api/projects/{name}/export")
+def export_project(name: str):
+    """【P10.3】导出项目为 {name}-story.zip（FileResponse，application/zip）。
+
+    name 过白名单正则（同 projects/open：非法名与不存在一律 404，不泄露目录
+    结构）；story.db 缺失 → 404。zip 在临时目录组装，BackgroundTask 在响应
+    发送后整目录清理；组装失败则 except 中立即清理再抛。"""
+    if not GENRE_NAME_RE.fullmatch(name):
+        raise HTTPException(status_code=404, detail=f"项目不存在：{name}")
+    project_dir = PROJECTS_ROOT / name
+    if not (project_dir / "story.db").exists():
+        raise HTTPException(status_code=404, detail=f"项目不存在：{name}")
+    work_dir = Path(tempfile.mkdtemp(prefix="story_export_"))
+    try:
+        zip_path = _build_project_zip(project_dir, name, work_dir)
+    except Exception:
+        shutil.rmtree(work_dir, ignore_errors=True)
+        raise
+    return FileResponse(
+        zip_path, filename=f"{name}-story.zip", media_type="application/zip",
+        background=BackgroundTask(shutil.rmtree, work_dir,
+                                  ignore_errors=True))
 
 
 @app.post("/api/project/generate")

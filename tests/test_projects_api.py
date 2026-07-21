@@ -1,5 +1,6 @@
 """P10.1 测试：GET /api/projects + project.json 老项目迁移补写
 P10.2 测试：POST /api/projects/open + gacha confirm project_name 扩展
+P10.3 测试：GET /api/projects/{name}/export（backup 一致快照 zip）
 
 核心用例（任务卡 ≤3）：
 1. 列表含 yupei（真实 data/projects 扫描）：首次调用后 project.json 被补写，
@@ -17,12 +18,19 @@ P10.2 测试：POST /api/projects/open + gacha confirm project_name 扩展
    culture/created_at/last_opened_at）+ 当前已切换。
 6. confirm 重名 → 409、非法名 → 422；切换后 intervene/interventions 端点
    用新栈（介入记录随项目隔离）。
+7. 导出：造小项目（events 表 3 行 + chapters.json + project.json +
+   training_data）→ GET export → 200 + application/zip + zip 内含
+   story.db（可 sqlite 打开且 events 数一致）/chapters.json/project.json/
+   training_data/**。
+8. 导出 404：项目不存在 / 非法名 / 目录无 story.db。
 """
+import io
 import json
 import os
 import sqlite3
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -130,6 +138,65 @@ class TestProjectsApi(unittest.TestCase):
             self.assertEqual([p["name"] for p in items], ["badchapters"])
             self.assertEqual(items[0]["chapter_count"], 0)
             self.assertEqual(items[0]["head_tick"], 0)
+
+    def test_7_export_zip_consistent_snapshot(self):
+        """P10.3：导出 zip 含 backup 快照 story.db + 附带文件，可解压复用。"""
+        with tempfile.TemporaryDirectory() as root:
+            proj = _make_project(Path(root), "exp1")
+            conn = sqlite3.connect(proj / "story.db")
+            conn.execute("CREATE TABLE events (id INTEGER PRIMARY KEY,"
+                         " payload TEXT)")
+            conn.executemany("INSERT INTO events (payload) VALUES (?)",
+                             [("a",), ("b",), ("c",)])
+            conn.commit()
+            conn.close()
+            (proj / "chapters.json").write_text(
+                json.dumps([{"chapter": 1}]), encoding="utf-8")
+            (proj / "project.json").write_text(
+                json.dumps({"name": "exp1", "genre": "mystery"}),
+                encoding="utf-8")
+            training = proj / "training_data"
+            training.mkdir()
+            (training / "preferences.jsonl").write_text(
+                '{"x": 1}\n', encoding="utf-8")
+            r = self._with_projects_root(
+                Path(root),
+                lambda: self.client.get("/api/projects/exp1/export"))
+            self.assertEqual(r.status_code, 200)
+            self.assertEqual(r.headers["content-type"], "application/zip")
+            self.assertIn("exp1-story.zip",
+                          r.headers.get("content-disposition", ""))
+            with zipfile.ZipFile(io.BytesIO(r.content)) as zf:
+                names = set(zf.namelist())
+                for arc in ("story.db", "chapters.json", "project.json",
+                            "training_data/preferences.jsonl"):
+                    self.assertIn(arc, names)
+                self.assertEqual(json.loads(zf.read("chapters.json")),
+                                 [{"chapter": 1}])
+                self.assertEqual(
+                    json.loads(zf.read("project.json"))["name"], "exp1")
+                # backup 快照：可 sqlite 打开且 events 行数与源库一致
+                with tempfile.TemporaryDirectory() as ex:
+                    zf.extract("story.db", ex)
+                    conn = sqlite3.connect(Path(ex) / "story.db")
+                    try:
+                        n = conn.execute(
+                            "SELECT COUNT(*) FROM events").fetchone()[0]
+                    finally:
+                        conn.close()
+                self.assertEqual(n, 3)
+
+    def test_8_export_404(self):
+        """P10.3：项目不存在 / 非法名 / 目录无 story.db → 一律 404。"""
+        with tempfile.TemporaryDirectory() as root:
+            (Path(root) / "emptydir").mkdir()  # 有目录无 story.db
+            def _get(n):
+                return self._with_projects_root(
+                    Path(root),
+                    lambda: self.client.get(f"/api/projects/{n}/export"))
+            self.assertEqual(_get("nope").status_code, 404)
+            self.assertEqual(_get("emptydir").status_code, 404)
+            self.assertEqual(_get("bad!name").status_code, 404)
 
 
 class TestProjectOpenAndConfirmSwitch(unittest.TestCase):
