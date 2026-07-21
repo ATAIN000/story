@@ -531,6 +531,13 @@ class SemanticMemoryBanks:
         rows = self._conn.execute(sql, args).fetchall()
         return [_row_to_item(r) for r in rows]
 
+    def clear(self) -> None:
+        """清空 memory_items + vec_mem（项目重置用，原位 DELETE 免文件锁）"""
+        with self._lock:
+            self._conn.execute("DELETE FROM memory_items")
+            self._conn.execute("DELETE FROM vec_mem")
+            self._conn.commit()
+
     def close(self) -> None:
         if self._owns_conn:
             try:

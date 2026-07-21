@@ -191,5 +191,20 @@ class EventStore:
                         "active": e.world_tick <= head and e.timeline == max_tl[e.world_tick]})
         return out
 
+    def clear_all(self) -> None:
+        """原位清空全部事件/快照/head 并重置 timeline（项目重置用）。
+
+        经本 store 自有连接清表，不删除 db 文件——Windows 下其他连接占用
+        story.db 时 unlink 会静默失败造成「半重置」（旧事件全保留），
+        原位 DELETE 不受文件锁影响。失败以 sqlite 异常显式上抛（响亮失败）。
+        """
+        with self._lock:
+            self._conn.execute("DELETE FROM events")
+            self._conn.execute("DELETE FROM snapshots")
+            self._conn.execute("DELETE FROM heads")
+            self._timeline = 0
+            self._meta_set("timeline", "0")
+            self._conn.commit()
+
     def close(self):
         self._conn.close()

@@ -1526,28 +1526,18 @@ class StoryEngine:
         self._actors_ready = False
         self._director_ref = None
 
-        self.kernel.close()
-        for f in ("story.db", "story.db-wal", "story.db-shm"):
-            p = self.project_dir / f
-            if p.exists():
-                try:
-                    p.unlink()
-                except OSError:
-                    pass
-        from .world.event_store import EventStore
-        from .kernel.embedding import Embedder
-        # 重建 store；保留 llm_pool / embedder mode
-        embedder = getattr(self.kernel, "embedder", None) or Embedder(mode="dummy")
-        # 若原 embedder 已 close，重新建同 mode
-        mode = getattr(embedder, "mode", "dummy")
-        fresh_embedder = Embedder(mode=mode, lazy_load=True)
-        self.kernel.store = EventStore(
-            str(self.project_dir / "story.db"),
-            initial_state_factory=self._genesis_state)
-        self.kernel.memory_banks = None
+        # 原位清库（热修复 2026-07-21：旧实现 kernel.close()+unlink(story.db)+
+        # 重建 EventStore——Windows 下任何占用连接都会让 unlink 静默失败，
+        # 造成「chapters 清空但旧事件全保留」的半重置（用户抽卡开局实测踩中）。
+        # 原位 DELETE 经 store 自有连接，不受文件锁影响，失败显式上抛）
+        self.kernel.store.clear_all()
+        # 保证创世种子工厂指向本引擎实现：直接构造 Kernel 的路径
+        # （如 backend/main.py）默认是空 WorldState 工厂，旧实现靠重建 store
+        # 顺带修正，原位清库后必须显式对齐，否则种子角色/关系/目标丢失
+        self.kernel.store._initial_state_factory = self._genesis_state
+        if self.kernel.memory_banks is not None:
+            self.kernel.memory_banks.clear()
         self.kernel._retrieval_by_agent = {}
-        self.kernel.embedder = fresh_embedder
-        self.store = self.kernel.store
         self._write_chapters([])
         self._pending_plan = None  # P6.2：重置作废待批准方案
         return self.project_snapshot()

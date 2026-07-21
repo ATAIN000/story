@@ -77,7 +77,10 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"],
                    allow_methods=["*"], allow_headers=["*"])
 
 # === v0.2: Kernel/User 分离 — 先建 Kernel，注入 Engine 与 MetaGenerator ===
-kernel = Kernel(PROJECT_DIR, plugin_dir=ROOT / "story_engine" / "plugins")
+# 传 initial_state_factory（静态方法可直接引用）：否则创世种子要靠
+# engine.reset() 重建 store 才能顺带注入（P9.x 原位清库后该掩蔽效应消失，必须显式传）
+kernel = Kernel(PROJECT_DIR, plugin_dir=ROOT / "story_engine" / "plugins",
+                initial_state_factory=StoryEngine._genesis_state)
 llm_client = kernel.llm  # 保留 llm_client 变量名，老 API 引用兼容
 engine = StoryEngine(kernel)
 meta_gen = MetaGenerator(kernel)
