@@ -17,6 +17,7 @@ API：
   POST /api/paragraph/rewrite  【P6.3 新增】段落重写（Realizer 单段渲染，只读不写）
   GET  /api/characters         【P6.4 新增】角色卡聚合（minds/关系/voice/arc，只增）
   POST /api/projects/open      【P10.2 新增】切换当前项目（整栈重建+全量重绑；不存在 → 404；写 last_opened_at）
+  GET  /api/projects/{name}/export  【P10.3 新增】导出项目 zip（sqlite backup 一致快照 + chapters/project.json + training_data）
   POST /api/gacha/draw         【P8.3/P8.4】抽卡开局：library 随机组合 + lock 锁栏；synth LLM 合成（mock 短路降级）
   POST /api/gacha/confirm      【P8.5】抽卡确认：synth 卡复核+落盘 plugins/genres/（原子写、重名后缀）→ reload → init
                                【P10.2】body 可选 project_name：建新项目目录（已存在 → 409）→ 整栈切换 → init
