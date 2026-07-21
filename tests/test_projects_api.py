@@ -1,4 +1,5 @@
 """P10.1 测试：GET /api/projects + project.json 老项目迁移补写
+P10.2 测试：POST /api/projects/open + gacha confirm project_name 扩展
 
 核心用例（任务卡 ≤3）：
 1. 列表含 yupei（真实 data/projects 扫描）：首次调用后 project.json 被补写，
@@ -8,6 +9,12 @@
    head_tick 从 sqlite heads 表只读取出。
 3. 坏目录不崩：无 story.db 的目录被跳过；坏 chapters.json/空 story.db →
    count=0/head_tick=0 且仍列出。
+4. 双项目切换：建 alpha（1 章）/beta（0 章）→ open alpha → 返回 meta 正确
+   + /api/project 数据是 alpha 的；open 不存在/非法名 → 404。
+5. confirm 带 project_name：确认后目录含 story.db + project.json（genre/
+   culture/created_at/last_opened_at）+ 当前已切换。
+6. confirm 重名 → 409、非法名 → 422；切换后 intervene/interventions 端点
+   用新栈（介入记录随项目隔离）。
 """
 import json
 import os
@@ -121,6 +128,146 @@ class TestProjectsApi(unittest.TestCase):
             self.assertEqual([p["name"] for p in items], ["badchapters"])
             self.assertEqual(items[0]["chapter_count"], 0)
             self.assertEqual(items[0]["head_tick"], 0)
+
+
+class TestProjectOpenAndConfirmSwitch(unittest.TestCase):
+    """P10.2：open 切换 + confirm project_name（临时目录，不污染真实项目）。
+
+    backend 单例全进程共享：每个用例 finally 必须切回原项目目录（兼 close
+    临时项目 kernel——Windows 文件锁下 TemporaryDirectory 才能清理）并还原
+    PROJECTS_ROOT/题材，否则波及字母序靠后的 backend 用例。"""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.client = TestClient(backend.app)
+        cls.orig_dir = Path(backend.engine.project_dir)
+        cls.orig_genre = backend.engine.genre.name
+        cls.orig_culture = backend.engine.culture.name
+        cls.saved_root = backend.PROJECTS_ROOT
+
+    def _restore_backend(self):
+        """切回共享 backend 项目并还原扫描根/题材（finally 中调用）。"""
+        backend.PROJECTS_ROOT = self.saved_root
+        backend._switch_to(self.orig_dir)
+        self.client.post("/api/project/init",
+                         json={"genre": self.orig_genre,
+                               "culture": self.orig_culture})
+
+    @staticmethod
+    def _card(project_name=None, genre="mystery",
+              culture="confucian_officialdom"):
+        card = {"mode": "library",
+                "genre": {"name": genre, "source": "library", "desc": "d"},
+                "culture": {"name": culture},
+                "archetype": {"name": ""}, "rule_packs": [], "note": None}
+        if project_name is not None:
+            card["project_name"] = project_name
+        return card
+
+    def test_4_open_switches_between_projects_and_404(self):
+        with tempfile.TemporaryDirectory() as root:
+            backend.PROJECTS_ROOT = Path(root)
+            try:
+                # alpha：确认建项目并生成 1 章；beta：0 章
+                r = self.client.post("/api/gacha/confirm",
+                                     json=self._card("alpha"))
+                self.assertEqual(r.status_code, 200, r.text)
+                r = self.client.post("/api/project/generate")
+                self.assertEqual(r.status_code, 200, r.text)
+                r = self.client.post("/api/gacha/confirm",
+                                     json=self._card("beta"))
+                self.assertEqual(r.status_code, 200, r.text)
+                # 当前在 beta；open alpha → meta 正确 + 当前数据是 alpha 的
+                r = self.client.post("/api/projects/open",
+                                     json={"name": "alpha"})
+                self.assertEqual(r.status_code, 200, r.text)
+                body = r.json()
+                self.assertTrue(body["ok"])
+                self.assertEqual(body["project"]["project"], "alpha")
+                self.assertEqual(body["project"]["genre"], "mystery")
+                self.assertEqual(body["project"]["chapter_count"], 1)
+                snap = self.client.get("/api/project").json()
+                self.assertEqual(snap["meta"]["project"], "alpha")
+                self.assertEqual(len(snap["chapters"]), 1)
+                # open 不存在 → 404；路径穿越式非法名同样 404（不泄露目录结构）
+                r = self.client.post("/api/projects/open",
+                                     json={"name": "nope"})
+                self.assertEqual(r.status_code, 404)
+                r = self.client.post("/api/projects/open",
+                                     json={"name": "../alpha"})
+                self.assertEqual(r.status_code, 404)
+            finally:
+                self._restore_backend()
+
+    def test_5_confirm_with_project_name_creates_switches_and_writes_meta(self):
+        with tempfile.TemporaryDirectory() as root:
+            backend.PROJECTS_ROOT = Path(root)
+            try:
+                r = self.client.post("/api/gacha/confirm",
+                                     json=self._card("gamma"))
+                self.assertEqual(r.status_code, 200, r.text)
+                body = r.json()
+                self.assertTrue(body["ok"])
+                self.assertFalse(body["persisted"])  # library 卡不落盘
+                self.assertEqual(body["project"],
+                                 {"name": "gamma", "genre": "mystery",
+                                  "culture": "confucian_officialdom"})
+                proj = Path(root) / "gamma"
+                self.assertTrue((proj / "story.db").exists())
+                meta = json.loads(
+                    (proj / "project.json").read_text(encoding="utf-8"))
+                self.assertEqual(meta["name"], "gamma")
+                self.assertEqual(meta["genre"], "mystery")
+                self.assertEqual(meta["culture"], "confucian_officialdom")
+                for k in ("created_at", "last_opened_at"):
+                    self.assertTrue(meta.get(k))
+                # 当前已切换（模块级 engine 与端点同栈）
+                self.assertEqual(backend.engine.project_dir, proj)
+                snap = self.client.get("/api/project").json()
+                self.assertEqual(snap["meta"]["project"], "gamma")
+                self.assertEqual(snap["meta"]["genre"], "mystery")
+            finally:
+                self._restore_backend()
+
+    def test_6_confirm_existing_409_and_endpoints_use_new_stack(self):
+        with tempfile.TemporaryDirectory() as root:
+            backend.PROJECTS_ROOT = Path(root)
+            try:
+                r = self.client.post("/api/gacha/confirm",
+                                     json=self._card("delta"))
+                self.assertEqual(r.status_code, 200, r.text)
+                # 重名（目录已含 story.db）→ 409，且当前项目不被切走
+                r = self.client.post("/api/gacha/confirm",
+                                     json=self._card("delta"))
+                self.assertEqual(r.status_code, 409, r.text)
+                self.assertIn("已存在", r.json()["detail"])
+                self.assertEqual(backend.engine.project_dir,
+                                 Path(root) / "delta")
+                # 非法项目名 → 422
+                r = self.client.post("/api/gacha/confirm",
+                                     json=self._card("bad name!"))
+                self.assertEqual(r.status_code, 422, r.text)
+                # 新栈抽查（intervene→router/pipeline，interventions→kernel）：
+                # delta 留 1 条介入；epsilon 0 条；open 回 delta 又见 1 条
+                r = self.client.post("/api/intervene", json={
+                    "type": "intent",
+                    "payload": {"goal_update": "加快节奏"}, "reason": "t"})
+                self.assertEqual(r.status_code, 200, r.text)
+                self.assertTrue(r.json()["ok"])
+                self.assertEqual(
+                    len(self.client.get("/api/interventions").json()), 1)
+                r = self.client.post("/api/gacha/confirm",
+                                     json=self._card("epsilon"))
+                self.assertEqual(r.status_code, 200, r.text)
+                self.assertEqual(
+                    self.client.get("/api/interventions").json(), [])
+                r = self.client.post("/api/projects/open",
+                                     json={"name": "delta"})
+                self.assertEqual(r.status_code, 200, r.text)
+                self.assertEqual(
+                    len(self.client.get("/api/interventions").json()), 1)
+            finally:
+                self._restore_backend()
 
 
 if __name__ == "__main__":

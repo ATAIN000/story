@@ -16,8 +16,10 @@ API：
   GET  /api/training/stats     【P6.1 新增】训练信号计数（skills/preferences/style）
   POST /api/paragraph/rewrite  【P6.3 新增】段落重写（Realizer 单段渲染，只读不写）
   GET  /api/characters         【P6.4 新增】角色卡聚合（minds/关系/voice/arc，只增）
+  POST /api/projects/open      【P10.2 新增】切换当前项目（整栈重建+全量重绑；不存在 → 404；写 last_opened_at）
   POST /api/gacha/draw         【P8.3/P8.4】抽卡开局：library 随机组合 + lock 锁栏；synth LLM 合成（mock 短路降级）
   POST /api/gacha/confirm      【P8.5】抽卡确认：synth 卡复核+落盘 plugins/genres/（原子写、重名后缀）→ reload → init
+                               【P10.2】body 可选 project_name：建新项目目录（已存在 → 409）→ 整栈切换 → init
   POST /api/project/init       【P8.5】开局切换：重置世界 → 按 genre/culture 重建 engine 单例（进程内覆盖，不改 env/.env）
 静态：/ → frontend/dist（Vue SPA）
 """
@@ -25,6 +27,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import re
 import sqlite3
@@ -56,6 +59,8 @@ from story_engine.meta import MetaGenerator, UserIntent  # noqa: E402
 from story_engine.meta.gacha import draw_card_async  # noqa: E402
 from story_engine.meta.genre_validator import validate_genre_pack  # noqa: E402
 from story_engine.types import StoryEngineError  # noqa: E402
+
+logger = logging.getLogger(__name__)
 
 
 def _load_dotenv():
@@ -100,14 +105,25 @@ def _make_regenerate_sync(stack: dict):
     return _regenerate_sync
 
 
+def _make_textual_apply(stack: dict):
+    """textual_apply_fn 闭包工厂（P10.2）：与 regenerate 同款经 stack["engine"]
+    延迟解析——project_init 会重绑栈内 engine，构造时绑死 update_chapter_text
+    会留旧 engine 引用（P10.1 遗留的 stale binding，本任务一并解决）。
+    签名同 engine.update_chapter_text（InterventionRouter.textual_apply_fn
+    约定：P6.1 B1 正文回写口子）。"""
+    def _textual_apply(chapter: int, before, after) -> str:
+        return stack["engine"].update_chapter_text(chapter, before, after)
+    return _textual_apply
+
+
 def _build_stack(project_dir: Path) -> dict:
     """P10.1 项目栈工厂：kernel/engine/meta_gen/pipeline/router 一处构造。
 
     传 initial_state_factory（静态方法可直接引用）：否则创世种子要靠
     engine.reset() 重建 store 才能顺带注入（P9.x 原位清库后该掩蔽效应消失，
     必须显式传）。挂载点决策（P5.10 任务卡）：engine 侧无 router/pipeline
-    实例，参照 meta_gen 同款模式在 backend 侧构造。router 的 textual_apply_fn
-    绑构造时的 engine（P6.1(B1) 正文回写口子；P8.5 前即如此，行为保持）。"""
+    实例，参照 meta_gen 同款模式在 backend 侧构造。router 的 regenerate_fn /
+    textual_apply_fn 均经 stack 延迟解析 engine（P10.2），切换/init 不留旧引用。"""
     kernel = Kernel(project_dir, plugin_dir=ROOT / "story_engine" / "plugins",
                     initial_state_factory=StoryEngine._genesis_state)
     engine = StoryEngine(kernel)
@@ -117,7 +133,7 @@ def _build_stack(project_dir: Path) -> dict:
              "pipeline": pipeline}
     stack["router"] = InterventionRouter(
         kernel, pipeline=pipeline, regenerate_fn=_make_regenerate_sync(stack),
-        textual_apply_fn=engine.update_chapter_text)
+        textual_apply_fn=_make_textual_apply(stack))
     return stack
 
 
@@ -128,6 +144,33 @@ engine = _stack["engine"]
 meta_gen = _stack["meta_gen"]
 training_pipeline = _stack["pipeline"]
 intervention_router = _stack["router"]
+
+
+def _switch_to(project_dir: Path) -> dict:
+    """P10.2 项目切换核心：旧 kernel 尽力 close → _build_stack 整栈重建 →
+    重绑全部模块级引用，不留旧栈引用。
+
+    重绑清单：kernel / llm_client / engine / meta_gen / training_pipeline /
+    intervention_router / _stack。各端点在函数体内运行时解析模块全局名，
+    重绑后全部端点自动用新栈；router 的 regenerate/textual 两闭包经
+    _stack 延迟解析 engine，project_init 重绑 _stack["engine"] 后依旧相干。
+    旧 kernel.close() 失败只 log 不阻断（尽力释放 SQLite 句柄，Windows 文件锁
+    场景下残留句柄不应卡死切换）。"""
+    global _stack, kernel, llm_client, engine, meta_gen
+    global training_pipeline, intervention_router
+    try:
+        kernel.close()
+    except Exception:
+        logger.warning("项目切换：旧 kernel close 失败（尽力继续）",
+                       exc_info=True)
+    _stack = _build_stack(Path(project_dir))
+    kernel = _stack["kernel"]
+    llm_client = kernel.llm
+    engine = _stack["engine"]
+    meta_gen = _stack["meta_gen"]
+    training_pipeline = _stack["pipeline"]
+    intervention_router = _stack["router"]
+    return _stack
 
 
 class RollbackReq(BaseModel):
@@ -231,11 +274,20 @@ def _read_project_meta(project_dir: Path) -> dict | None:
 def _write_project_meta(project_dir: Path, **fields) -> dict:
     """合并写 project.json（在既有元数据上更新给定字段），返回写后全文。
     字段口径（P10.1）：name/genre/culture/created_at/last_opened_at；
-    engine.reset()/init/gacha confirm 处的写入 P10.2 统一接。"""
+    gacha confirm 新项目与 projects/open 的写入 P10.2 接入。
+    P10.2 顺手升级原子写：同目录 .tmp + replace（P10.1 Minor）——
+    要么不写、要么写全，不留半写 JSON。"""
     meta = _read_project_meta(project_dir) or {}
     meta.update(fields)
-    (Path(project_dir) / PROJECT_META_NAME).write_text(
-        json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+    path = Path(project_dir) / PROJECT_META_NAME
+    tmp = path.with_suffix(".tmp")
+    try:
+        tmp.write_text(json.dumps(meta, ensure_ascii=False, indent=2),
+                       encoding="utf-8")
+        tmp.replace(path)
+    except OSError:
+        tmp.unlink(missing_ok=True)
+        raise
     return meta
 
 
@@ -310,6 +362,31 @@ def list_projects():
     chapter_count, head_tick, last_opened_at, current}]。
     坏目录不崩：无 story.db 跳过；坏 chapters.json/打不开 story.db → 计数 0。"""
     return _list_projects(PROJECTS_ROOT)
+
+
+class ProjectOpenReq(BaseModel):
+    name: str
+
+
+@app.post("/api/projects/open")
+def open_project(req: ProjectOpenReq):
+    """【P10.2】切换当前项目到 data/projects/<name>：整栈重建 + 全量重绑。
+
+    name 先过白名单（复用题材名正则，拒绝路径分隔符/穿越 → 一律 404，
+    不区分「非法名」与「不存在」，不泄露目录结构）；story.db 缺失 → 404。
+    切换后写 last_opened_at（原子合并写），返回 {ok, project: 快照 meta}。
+    genre/culture 不回写 project.json：open 按 _build_stack 默认（env/内置）
+    建栈，不回放项目原题材（P10.2 口径，恢复题材留给后续任务）。"""
+    if not GENRE_NAME_RE.fullmatch(req.name):
+        raise HTTPException(status_code=404, detail=f"项目不存在：{req.name}")
+    project_dir = PROJECTS_ROOT / req.name
+    if not (project_dir / "story.db").exists():
+        raise HTTPException(status_code=404, detail=f"项目不存在：{req.name}")
+    _switch_to(project_dir)
+    _write_project_meta(
+        project_dir, name=req.name,
+        last_opened_at=datetime.now().isoformat(timespec="seconds"))
+    return {"ok": True, "project": engine.project_snapshot()["meta"]}
 
 
 @app.post("/api/project/generate")
@@ -538,7 +615,26 @@ def gacha_confirm(card: dict):
     （重名自动后缀，原子写）并 registry.reload() 让新题材立即可用。
     library 卡跳过落盘（persisted=false）直接 init。
     响应 = init 响应 + {persisted, genre(最终名)}。
+
+    【P10.2】body 可选 project_name（卡对象平铺的额外键，不给则现状语义）：
+    给了则开新项目——白名单校验（复用题材名正则）→ 目标目录已含 story.db
+    → 409「项目已存在」（在 synth 落盘之前检查，失败零副作用）；否则
+    _switch_to 整栈切换到新目录（Kernel 构造自建目录/库）→ init 应用卡的
+    genre/culture → 写 project.json（name/genre/culture/created_at/
+    last_opened_at）→ 响应 project 键扩为 {name, genre, culture}。
+    组合合法性在切换前用当前 registry 预校验（插件同源），避免切完才 422
+    的半切换态。synth 落盘逻辑不变，与项目切换正交。
     """
+    project_name = card.get("project_name")
+    if project_name is not None:
+        if not isinstance(project_name, str) \
+                or not GENRE_NAME_RE.fullmatch(project_name):
+            raise HTTPException(
+                status_code=422,
+                detail=f"项目名非法：{project_name!r}（仅限字母/数字/-/_，1-64 位）")
+        if (PROJECTS_ROOT / project_name / "story.db").exists():
+            raise HTTPException(status_code=409,
+                                detail=f"项目已存在：{project_name}")
     g = card.get("genre") or {}
     persisted = False
     name = g.get("name")
@@ -575,6 +671,23 @@ def gacha_confirm(card: dict):
         persisted = True
     if not name:
         raise HTTPException(status_code=422, detail="卡缺 genre.name")
+    if project_name is not None:
+        # 开新项目：组合合法性预校验（当前 registry 与新栈同源扫 plugins 目录，
+        # synth 包已落盘，两边都可见）→ 整栈切换 → init 应用卡题材/文化。
+        try:
+            engine.kernel.registry.validate_combo(name, culture)
+        except StoryEngineError as e:
+            raise HTTPException(status_code=422, detail=str(e))
+        project_dir = PROJECTS_ROOT / project_name
+        _switch_to(project_dir)
+        resp = project_init({"genre": name, "culture": culture})
+        now = datetime.now().isoformat(timespec="seconds")
+        _write_project_meta(project_dir, name=project_name, genre=name,
+                            culture=culture, created_at=now,
+                            last_opened_at=now)
+        return {**resp, "persisted": persisted, "genre": name,
+                "project": {"name": project_name, "genre": name,
+                            "culture": culture}}
     return {**project_init({"genre": name, "culture": culture}),
             "persisted": persisted, "genre": name}
 
