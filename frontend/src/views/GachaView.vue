@@ -42,9 +42,11 @@ const cancelBtn = ref(null)
 const chapterCount = computed(() => (props.project?.chapters ?? []).length)
 const busy = computed(() => drawing.value || confirmBusy.value)
 
-/* P10.4 新项目名：与后端 GENRE_NAME_RE 同口径（字母/数字开头，后可含 -/_，≤64）。
-   建议值 {genre}-{MMdd}——genre 用卡 id 不用 displayName（中文 title 过不了白名单） */
-const NAME_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/
+/* P10.6 项目名放宽：与后端 validate_project_name 同口径——中文/Unicode 字母数字/
+   空格/-/_，≤40 字符；拒首尾空白或点、..、Windows 保留名（路径分隔符本就不在字符集内）。
+   建议值 {genre}-{MMdd} 保持现状——genre 用卡 id 不用 displayName（slug 更稳） */
+const NAME_RE = /^[\p{L}\p{N} _-]+$/u
+const RESERVED_RE = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i
 const suggestedName = computed(() => {
   const g = card.value?.genre.name || 'story'
   const d = new Date()
@@ -52,7 +54,12 @@ const suggestedName = computed(() => {
   const dd = String(d.getDate()).padStart(2, '0')
   return `${g}-${mm}${dd}`
 })
-const nameValid = computed(() => NAME_RE.test(projectName.value))
+const nameValid = computed(() => {
+  const n = projectName.value
+  return n.length > 0 && n.length <= 40 && n === n.trim()
+    && !n.startsWith('.') && !n.endsWith('.') && !n.includes('..')
+    && NAME_RE.test(n) && !RESERVED_RE.test(n)
+})
 
 const COLS = [
   { key: 'genre', label: '题材' },
@@ -260,10 +267,10 @@ async function doConfirm() {
           <span>作为新项目开局</span>
         </label>
         <div v-if="startMode === 'new'" class="gd-name-row">
-          <input v-model.trim="projectName" class="gd-input" :disabled="confirmBusy" maxlength="64"
-                 aria-label="新项目名，仅限字母、数字、连字符和下划线" :placeholder="suggestedName">
+          <input v-model.trim="projectName" class="gd-input" :disabled="confirmBusy" maxlength="40"
+                 aria-label="新项目名，可用中文、字母、数字、空格、连字符和下划线" :placeholder="suggestedName">
           <div class="gd-hint" :class="{ bad: projectName && !nameValid }">
-            将作为新项目目录名：仅限字母/数字/-/_，且以字母或数字开头
+            将作为新项目目录名：可用中文/字母/数字/空格/-/_，≤40 字符，不能以空格或点开头结尾
           </div>
         </div>
 

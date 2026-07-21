@@ -2,7 +2,8 @@
 // 项目页（P10.4，多项目管理）：项目卡片网格 —— 名称 / 题材（displayName title +
 // id 小字副标）/ 文化 / 章数·tick / 最后打开 + current 徽标；卡片操作：
 // 「继续」（open → 全站刷新 → 写作台）/「导出」（浏览器直接下载 zip，不走 JSON
-// 通道）；顶部「开新项目」→ 开局页。铁律执行：列表只消费 toProjectsVM。
+// 通道）；顶部「导入 zip」（P10.6：multipart 上传外部项目包）/「开新项目」→ 开局页。
+// 铁律执行：列表只消费 toProjectsVM。
 import { ref, onMounted } from 'vue'
 import { api } from '../api/api'
 import { toProjectsVM, displayName } from '../api/adapters'
@@ -22,6 +23,8 @@ const dn = (id) => displayName(props.config, id)
 const projects = ref([])
 const loading = ref(true)
 const opening = ref('')          // 正在切换的项目名（防重入；按钮提示）
+const fileInput = ref(null)      // 隐藏的 zip 选择框（P10.6 导入）
+const importing = ref(false)     // 导入进行中（防重入；按钮提示）
 
 onMounted(load)
 
@@ -33,6 +36,33 @@ async function load() {
     toastError(`加载项目列表失败：${e.message}`)
   } finally {
     loading.value = false
+  }
+}
+
+/* 导入（P10.6）：选 zip → POST /api/projects/import → toast → 刷新列表。
+   项目名由后端定（zip 内 project.json.name → zip 文件名）；409 重名提示改名后重导 */
+function pickImport() {
+  if (importing.value) return
+  fileInput.value?.click()
+}
+
+async function onImportFile(e) {
+  const file = e.target.files?.[0]
+  e.target.value = ''            // 重置选择框，允许重选同一文件
+  if (!file || importing.value) return
+  importing.value = true
+  try {
+    const res = await api.importProject(file)
+    toast(`项目《${res.name}》已导入，点「继续」开工`)
+    await load()
+  } catch (err) {
+    if (err.status === 409) {
+      toastError(`导入失败：${err.message}——请改名后重试（zip 文件名或包内 project.json 的 name）`)
+    } else {
+      toastError(`导入失败：${err.message}`)
+    }
+  } finally {
+    importing.value = false
   }
 }
 
@@ -59,8 +89,12 @@ async function openProject(p) {
     <header class="projects-head">
       <h2>项目</h2>
       <span class="projects-sub">每个项目独立成书：章节、世界状态与题材配置互不干扰。</span>
+      <button class="btn-line" :disabled="importing" aria-label="导入项目 zip 包"
+              @click="pickImport">{{ importing ? '导入中…' : '导入 zip' }}</button>
       <button class="btn-main" aria-label="开新项目，去抽一组开局配置"
               @click="emit('navigate', 'gacha')">开新项目</button>
+      <input ref="fileInput" type="file" accept=".zip" hidden tabindex="-1"
+             aria-hidden="true" @change="onImportFile">
     </header>
 
     <div v-if="loading" class="projects-loading" role="status">

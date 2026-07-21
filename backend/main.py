@@ -18,6 +18,7 @@ API：
   GET  /api/characters         【P6.4 新增】角色卡聚合（minds/关系/voice/arc，只增）
   POST /api/projects/open      【P10.2 新增】切换当前项目（整栈重建+全量重绑；不存在 → 404；写 last_opened_at）
   GET  /api/projects/{name}/export  【P10.3 新增】导出项目 zip（sqlite backup 一致快照 + chapters/project.json + training_data）
+  POST /api/projects/import    【P10.6 新增】导入项目 zip（arcname 防穿越/炸弹粗防/名校验；重名 → 409）
   POST /api/gacha/draw         【P8.3/P8.4】抽卡开局：library 随机组合 + lock 锁栏；synth LLM 合成（mock 短路降级）
   POST /api/gacha/confirm      【P8.5】抽卡确认：synth 卡复核+落盘 plugins/genres/（原子写、重名后缀）→ reload → init
                                【P10.2】body 可选 project_name：建新项目目录（已存在 → 409）→ 整栈切换 → init
@@ -27,6 +28,7 @@ API：
 from __future__ import annotations
 
 import asyncio
+import io
 import json
 import logging
 import os
@@ -42,7 +44,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 import yaml
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -277,6 +279,32 @@ def get_project():
 PROJECTS_ROOT = ROOT / "data" / "projects"
 PROJECT_META_NAME = "project.json"
 
+# ---------- 项目名校验（P10.6：中文名放开，路径安全不退让） ----------
+# 允许：中文/Unicode 字母与数字/空格/-/_（\w 即 Unicode L*/N* 加下划线），≤40 字符。
+# 拒绝：空、首尾空白或点、路径分隔符（/ \）、..、控制字符、Windows 保留名。
+# 只用于项目目录名；题材 id 仍是 GENRE_NAME_RE 的 slug 口径（见 gacha confirm），不动。
+PROJECT_NAME_MAX_LEN = 40
+PROJECT_NAME_RE = re.compile(r"[\w \-]+")
+WINDOWS_RESERVED_NAMES = frozenset(
+    {"CON", "PRN", "AUX", "NUL"}
+    | {f"COM{i}" for i in range(1, 10)}
+    | {f"LPT{i}" for i in range(1, 10)})
+
+
+def validate_project_name(name) -> bool:
+    """项目目录名合法性。fail-closed：任何一环不过 → False（调用方定状态码）。"""
+    if not isinstance(name, str) or not name or len(name) > PROJECT_NAME_MAX_LEN:
+        return False
+    if name != name.strip() or name.startswith(".") or name.endswith("."):
+        return False
+    if "/" in name or "\\" in name or ".." in name:
+        return False
+    if any(ord(c) < 32 or ord(c) == 127 for c in name):
+        return False
+    if name.upper() in WINDOWS_RESERVED_NAMES:
+        return False
+    return PROJECT_NAME_RE.fullmatch(name) is not None
+
 
 def _read_project_meta(project_dir: Path) -> dict | None:
     """读 project.json；缺失/损坏/非 JSON 对象 → None（调用方按需补写）。"""
@@ -389,8 +417,8 @@ class ProjectOpenReq(BaseModel):
 def open_project(req: ProjectOpenReq):
     """【P10.2】切换当前项目到 data/projects/<name>：整栈重建 + 全量重绑。
 
-    name 先过白名单（复用题材名正则，拒绝路径分隔符/穿越 → 一律 404，
-    不区分「非法名」与「不存在」，不泄露目录结构）；story.db 缺失 → 404。
+    name 先过 validate_project_name（P10.6 起支持中文名；拒绝路径分隔符/穿越
+    → 一律 404，不区分「非法名」与「不存在」，不泄露目录结构）；story.db 缺失 → 404。
     切换后写 last_opened_at（原子合并写），返回 {ok, project: 快照 meta}。
     genre/culture（P10.2 评审修复）：读项目自身 project.json 恢复其题材/文化
     建新栈（缺 project.json 或缺键 → 回落 env/内置默认）——切回旧项目后继续
@@ -398,7 +426,7 @@ def open_project(req: ProjectOpenReq):
     与新栈同源扫 plugins 目录，口径同 gacha confirm）：非法 → 422 且不切换，
     当前项目原样保留。不复用 project_init：其语义含 reset 清世界，会抹掉被
     恢复项目的全部数据。"""
-    if not GENRE_NAME_RE.fullmatch(req.name):
+    if not validate_project_name(req.name):
         raise HTTPException(status_code=404, detail=f"项目不存在：{req.name}")
     project_dir = PROJECTS_ROOT / req.name
     if not (project_dir / "story.db").exists():
@@ -463,10 +491,11 @@ def _build_project_zip(project_dir: Path, name: str, work_dir: Path) -> Path:
 def export_project(name: str):
     """【P10.3】导出项目为 {name}-story.zip（FileResponse，application/zip）。
 
-    name 过白名单正则（同 projects/open：非法名与不存在一律 404，不泄露目录
-    结构）；story.db 缺失 → 404。zip 在临时目录组装，BackgroundTask 在响应
-    发送后整目录清理；组装失败则 except 中立即清理再抛。"""
-    if not GENRE_NAME_RE.fullmatch(name):
+    name 过 validate_project_name（P10.6 起支持中文名；非法名与不存在一律 404，
+    不泄露目录结构）；story.db 缺失 → 404。zip 在临时目录组装，BackgroundTask 在响应
+    发送后整目录清理；组装失败则 except 中立即清理再抛。中文名文件名由
+    Starlette 自动走 RFC5987 filename*=utf-8''<quoted>，浏览器下载不乱码。"""
+    if not validate_project_name(name):
         raise HTTPException(status_code=404, detail=f"项目不存在：{name}")
     project_dir = PROJECTS_ROOT / name
     if not (project_dir / "story.db").exists():
@@ -481,6 +510,123 @@ def export_project(name: str):
         zip_path, filename=f"{name}-story.zip", media_type="application/zip",
         background=BackgroundTask(shutil.rmtree, work_dir,
                                   ignore_errors=True))
+
+
+# ---------- 项目导入（P10.6：zip 入库；防穿越/防炸弹/重名 409） ----------
+IMPORT_MAX_ENTRIES = 200                      # 炸弹粗防 1：条目数上限
+IMPORT_MAX_UNPACKED = 200 * 1024 * 1024       # 炸弹粗防 2：解压总尺寸上限
+
+
+def _zip_arcname_safe(arcname: str) -> bool:
+    """zip 条目名防穿越：拒绝空名、绝对路径（/ \\ 开头）、盘符（C:…）、
+    反斜杠、NUL/控制字符、冒号（Windows ADS/盘符变体）、任何 .. 段。"""
+    if not arcname or arcname.startswith(("/", "\\")):
+        return False
+    if "\\" in arcname or ":" in arcname:
+        return False
+    if any(ord(c) < 32 or ord(c) == 127 for c in arcname):
+        return False
+    return ".." not in arcname.split("/")
+
+
+def _resolve_import_name(zf: zipfile.ZipFile, form_name: str | None,
+                         upload_name: str | None) -> str | None:
+    """导入项目名取参顺序：表单 name → zip 内 project.json.name → zip 文件名去后缀。
+    只负责取名，合法性由 validate_project_name 统一判。"""
+    if form_name and form_name.strip():
+        return form_name.strip()
+    if "project.json" in zf.namelist():
+        try:
+            meta = json.loads(zf.read("project.json").decode("utf-8"))
+        except (ValueError, UnicodeDecodeError):
+            meta = None
+        if isinstance(meta, dict) and isinstance(meta.get("name"), str) \
+                and meta["name"].strip():
+            return meta["name"].strip()
+    base = Path(upload_name or "").name          # 剥掉浏览器可能带的路径
+    return re.sub(r"\.zip$", "", base, flags=re.IGNORECASE) or None
+
+
+@app.post("/api/projects/import")
+async def import_project(file: UploadFile = File(...),
+                         name: str | None = Form(None)):
+    """【P10.6】导入项目 zip（本平台导出的 -story.zip 或同构包）到
+    data/projects/<name>。不入栈不切换（open 是显式动作）。
+
+    安全面（任一不过 → 422，落盘前全检完，零副作用）：
+    - 合法 zip 且根级含 story.db（文件条目，非目录）；
+    - 每个 arcname 过 _zip_arcname_safe（防解压逃逸到项目目录外）；
+    - 炸弹粗防：条目数 >200 或声明解压总尺寸 >200MB → 422；逐条实写时按
+      实际字节累计复核（声明值可伪造），超限中断并清掉已写内容；
+    - 项目名过 validate_project_name；目标目录已存在且非空 → 409。
+    落盘后 zip 无 project.json 时补写（name/created_at 必填；genre/culture
+    留空走默认——列表/open 的既有推断口径接管）。返回 {ok, name, genre, culture}
+    （genre/culture 取自落盘后的 project.json，缺省 → null）。"""
+    blob = await file.read()
+    try:
+        zf = zipfile.ZipFile(io.BytesIO(blob))
+    except zipfile.BadZipFile:
+        raise HTTPException(status_code=422, detail="不是合法的 zip 文件")
+    with zf:
+        entries = [i for i in zf.infolist() if not i.is_dir()]
+        if "story.db" not in {i.filename for i in entries}:
+            raise HTTPException(status_code=422,
+                                detail="zip 根级缺 story.db（非项目包）")
+        for i in entries:
+            if not _zip_arcname_safe(i.filename):
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"zip 含非法条目名（防穿越）：{i.filename!r}")
+        if len(entries) > IMPORT_MAX_ENTRIES:
+            raise HTTPException(
+                status_code=422,
+                detail=f"zip 条目过多（{len(entries)} > {IMPORT_MAX_ENTRIES}）")
+        declared = sum(i.file_size for i in entries)
+        if declared > IMPORT_MAX_UNPACKED:
+            raise HTTPException(status_code=422,
+                                detail="zip 解压后总尺寸超限（>200MB）")
+        proj_name = _resolve_import_name(zf, name, file.filename)
+        if not validate_project_name(proj_name):
+            raise HTTPException(
+                status_code=422,
+                detail=f"项目名非法：{proj_name!r}（允许中文/字母/数字/空格/-/_，"
+                       "1-40 字符；不含路径分隔符/.. /Windows 保留名）")
+        target = PROJECTS_ROOT / proj_name
+        if target.exists() and any(target.iterdir()):
+            raise HTTPException(status_code=409,
+                                detail=f"项目已存在：{proj_name}")
+        # 落盘：逐条解压（arcname 已过检，纯相对路径）；失败清现场
+        created = not target.exists()
+        target.mkdir(parents=True, exist_ok=True)
+        done: list[Path] = []
+        actual = 0
+        try:
+            for i in entries:
+                data = zf.read(i)
+                actual += len(data)
+                if actual > IMPORT_MAX_UNPACKED:
+                    raise HTTPException(
+                        status_code=422,
+                        detail="zip 实际解压尺寸超限（>200MB）")
+                dest = target / i.filename
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                dest.write_bytes(data)
+                done.append(dest)
+        except Exception:
+            if created:
+                shutil.rmtree(target, ignore_errors=True)
+            else:
+                for p in done:
+                    p.unlink(missing_ok=True)
+            raise
+    meta = _read_project_meta(target)
+    if meta is None:
+        # zip 无 project.json：补写最小元数据；genre/culture 留空走默认
+        meta = _write_project_meta(
+            target, name=proj_name,
+            created_at=datetime.now().isoformat(timespec="seconds"))
+    return {"ok": True, "name": proj_name, "genre": meta.get("genre"),
+            "culture": meta.get("culture")}
 
 
 @app.post("/api/project/generate")
@@ -664,7 +810,8 @@ async def gacha_draw(req: GachaDrawReq):
 
 
 # ---------- 抽卡确认 + 开局切换（P8.5：落盘 → reload → engine 单例重建） ----------
-# 题材名白名单：落盘文件名直接由它构成，拒绝对路径/穿越字符（防路径逃逸）
+# 题材名白名单：落盘文件名直接由它构成，拒绝对路径/穿越字符（防路径逃逸）。
+# 只用于题材 id（slug）；项目目录名走 validate_project_name（P10.6，允许中文）。
 GENRE_NAME_RE = re.compile(r"[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}")
 
 
@@ -711,7 +858,8 @@ def gacha_confirm(card: dict):
     响应 = init 响应 + {persisted, genre(最终名)}。
 
     【P10.2】body 可选 project_name（卡对象平铺的额外键，不给则现状语义）：
-    给了则开新项目——白名单校验（复用题材名正则）→ 目标目录已含 story.db
+    给了则开新项目——validate_project_name 校验（P10.6 起支持中文名）→ 目标
+    目录已含 story.db
     → 409「项目已存在」（在 synth 落盘之前检查，失败零副作用）；否则
     _switch_to 整栈切换到新目录（Kernel 构造自建目录/库）→ init 应用卡的
     genre/culture → 写 project.json（name/genre/culture/created_at/
@@ -721,11 +869,11 @@ def gacha_confirm(card: dict):
     """
     project_name = card.get("project_name")
     if project_name is not None:
-        if not isinstance(project_name, str) \
-                or not GENRE_NAME_RE.fullmatch(project_name):
+        if not validate_project_name(project_name):
             raise HTTPException(
                 status_code=422,
-                detail=f"项目名非法：{project_name!r}（仅限字母/数字/-/_，1-64 位）")
+                detail=f"项目名非法：{project_name!r}（允许中文/字母/数字/空格/-/_，"
+                       "1-40 字符；不含路径分隔符/.. /Windows 保留名）")
         if (PROJECTS_ROOT / project_name / "story.db").exists():
             raise HTTPException(status_code=409,
                                 detail=f"项目已存在：{project_name}")

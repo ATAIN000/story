@@ -1,6 +1,7 @@
 """P10.1 测试：GET /api/projects + project.json 老项目迁移补写
 P10.2 测试：POST /api/projects/open + gacha confirm project_name 扩展
 P10.3 测试：GET /api/projects/{name}/export（backup 一致快照 zip）
+P10.6 测试：中文项目名（confirm/open/export RFC5987）+ 项目导入 + 名校验安全面
 
 核心用例（任务卡 ≤3）：
 1. 列表含 yupei（真实 data/projects 扫描）：首次调用后 project.json 被补写，
@@ -23,6 +24,14 @@ P10.3 测试：GET /api/projects/{name}/export（backup 一致快照 zip）
    story.db（可 sqlite 打开且 events 数一致）/chapters.json/project.json/
    training_data/**。
 8. 导出 404：项目不存在 / 非法名 / 目录无 story.db。
+9. 中文项目名（P10.6）：confirm 中文名创建成功 → open 中文名成功 →
+   导出 content-disposition 走 RFC5987 filename*（quote 后的中文名不乱码）。
+10. 导入（P10.6）：合法 zip（story.db + project.json + chapters.json）→
+    导入成功 + 项目可 open + 重名 409；含 ../evil 条目 → 422 且零落盘；
+    缺 story.db → 422。
+11. 名校验安全面（P10.6）：validate_project_name 单元断言（中文放行；
+    保留名 CON/aux、分隔符、穿越、首尾空白/点、超长、控制字符全拒）+
+    confirm 带保留名/分隔符 → 422。
 """
 import io
 import json
@@ -32,6 +41,7 @@ import tempfile
 import unittest
 import zipfile
 from pathlib import Path
+from urllib.parse import quote
 
 from fastapi.testclient import TestClient
 
@@ -347,6 +357,146 @@ class TestProjectOpenAndConfirmSwitch(unittest.TestCase):
                 self.assertEqual(r.status_code, 200, r.text)
                 self.assertEqual(
                     len(self.client.get("/api/interventions").json()), 1)
+            finally:
+                self._restore_backend()
+
+
+class TestChineseNameAndImport(unittest.TestCase):
+    """P10.6：中文项目名 + 项目导入 + 名校验安全面（临时目录，纪律同
+    TestProjectOpenAndConfirmSwitch：finally 切回原项目并还原 PROJECTS_ROOT）。"""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.client = TestClient(backend.app)
+        cls.orig_dir = Path(backend.engine.project_dir)
+        cls.orig_genre = backend.engine.genre.name
+        cls.orig_culture = backend.engine.culture.name
+        cls.saved_root = backend.PROJECTS_ROOT
+
+    def _restore_backend(self):
+        backend.PROJECTS_ROOT = self.saved_root
+        backend._switch_to(self.orig_dir)
+        self.client.post("/api/project/init",
+                         json={"genre": self.orig_genre,
+                               "culture": self.orig_culture})
+
+    @staticmethod
+    def _card(project_name=None, genre="mystery",
+              culture="confucian_officialdom"):
+        card = {"mode": "library",
+                "genre": {"name": genre, "source": "library", "desc": "d"},
+                "culture": {"name": culture},
+                "archetype": {"name": ""}, "rule_packs": [], "note": None}
+        if project_name is not None:
+            card["project_name"] = project_name
+        return card
+
+    @staticmethod
+    def _zip_bytes(entries: dict) -> bytes:
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as zf:
+            for arc, data in entries.items():
+                zf.writestr(arc, data)
+        return buf.getvalue()
+
+    def _post_import(self, filename: str, payload: bytes):
+        return self.client.post(
+            "/api/projects/import",
+            files={"file": (filename, payload, "application/zip")})
+
+    def test_9_chinese_project_name_confirm_open_export(self):
+        """中文名全链路：confirm 建项目 → open 切换 → 导出 zip 文件名 RFC5987。"""
+        with tempfile.TemporaryDirectory() as root:
+            backend.PROJECTS_ROOT = Path(root)
+            try:
+                name = "末日情缘一号"
+                r = self.client.post("/api/gacha/confirm",
+                                     json=self._card(name))
+                self.assertEqual(r.status_code, 200, r.text)
+                self.assertTrue((Path(root) / name / "story.db").exists())
+                # open 中文名 → 200，meta 项目名一致
+                r = self.client.post("/api/projects/open",
+                                     json={"name": name})
+                self.assertEqual(r.status_code, 200, r.text)
+                self.assertEqual(r.json()["project"]["project"], name)
+                # 导出中文名：200 + content-disposition 走 RFC5987 filename*
+                # （Starlette 对非 ASCII 文件名自动 quote，下载不乱码）
+                r = self.client.get(f"/api/projects/{quote(name)}/export")
+                self.assertEqual(r.status_code, 200, r.text)
+                cd = r.headers.get("content-disposition", "")
+                self.assertIn("filename*=utf-8''", cd)
+                self.assertIn(quote(f"{name}-story.zip"), cd)
+                with zipfile.ZipFile(io.BytesIO(r.content)) as zf:
+                    self.assertIn("story.db", zf.namelist())
+            finally:
+                self._restore_backend()
+
+    def test_10_import_project_zip(self):
+        """导入：合法 zip → 200 + 可 open + 重名 409；穿越/缺 story.db → 422。"""
+        with tempfile.TemporaryDirectory() as root:
+            backend.PROJECTS_ROOT = Path(root)
+            try:
+                payload = self._zip_bytes({
+                    "story.db": b"",
+                    "project.json": json.dumps(
+                        {"name": "imported-01", "genre": "mystery",
+                         "culture": "confucian_officialdom"}),
+                    "chapters.json": "[]",
+                })
+                r = self._post_import("imported-01-story.zip", payload)
+                self.assertEqual(r.status_code, 200, r.text)
+                body = r.json()
+                self.assertTrue(body["ok"])
+                self.assertEqual(body["name"], "imported-01")
+                self.assertEqual(body["genre"], "mystery")
+                proj = Path(root) / "imported-01"
+                self.assertTrue((proj / "story.db").exists())
+                self.assertTrue((proj / "chapters.json").exists())
+                # 导入的项目可 open（整栈切换成功）
+                r = self.client.post("/api/projects/open",
+                                     json={"name": "imported-01"})
+                self.assertEqual(r.status_code, 200, r.text)
+                self.assertEqual(r.json()["project"]["project"], "imported-01")
+                # 重名（目录已存在且非空）→ 409
+                r = self._post_import("imported-01.zip", payload)
+                self.assertEqual(r.status_code, 409, r.text)
+                # 含 ../evil 穿越条目 → 422，且零落盘
+                evil = self._zip_bytes(
+                    {"story.db": b"", "../evil.txt": b"x"})
+                r = self._post_import("evil.zip", evil)
+                self.assertEqual(r.status_code, 422, r.text)
+                self.assertFalse((Path(root) / "evil").exists())
+                self.assertFalse((Path(root).parent / "evil.txt").exists())
+                # 缺根级 story.db → 422
+                nodb = self._zip_bytes({"chapters.json": "[]"})
+                r = self._post_import("nodb.zip", nodb)
+                self.assertEqual(r.status_code, 422, r.text)
+                self.assertFalse((Path(root) / "nodb").exists())
+            finally:
+                self._restore_backend()
+
+    def test_11_project_name_validation_security(self):
+        """名校验：中文/空格/-/_ 放行；保留名/分隔符/穿越/首尾白点/超长/
+        控制字符全拒；confirm 集成面 422。"""
+        v = backend.validate_project_name
+        for ok in ("末日情缘一号", "alpha", "my story", "a-b_c", "故事 2 号",
+                   "x" * 40):
+            self.assertTrue(v(ok), ok)
+        for bad in ("", "x" * 41, " lead", "trail ", ".dot", "dot.",
+                    "a/b", "a\\b", "..", "a..b", "CON", "aux", "Com1",
+                    "lpt9", "a\tb", "a\nb"):
+            self.assertFalse(v(bad), bad)
+        with tempfile.TemporaryDirectory() as root:
+            backend.PROJECTS_ROOT = Path(root)
+            try:
+                for bad in ("CON", "aux", "a/b"):
+                    r = self.client.post("/api/gacha/confirm",
+                                         json=self._card(bad))
+                    self.assertEqual(r.status_code, 422, f"{bad}: {r.text}")
+                # open 非法名仍一律 404（不泄露目录结构）
+                r = self.client.post("/api/projects/open",
+                                     json={"name": "a/b"})
+                self.assertEqual(r.status_code, 404)
             finally:
                 self._restore_backend()
 

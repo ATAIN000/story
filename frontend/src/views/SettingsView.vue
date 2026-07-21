@@ -1,7 +1,8 @@
 <script setup>
 // 设置视图（P6.10）：LLM 接入卡（展示掩码 base_url/model/mode + [测试连接]）+
 // 三个开关 EVAL_ENABLED / IR_FIRST / EVAL_MAX_ROUNDS（POST /api/settings 进程内覆盖，
-// 不持久化，重启失效）+ 界面设置（主题 + 字号，复用全局 composable）。
+// 不持久化，重启失效）+ 项目导出（P10.6：当前项目 zip 直链下载）+ 界面设置
+// （主题 + 字号，复用全局 composable）。
 //
 // 明确不做（评审意见 8）：7 步验证开关、违规动作 mark 模式、provider 在线切换、
 // 伏笔回收窗口/钩子在线改。key 永不在前端展示或编辑（走 .env）。
@@ -13,12 +14,15 @@ import { useTheme } from '../composables/useTheme'
 import { useFontSize } from '../composables/useFontSize'
 import EmptyState from '../components/EmptyState.vue'
 
-// App.vue 通过 <component :is> 统一传 :project :config；这里显式声明（即便未用）
-// 避免 fallthrough 到根元素 attr。
-defineProps({
+// App.vue 通过 <component :is> 统一传 :project :config；project 用于 P10.6
+// 项目导出行（取当前项目名拼 /api/projects/{name}/export 直链）。
+const props = defineProps({
   project: { type: Object, default: null },
   config: { type: Object, default: null },
 })
+
+// P10.6 设置页导出入口：当前项目名（快照 meta.project；未加载完成时为空 → 隐藏按钮）
+const currentName = computed(() => props.project?.meta?.project ?? '')
 
 const { toast, toastError } = useToast()
 const { theme, toggleTheme } = useTheme()
@@ -218,6 +222,27 @@ function onFont(e) {
                      @change="onMaxRounds"
                      aria-label="自评最大轮数" />
             </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 项目导出（P10.6：设置页导出入口，浏览器直链下载 zip） -->
+      <section class="card">
+        <header class="card-h">
+          <span class="card-t">项目</span>
+          <span class="card-tag">zip 打包 · 可分享可备份</span>
+        </header>
+        <div class="card-body">
+          <div class="switch-row">
+            <div class="sw-text">
+              <div class="sw-name">项目导出</div>
+              <div class="sw-sub">
+                当前项目《{{ currentName || '—' }}》打包为 zip：story.db 一致快照 + 章节 + 元数据。
+                导出的包可在项目页「导入 zip」恢复到任意一台机器。
+              </div>
+            </div>
+            <a v-if="currentName" class="btn" :href="api.exportProjectUrl(currentName)"
+               :download="`${currentName}-story.zip`" aria-label="导出当前项目为 zip 下载">导出 zip</a>
           </div>
         </div>
       </section>

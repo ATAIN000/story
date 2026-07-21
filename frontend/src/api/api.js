@@ -69,6 +69,13 @@ export const api = {
   openProject: (name) => post('/api/projects/open', { name }),
   /* 导出是浏览器直接下载（FileResponse zip），不走 req JSON 通道，只给 URL */
   exportProjectUrl: (name) => `/api/projects/${encodeURIComponent(name)}/export`,
+  /* P10.6 导入：multipart 上传。FormData 边界由浏览器生成，必须置空 headers
+     覆盖掉 req 默认的 Content-Type: application/json */
+  importProject: (file) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    return req('/api/projects/import', { method: 'POST', headers: {}, body: fd })
+  },
 
   /* --- 设置（P6.10 B9/B10） --- */
   settings: () => req('/api/settings'),
