@@ -154,8 +154,11 @@ tests/test_engine.py         赌注1/赌注4/核心循环回归测试
 | POST | /api/project/rollback | 回滚到指定 tick（`{"tick": 14}`） |
 | POST | /api/project/reset | 重置项目 |
 | POST | /api/gacha/draw | 抽卡开局：library 随机组合 / synth LLM 合成（lock 锁栏，mock 恒降级） |
-| POST | /api/gacha/confirm | 确认抽卡：synth 落盘 plugins/genres/ + registry 重扫 → init 切换 |
+| POST | /api/gacha/confirm | 确认抽卡：synth 落盘 plugins/genres/ + registry 重扫 → init 切换；可选 project_name 开新项目（409 重名） |
 | POST | /api/project/init | 开局切换：reset + 按 genre/culture 重建单例（进程内覆盖不写 env） |
+| GET | /api/projects | 项目列表（扫描 data/projects/*，含 current 字段；老项目补写 project.json） |
+| POST | /api/projects/open | 续旧切换：恢复项目自身 genre/culture 整栈重建（404 不存在 / 422 组合非法） |
+| GET | /api/projects/{name}/export | 导出项目 zip（sqlite backup 一致快照 + chapters/project.json + training_data） |
 | POST | /api/intervene | 作者介入统一入口（textual/structural/character/intent/evaluation） |
 | GET | /api/interventions | 介入历史（author_intervention 事件流） |
 | POST | /api/hitl/respond | 应答 pending 的 HITL 请求 |
@@ -191,6 +194,17 @@ tests/test_engine.py         赌注1/赌注4/核心循环回归测试
 
 端点契约：`POST /api/gacha/draw`、`POST /api/gacha/confirm`、`POST /api/project/init`，见 `docs/接口规范_part2.md` §9.5。
 
+## 多项目管理（Projects）
+
+每个项目是一个独立目录 `data/projects/<name>/`（自带 story.db 事件溯源库 + chapters.json +
+project.json 元数据 + training_data/），互不干扰；后端持有「当前项目栈」，切换即整栈重建。
+
+- **项目页**：左侧 nav 最顶部「项目」段。卡片列表展示每个项目的题材/文化/章节数/head tick/最后打开时间，当前项目带徽标高亮
+- **开新（抽卡）**：项目页「开新项目」→ 抽卡页 → 确认时选「作为新项目开局」并输项目名（字母/数字/-/_）→ 后端建独立目录并切换过去，直接进第一章 plan；重名 409 提示改名（弹层停留可重试）
+- **续旧**：卡片「继续」→ 整栈切换到该项目，**恢复其自身题材/文化**（读 project.json，不是 env 默认），写 last_opened_at；当前项目卡显示「进行中」
+- **导出分发**：卡片「导出」→ 下载 `{name}-story.zip`（story.db 为 sqlite backup 一致快照 + chapters.json/project.json + training_data/）；解压到 `data/projects/<name>/` 即可在任一实例打开
+
+端点契约：`GET /api/projects`、`POST /api/projects/open`、`GET /api/projects/{name}/export` 及 `POST /api/gacha/confirm` 的 `project_name` 扩展，见 `docs/接口规范_part2.md` §9.6。
 
 ## 已知边界（下一步路线）
 
