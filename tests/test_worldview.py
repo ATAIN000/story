@@ -75,3 +75,93 @@ def test_layers_data_integrity():
     assert "materialist" in [o["value"] for o in ALL_PARAMS["metaphysics"]["options"]]
     # 谓词条数符合预期（≥40）
     assert len(PREDICATES) >= 40
+
+
+# ---------- P12.2 端点测试（3 核心） ----------
+def test_schema_endpoint_layers_and_param_count():
+    """GET /api/worldview/schema：layers 含 L0-L3、param_count 与 ALL_PARAMS 一致、
+    layers_covered 仅已数据化层。"""
+    from fastapi.testclient import TestClient
+    from conftest import import_backend_main
+    backend = import_backend_main()
+    r = TestClient(backend.app).get("/api/worldview/schema")
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert [l["id"] for l in body["layers"]] == ["L0", "L1", "L2", "L3"]
+    assert body["param_count"] == len(ALL_PARAMS)  # 31
+    assert body["layers_covered"] == ["L0", "L1", "L2", "L3"]
+
+
+def test_evaluate_endpoint_materialist_narrows_consciousness_nature():
+    """POST /api/worldview/evaluate：materialist profile 经端点扁平化 + evaluate
+    → allowed[consciousness_nature] 不含 soul_based（跨层收窄，端点直通纯函数）。"""
+    from fastapi.testclient import TestClient
+    from conftest import import_backend_main
+    backend = import_backend_main()
+    r = TestClient(backend.app).post(
+        "/api/worldview/evaluate",
+        json={"profile": {"L0": {"metaphysics": "materialist"}}})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    allowed_cn = body["allowed"]["consciousness_nature"]
+    assert "soul_based" not in allowed_cn   # 唯物基底不允许灵魂独立存在
+    assert "emergent" in allowed_cn
+    assert body["violations"] == []         # profile 未显式设违例值
+
+
+def test_confirm_with_worldview_persists_and_rejects_violations():
+    """POST /api/gacha/confirm 携带 worldview：合法 profile → 落盘 worldview.json
+    （含 layers/preset/created_at）+ project.json 含 worldview 摘要；
+    违例 profile → 422 不落盘。走无 project_name 的原地 init 路径，避免新建
+    项目目录带来的 SQLite 句柄锁（finally 只删 JSON 文件，不动项目目录）。"""
+    import json as _json
+    from fastapi.testclient import TestClient
+    from conftest import import_backend_main
+    backend = import_backend_main()
+    orig = (backend.engine.genre.name, backend.engine.culture.name)
+    proj_dir = backend.engine.project_dir   # conftest 临时项目目录
+    c = TestClient(backend.app)
+    try:
+        # 合法 profile：library 卡 + worldview（无违例）→ 原地 init + 落盘
+        valid_wv = {
+            "layers": {"L0": {"metaphysics": "materialist",
+                              "consciousness_nature": "emergent"}},
+            "preset": "sci-fi-hard",
+        }
+        card = {"mode": "library", "genre": {"name": "mystery", "source": "library",
+                                             "desc": "d"},
+                "culture": {"name": "confucian_officialdom"},
+                "archetype": {"name": ""}, "rule_packs": [], "note": None,
+                "worldview": valid_wv}
+        r = c.post("/api/gacha/confirm", json=card)
+        assert r.status_code == 200, r.text
+        wv_file = proj_dir / "worldview.json"
+        assert wv_file.exists()
+        wv_data = _json.loads(wv_file.read_text(encoding="utf-8"))
+        assert wv_data["layers"] == valid_wv["layers"]
+        assert wv_data["preset"] == "sci-fi-hard"
+        assert wv_data["created_at"]
+        meta = _json.loads(
+            (proj_dir / "project.json").read_text(encoding="utf-8"))
+        assert meta["worldview"]["preset"] == "sci-fi-hard"
+        assert meta["worldview"]["param_count"] == 2  # 两个参数已设
+
+        # 违例 profile：materialist + soul_based → 422 不落盘不切换
+        bad_card = {"mode": "library",
+                    "genre": {"name": "mystery", "source": "library", "desc": "d"},
+                    "culture": {"name": "confucian_officialdom"},
+                    "archetype": {"name": ""}, "rule_packs": [], "note": None,
+                    "worldview": {"layers": {"L0": {
+                        "metaphysics": "materialist",
+                        "consciousness_nature": "soul_based"}}}}
+        r2 = c.post("/api/gacha/confirm", json=bad_card)
+        assert r2.status_code == 422, r2.text
+        # 失败前不应改写已落盘的 worldview.json（内容仍是合法那份）
+        assert _json.loads(wv_file.read_text(encoding="utf-8"))["preset"] == "sci-fi-hard"
+    finally:
+        # 恢复 engine 题材/文化 + 删掉测试写的 JSON 文件（不删项目目录本身）
+        for f in (proj_dir / "worldview.json",):
+            if f.exists():
+                f.unlink(missing_ok=True)
+        c.post("/api/project/init",
+               json={"genre": orig[0], "culture": orig[1]})

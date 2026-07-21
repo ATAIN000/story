@@ -65,6 +65,11 @@ from story_engine.meta import MetaGenerator, UserIntent  # noqa: E402
 from story_engine.meta.gacha import draw_card_async  # noqa: E402
 from story_engine.meta.genre_validator import validate_genre_pack  # noqa: E402
 from story_engine.types import StoryEngineError  # noqa: E402
+from story_engine.worldview import (  # noqa: E402
+    ALL_PARAMS as WV_ALL_PARAMS, LAYERS as WV_LAYERS,
+    WorldviewProfile, evaluate as wv_evaluate,
+    param_values as wv_param_values,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -380,6 +385,21 @@ def _read_head_tick(project_dir: Path) -> int:
     except sqlite3.Error:
         return 0
     return int(row[0]) if row else 0
+
+
+def _write_json_atomic(path: Path, data: dict) -> None:
+    """原子写 JSON 到任意路径（同目录 .tmp + replace，与 _write_project_meta
+    同口径）。P12.2 供 worldview.json 落盘复用：要么不写、要么写全。"""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    try:
+        tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2),
+                       encoding="utf-8")
+        tmp.replace(path)
+    except OSError:
+        tmp.unlink(missing_ok=True)
+        raise
 
 
 def _list_projects(root: Path) -> list[dict]:
@@ -812,6 +832,41 @@ def characters():
     return engine.characters_view()
 
 
+# ---------- 世界观架构（P12.2：L0-L3 全量参数 + 跨层一致性校验） ----------
+@app.get("/api/worldview/schema")
+def worldview_schema():
+    """【P12.2】返回世界观 10 层架构定义 + 当前已数据化的层。
+
+    前端据此渲染向导：``layers`` 是 L0-L3 的完整参数/枚举/连锁描述；
+    L4-L9 暂无参数（``layers_covered`` 仅含 L0-L3），UI 显示「即将上线」占位。
+    ``param_count`` 为当前已数据化参数总数（L0-L3 合计 31）。
+    """
+    return {
+        "layers": WV_LAYERS,
+        "param_count": len(WV_ALL_PARAMS),
+        "layers_covered": [layer["id"] for layer in WV_LAYERS],
+    }
+
+
+class WorldviewEvaluateReq(BaseModel):
+    """POST /api/worldview/evaluate body：``profile`` 为分层结构
+    ``{L0: {param: value}, ...}``（容忍部分填写/未知层键，见 WorldviewProfile）。"""
+    profile: dict[str, dict[str, str]] = {}
+
+
+@app.post("/api/worldview/evaluate")
+def worldview_evaluate_endpoint(req: WorldviewEvaluateReq):
+    """【P12.2】评估世界观 profile 的跨层一致性 → {allowed, violations}。
+
+    分层 profile 经 :class:`WorldviewProfile` 扁平化后喂给纯函数
+    :func:`evaluate`；``allowed`` 为被谓词收窄后的合法值集（未触发的参数
+    取全集），``violations`` 为 profile 中已设值命中某谓词 disallow/require
+    的明细（{param, value, message}）。
+    """
+    flat = WorldviewProfile(layers=req.profile).as_flat()
+    return wv_evaluate(flat)
+
+
 # ---------- 抽卡开局（P8.3 library / P8.4 synth，独立开局页：题材×文化×原型×规则） ----------
 @app.post("/api/gacha/draw")
 async def gacha_draw(req: GachaDrawReq):
@@ -883,6 +938,15 @@ def gacha_confirm(card: dict):
     last_opened_at）→ 响应 project 键扩为 {name, genre, culture}。
     组合合法性在切换前用当前 registry 预校验（插件同源），避免切完才 422
     的半切换态。synth 落盘逻辑不变，与项目切换正交。
+
+    【P12.2】card 可选携带 ``worldview: {layers: {L0: {param: value}, ...},
+    preset?: str}``：confirm 时先扁平化 + evaluate 校验跨层一致性，
+    violations 非空 → 422（带明细，不落盘不切换，与 synth 复核同口径）；
+    violations 空 → init/switch 之后把 ``{layers, preset?, created_at}``
+    原子写入目标项目目录的 worldview.json，并在 project.json 合并写
+    ``worldview: {preset?, param_count: N}`` 摘要（列表页用）。无 worldview
+    键 → 现状逐字不变。落盘目标目录：project_name 给了则新项目目录，否则
+    当前 engine.project_dir（init 原地切换后的当前项目）。
     """
     project_name = card.get("project_name")
     if project_name is not None:
@@ -894,6 +958,32 @@ def gacha_confirm(card: dict):
         if (PROJECTS_ROOT / project_name / "story.db").exists():
             raise HTTPException(status_code=409,
                                 detail=f"项目已存在：{project_name}")
+    # 【P12.2】worldview 可选：先校验（violations 非空 → 422 不落盘不切换）；
+    # 通过则保留扁平 profile + preset 供 init/switch 后落盘使用。
+    wv = card.get("worldview")
+    wv_layers: dict | None = None
+    wv_preset: str | None = None
+    wv_param_count = 0
+    wv_validated = False
+    if wv is not None:
+        if not isinstance(wv, dict):
+            raise HTTPException(status_code=422,
+                                detail="worldview 必须是对象")
+        wv_layers = wv.get("layers") or {}
+        if not isinstance(wv_layers, dict):
+            raise HTTPException(
+                status_code=422,
+                detail="worldview.layers 必须是对象（层 id → {param: value}）")
+        wv_preset = wv.get("preset")
+        flat = WorldviewProfile(layers=wv_layers).as_flat()
+        wv_param_count = len(flat)
+        result = wv_evaluate(flat)
+        if result["violations"]:
+            raise HTTPException(
+                status_code=422,
+                detail={"message": "世界观存在跨层一致性违例",
+                        "violations": result["violations"]})
+        wv_validated = True
     g = card.get("genre") or {}
     persisted = False
     name = g.get("name")
@@ -944,11 +1034,33 @@ def gacha_confirm(card: dict):
         _write_project_meta(project_dir, name=project_name, genre=name,
                             culture=culture, created_at=now,
                             last_opened_at=now)
+        # P12.2：worldview 落盘（已通过校验）到新项目目录 + project.json 摘要
+        if wv_validated:
+            _write_json_atomic(
+                project_dir / "worldview.json",
+                {"layers": wv_layers, "preset": wv_preset,
+                 "created_at": datetime.now().isoformat(timespec="seconds")})
+            _write_project_meta(
+                project_dir,
+                worldview={"preset": wv_preset,
+                           "param_count": wv_param_count})
         return {**resp, "persisted": persisted, "genre": name,
                 "project": {"name": project_name, "genre": name,
                             "culture": culture}}
-    return {**project_init({"genre": name, "culture": culture}),
+    resp = {**project_init({"genre": name, "culture": culture}),
             "persisted": persisted, "genre": name}
+    # P12.2：无 project_name 时落盘到当前 engine.project_dir（init 原地切换后）
+    if wv_validated:
+        target = Path(engine.project_dir)
+        _write_json_atomic(
+            target / "worldview.json",
+            {"layers": wv_layers, "preset": wv_preset,
+             "created_at": datetime.now().isoformat(timespec="seconds")})
+        _write_project_meta(
+            target,
+            worldview={"preset": wv_preset,
+                       "param_count": wv_param_count})
+    return resp
 
 
 @app.post("/api/project/init")
