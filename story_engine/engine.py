@@ -52,6 +52,7 @@ from .types import (WorldEvent, WorldState, CharacterMind, Relation,
                     NarrativeState, ForeshadowTriple, Check, StoryEngineError,
                     GenreBundle, normalize_learn)
 from .validator import ConsistencyValidator
+from .worldview import WorldviewProfile
 from . import mock_script
 
 PLUGIN_DIR = Path(__file__).parent / "plugins"
@@ -198,6 +199,11 @@ class StoryEngine:
         # P7.4 L5：rule_packs 显式引用的 world.rule 包合并进 world_rules
         #（genre params 未配置 rule_packs 时返回 params 本体，行为与现状逐字一致）
         genre_params = self._merge_world_rule_packs(self.genre.params)
+        # P12.3：世界观档案的 to_world_rules() 追加进统一 world_rules 列表
+        #（与 P7.4 同款合并：仅 kind=bool 且 expr 过 check_rule_expr 校验的规则
+        # 才追加；同 id 不覆盖；无 profile / 无可表达规则时 genre_params 不变，
+        # 行为与现状逐字一致）
+        genre_params = self._merge_worldview_rules(genre_params)
         # 权威 GenreBundle 构建一次：Showrunner 决策卡与 spawn_director 共用
         self.bundle = GenreBundle(
             genre=genre_name, culture=culture_name,
@@ -295,6 +301,48 @@ class StoryEngine:
                 else:
                     slot[rule["id"]] = len(merged)
                     merged.append(rule)               # 新规则追加
+        params = dict(genre_params)
+        params["world_rules"] = merged
+        return params
+
+    # ============ P12.3：worldview profile world_rules 合并 ============
+    def _merge_worldview_rules(self, genre_params: dict) -> dict:
+        """把项目 WorldviewProfile.to_world_rules() 中可表达为布尔事实的规则
+        追加进 genre_params.world_rules（与 P7.4 同款合并语义）。
+
+        - 仅 kind=bool 且 expr 过 ConsistencyValidator.check_rule_expr 的规则
+          才追加（kind=narrative 无 expr，validator 不消费，跳过）
+        - 同 id 已存在 → 不覆盖（worldview 规则 id 以 ``wv_`` 前缀，不与题材
+          内嵌规则冲突；保守起见仍跳过同 id）
+        - 无 profile / 无可表达规则 / 读取异常 → 返回 genre_params 本体
+          （行为与现状逐字一致）
+        """
+        profile = self._read_worldview()
+        if profile is None:
+            return genre_params
+        wv_rules = profile.to_world_rules()
+        bool_rules = [r for r in wv_rules
+                      if r.get("kind") == "bool" and r.get("expr")]
+        if not bool_rules:
+            return genre_params
+        existing = genre_params.get("world_rules") or []
+        slot = {r.get("id") for r in existing if isinstance(r, dict)}
+        merged = list(existing)
+        appended = False
+        for rule in bool_rules:
+            rid = rule.get("id")
+            if not rid or rid in slot:
+                continue
+            if not ConsistencyValidator.check_rule_expr(rule["expr"]):
+                logger.warning(
+                    "worldview 规则「%s」expr 非法（%r），拒载",
+                    rid, rule["expr"])
+                continue
+            slot.add(rid)
+            merged.append(rule)
+            appended = True
+        if not appended:
+            return genre_params
         params = dict(genre_params)
         params["world_rules"] = merged
         return params
@@ -622,7 +670,8 @@ class StoryEngine:
             fabula = FabulaBuilder().build(active)
             sjuzhet = SjuzhetSelector().select(fabula, self.bundle)
             text = await Narrativizer(self.kernel, self.bundle).narrate(
-                ir, sjuzhet, recap=self._ir_recap())
+                ir, sjuzhet, recap=self._ir_recap(),
+                worldview_text=self._worldview_prompt_text())
         except Exception as exc:
             warnings.warn(
                 f"P5.6 IR-first 链路异常（{exc!r}），回退旧文本产出路径",
@@ -1120,10 +1169,15 @@ class StoryEngine:
                      "章末留钩子",
                      "第一行写：标题：XXXX（不超过八字），空一行后接正文"]
         hard_txt = "\n".join(f"{i}. {req}" for i, req in enumerate(hard_reqs, 1))
+        # P12.3：世界观设定段（双通道融合）；无 profile / 空文本时整段缺席，
+        # prompt 与现状逐字一致
+        wv_text = self._worldview_prompt_text()
+        wv_txt = (f"=== 世界观设定 ===\n{wv_text}\n\n" if wv_text else "")
         return (
             f"【CHAPTER={chapter_no}】\n"
             f"你是{pcfg['role']}。背景：{pcfg['setting']}。\n"
             f"人物：{pcfg['characters']}。\n\n"
+            f"{wv_txt}"
             f"=== 已定稿前情 ===\n{history or '（开篇）'}\n\n"
             f"=== 本章调度 ===\n{intent_txt}推进轨道：{advance_txt}\n"
             f"原语序列：{prim_txt or '无'}\n"
@@ -1689,6 +1743,34 @@ class StoryEngine:
                 payload["effects"] = normalize_learn(
                     payload.get("effects"), payload.get("agent") or "world")
         return events
+
+    def _read_worldview(self) -> WorldviewProfile | None:
+        """P12.3：读项目 worldview.json → WorldviewProfile；无文件/异常 → None。
+
+        无文件时返回 None（双通道融合的「无 profile」路径：prompt 与现状逐字
+        一致，world_rules 不追加）。文件存在但格式异常 → warning + None（增强
+        不是门禁，世界观缺失不应阻塞生成主路径）。
+        """
+        path = self.project_dir / "worldview.json"
+        if not path.exists():
+            return None
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except Exception as exc:
+            warnings.warn(f"worldview.json 读取失败（{exc!r}），忽略", stacklevel=2)
+            return None
+        layers = data.get("layers") if isinstance(data, dict) else None
+        if not isinstance(layers, dict) or not layers:
+            return None
+        return WorldviewProfile(layers=layers)
+
+    def _worldview_prompt_text(self) -> str | None:
+        """P12.3：WorldviewProfile.to_prompt_text()；空文本 → None（无段注入）。"""
+        profile = self._read_worldview()
+        if profile is None:
+            return None
+        text = profile.to_prompt_text()
+        return text or None
 
     def _read_chapters(self) -> list[dict]:
         return json.loads(self.chapters_path.read_text(encoding="utf-8"))

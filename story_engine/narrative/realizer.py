@@ -146,12 +146,16 @@ class LanguageRealizer:
 
     # ---------- 主入口：1 次 LLM 调用 ----------
     async def realize(self, ir: NarrativeIR, sjuzhet=None, bundle=None,
-                      *, recap: str | None = None) -> str:
+                      *, recap: str | None = None,
+                      worldview_text: str | None = None) -> str:
         """IR → 目标语言文本（共创模式，恰好 1 次 LLM 调用；无设施/异常 → ""）
 
         recap：可选前情提要文本（P5.12 ②，章节连续性上下文）；None 时 prompt
-        与现状逐字一致。"""
-        prompt = self._render_prompt(ir, sjuzhet, bundle, recap=recap)
+        与现状逐字一致。
+        worldview_text：可选世界观设定文本（P12.3，双通道融合）；None/空 时
+        prompt 与现状逐字一致。"""
+        prompt = self._render_prompt(ir, sjuzhet, bundle, recap=recap,
+                                     worldview_text=worldview_text)
         if self._llm_call is None:
             return ""
         try:
@@ -217,7 +221,8 @@ class LanguageRealizer:
 
     # ---------- prompt 组装 ----------
     def _render_prompt(self, ir: NarrativeIR, sjuzhet=None, bundle=None,
-                       *, recap: str | None = None) -> str:
+                       *, recap: str | None = None,
+                       worldview_text: str | None = None) -> str:
         pcfg = _plugin_prompt_config(bundle)
         hard_reqs = [pcfg["style"], *(pcfg.get("hard_requirements") or []),
                      *self._craft_rules()]
@@ -227,10 +232,15 @@ class LanguageRealizer:
         recap_txt = (
             f"=== 前情提要（已定稿章节结尾与未回收伏笔，保持连续性） ===\n{recap}\n\n"
             if recap else "")
+        # P12.3：可选世界观设定段（双通道融合）；None/空串时整段缺席，
+        # prompt 与现状逐字一致
+        worldview_txt = (
+            f"=== 世界观设定 ===\n{worldview_text}\n\n"
+            if worldview_text else "")
         return (
             f"你是{pcfg['role']}。背景：{pcfg['setting']}。\n"
             f"人物：{pcfg['characters']}。\n\n"
-            f"{recap_txt}"
+            f"{worldview_txt}{recap_txt}"
             f"=== 本章故事骨架（IR 概念级摘要，供你再创作，不是待译原文） ===\n"
             f"{self._ir_summary(ir, sjuzhet)}\n\n"
             f"=== 质感目标（创作指令） ===\n{self._texture_block(ir.texture)}\n\n"
@@ -383,7 +393,8 @@ class EnglishRealizer(LanguageRealizer):
     }
 
     def _render_prompt(self, ir: NarrativeIR, sjuzhet=None, bundle=None,
-                       *, recap: str | None = None) -> str:
+                       *, recap: str | None = None,
+                       worldview_text: str | None = None) -> str:
         pcfg = _plugin_prompt_config(bundle)
         hard_reqs = [pcfg["style"], *(pcfg.get("hard_requirements") or []),
                      *self._craft_rules()]
@@ -394,10 +405,15 @@ class EnglishRealizer(LanguageRealizer):
             f"=== Previously on (finalized chapter endings and unpaid "
             f"foreshadowing — keep continuity) ===\n{recap}\n\n"
             if recap else "")
+        # P12.3：optional worldview block (dual-channel fusion); absent when
+        # None/empty, keeping the prompt byte-identical to before
+        worldview_txt = (
+            f"=== Worldview ===\n{worldview_text}\n\n"
+            if worldview_text else "")
         return (
             f"You are {pcfg['role']}. Setting: {pcfg['setting']}.\n"
             f"Characters: {pcfg['characters']}.\n\n"
-            f"{recap_txt}"
+            f"{worldview_txt}{recap_txt}"
             f"=== Story skeleton (concept-level IR summary — raw material to "
             f"re-create from, not text to translate) ===\n"
             f"{self._ir_summary(ir, sjuzhet)}\n\n"
@@ -512,13 +528,17 @@ class Narrativizer:
         return ChineseRealizer(self._llm_call, registry=registry)
 
     async def narrate(self, ir: NarrativeIR, sjuzhet=None,
-                      *, recap: str | None = None) -> str:
+                      *, recap: str | None = None,
+                      worldview_text: str | None = None) -> str:
         """realize（1 次 LLM）→ _filter_ai_isms → （env 门控的）_inject_imperfection
 
         recap：可选前情提要（P5.12 ②，engine IR-first 路径注入最近章节结尾 +
         未回收伏笔）；None 时 prompt 与现状逐字一致。
+        worldview_text：可选世界观设定文本（P12.3 双通道融合，engine 注入
+        WorldviewProfile.to_prompt_text()）；None/空 时 prompt 与现状逐字一致。
         """
         realizer = self.select_realizer(self.bundle.language)
-        text = await realizer.realize(ir, sjuzhet, self.bundle, recap=recap)
+        text = await realizer.realize(ir, sjuzhet, self.bundle, recap=recap,
+                                      worldview_text=worldview_text)
         text = _filter_ai_isms(text, realizer.language)
         return _inject_imperfection(text, realizer.language)

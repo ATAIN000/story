@@ -165,3 +165,84 @@ def test_confirm_with_worldview_persists_and_rejects_violations():
                 f.unlink(missing_ok=True)
         c.post("/api/project/init",
                json={"genre": orig[0], "culture": orig[1]})
+
+
+# ---------- P12.3 双通道融合（3 核心） ----------
+
+def test_realizer_prompt_includes_worldview_section_when_provided():
+    """有 worldview profile 时 Realizer prompt 含「=== 世界观设定 ===」段，
+    段体为 WorldviewProfile.to_prompt_text() 输出。fake LLM 记录 prompt 断言。"""
+    import asyncio
+    from types import SimpleNamespace
+    from story_engine.narrative import (BeatIR, ChineseRealizer, EventIR,
+                                        NarrativeIR, SceneBreakdown, TextureParams)
+    from story_engine.narrative.ir_builder import TEXTURE_DEFAULTS
+
+    class _FakeLLM:
+        def __init__(self):
+            self.captured = None
+
+        async def call(self, prompt, *, purpose="realize_chapter", **kw):
+            self.captured = prompt
+            return SimpleNamespace(text="正文。")
+
+    profile = WorldviewProfile(layers={"L0": {"metaphysics": "dualist"}})
+    wv_text = profile.to_prompt_text()
+    assert wv_text  # 非空（L0 形而上学已设）
+
+    ir = NarrativeIR(
+        beats=[BeatIR("b1", "disruption", ["Suspense"], "man_in_hole", 0.7)],
+        events=[EventIR("甲", "act:x", None, "地", "第1日·午", None, None, None)],
+        dialogue_lines=[], scene_breakdown=[SceneBreakdown("s1", (0, 1), "地")],
+        texture=TextureParams(**TEXTURE_DEFAULTS["zh"]))
+    llm = _FakeLLM()
+    realizer = ChineseRealizer(llm_call=llm.call)
+    asyncio.run(realizer.realize(ir, None, None, worldview_text=wv_text))
+    prompt = llm.captured
+    assert "=== 世界观设定 ===" in prompt
+    assert wv_text in prompt          # 段体含 to_prompt_text 输出
+
+
+def test_realizer_prompt_unchanged_when_no_worldview():
+    """无 worldview profile（worldview_text=None）时 prompt 不含世界观段，
+    与现状逐字一致。"""
+    import asyncio
+    from types import SimpleNamespace
+    from story_engine.narrative import (BeatIR, ChineseRealizer, EventIR,
+                                        NarrativeIR, SceneBreakdown, TextureParams)
+    from story_engine.narrative.ir_builder import TEXTURE_DEFAULTS
+
+    class _FakeLLM:
+        async def call(self, prompt, *, purpose="realize_chapter", **kw):
+            self.captured = prompt
+            return SimpleNamespace(text="正文。")
+
+    ir = NarrativeIR(
+        beats=[BeatIR("b1", "disruption", ["Suspense"], "man_in_hole", 0.7)],
+        events=[EventIR("甲", "act:x", None, "地", "第1日·午", None, None, None)],
+        dialogue_lines=[], scene_breakdown=[SceneBreakdown("s1", (0, 1), "地")],
+        texture=TextureParams(**TEXTURE_DEFAULTS["zh"]))
+    llm = _FakeLLM()
+    realizer = ChineseRealizer(llm_call=llm.call)
+    asyncio.run(realizer.realize(ir, None, None))   # worldview_text 缺省 None
+    assert "=== 世界观设定 ===" not in llm.captured
+
+
+def test_worldview_to_world_rules_passes_validator_check():
+    """to_world_rules() 产出的 kind=bool 规则 expr 能过 ConsistencyValidator
+    .check_rule_expr（限 5 事实词汇表内）。"""
+    from story_engine.validator import ConsistencyValidator
+
+    # power_existence=nonexistent → has_supernatural=False
+    p1 = WorldviewProfile(layers={"L3": {"power_existence": "nonexistent"}})
+    bool_rules = [r for r in p1.to_world_rules() if r.get("kind") == "bool"]
+    assert bool_rules, "应至少产出 1 条布尔规则"
+    for r in bool_rules:
+        assert ConsistencyValidator.check_rule_expr(r["expr"]), \
+            f"expr 非法：{r['expr']}"
+
+    # power_existence=common → has_supernatural=True
+    p2 = WorldviewProfile(layers={"L3": {"power_existence": "common"}})
+    exprs = [r["expr"] for r in p2.to_world_rules() if r.get("kind") == "bool"]
+    assert "has_supernatural" in exprs
+    assert ConsistencyValidator.check_rule_expr("has_supernatural")
