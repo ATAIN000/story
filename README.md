@@ -103,7 +103,8 @@ story_engine/                ← 纯 Python 核心包（不依赖 Web 框架）
 ├── mock_script.py           《玉佩案》3 章剧本（含三类违规的教科书式演示）
 └── plugins/
     ├── genres/                          题材插件 ×29（mystery/romance/wuxia + H7 提升的 26 个融合题材；
-    │                                    STORY_ENGINE_GENRE 环境变量切换，默认 mystery）
+    │                                    STORY_ENGINE_GENRE 环境变量切换，默认 mystery；
+    │                                    可选 cast: 段声明开局阵容——阵容随题材，不再恒包青天）
     ├── cultures/confucian_officialdom.yaml  文化插件（Hofstede 6维/评书扣子/原型映射）
     └── packs/                           素材包（P7：5 扩展点 7 样例 + _index.yaml 清单）
 
@@ -120,8 +121,18 @@ tests/test_engine.py         赌注1/赌注4/核心循环回归测试
 （坏包 warning 跳过不崩），各扩展点按各自方式消费：skill 包注册进内核、language
 包并入 Realizer 资源池、evaluator 包扩充 critic 维度库、world.rule 包经 genre
 `rule_packs` 键显式引用合并、archetype 包注册可见（消费接线二期）。前端插件视图
-经 `GET /api/config` 的 `plugins` 字段展示全部桶。格式规范见
+经 `GET /api/config` 的 `plugins` 字段展示全部桶（扩展点分桶，含
+`story.world.rule` 段 7 包）。格式规范见
 `../docs/素材包体系与hermes采集计划.md`。
+
+### 阵容插件化（Cast，P11）
+
+开局阵容随题材，不再恒为包青天：题材 yaml 可写可选 `cast:` 结构化段
+（id/role/goals/voice_hint/relations，示例见 mystery.yaml 的包青天五虎数据化）；
+无 cast 段时解析 `prompt.characters` 文案（如 romance → 沈砚清/顾明璋/柳含烟）；
+两者皆无回退 mock 种子阵容 + warning（不崩）。创世（genesis）与角色 spawn 均
+消费解析结果——mystery 保持全量 SEED 保真（剧本演示世界零变化），其余任何
+题材开局都是自己的阵容人物。契约见 `../docs/接口规范_part2.md` §11.5。
 
 ## 关键设计决策（来自调研与验证报告）
 
@@ -190,7 +201,7 @@ tests/test_engine.py         赌注1/赌注4/核心循环回归测试
 - **两模式**：
   - **库内组合（library）**：registry 现有题材（29 个）× 文化 × 人物原型/世界规则包随机组合，零 LLM；「换一批」整套重抽，「换这张」单换一栏（其余栏锁定）
   - **AI 自由发挥（synth）**：LLM 以 mystery.yaml 为模板锚现场合成新题材包，H7 检查集机器校验，失败带反馈重试 1 次，仍失败自动降级为库内组合（卡面 note 说明）；mock 模式恒走库内卡（零 LLM 调用）
-- **确认即入库 + 切换**：确认开工后，AI 合成的题材复核落盘 `plugins/genres/`（重名自动 -2 后缀、原子写）并 `registry.reload()` 立即可选；随后 reset 清库 + 同一 Kernel 上按新 genre/culture 重建引擎（进程内覆盖，不改 env/.env，重启回落），直接进第一章 plan。已有章节时先弹重置确认框（可取消）
+- **确认即入库 + 切换**：确认开工后，AI 合成的题材复核落盘 `plugins/genres/`（重名自动 -2 后缀、原子写）并 `registry.reload()` 立即可选；随后 reset 清库 + 同一 Kernel 上按新 genre/culture 重建引擎（进程内覆盖，不改 env/.env，重启回落），直接进第一章 plan。已有章节时先弹重置确认框（可取消）。确认成功后前端**整页刷新**落写作台（P11.2：刷新后 SPA 重拉配置与项目快照，状态天然对齐；失败路径不刷新，停留弹层可重试）
 
 端点契约：`POST /api/gacha/draw`、`POST /api/gacha/confirm`、`POST /api/project/init`，见 `docs/接口规范_part2.md` §9.5。
 
@@ -200,8 +211,8 @@ tests/test_engine.py         赌注1/赌注4/核心循环回归测试
 project.json 元数据 + training_data/），互不干扰；后端持有「当前项目栈」，切换即整栈重建。
 
 - **项目页**：左侧 nav 最顶部「项目」段。卡片列表展示每个项目的题材/文化/章节数/head tick/最后打开时间，当前项目带徽标高亮
-- **开新（抽卡）**：项目页「开新项目」→ 抽卡页 → 确认时选「作为新项目开局」并输项目名（字母/数字/-/_）→ 后端建独立目录并切换过去，直接进第一章 plan；重名 409 提示改名（弹层停留可重试）
-- **续旧**：卡片「继续」→ 整栈切换到该项目，**恢复其自身题材/文化**（读 project.json，不是 env 默认），写 last_opened_at；当前项目卡显示「进行中」
+- **开新（抽卡）**：项目页「开新项目」→ 抽卡页 → 确认时选「作为新项目开局」并输项目名（字母/数字/-/_）→ 后端建独立目录并切换过去，成功后整页刷新落写作台、直接进第一章 plan；重名 409 提示改名（弹层停留不刷新，可重试）
+- **续旧**：卡片「继续」→ 整栈切换到该项目，**恢复其自身题材/文化**（读 project.json，不是 env 默认），写 last_opened_at；切换成功**整页刷新**落写作台（P11.2，替代原 SPA 内跳转；失败 toast 停留本页不刷新）；当前项目卡显示「进行中」
 - **导出分发**：卡片「导出」→ 下载 `{name}-story.zip`（story.db 为 sqlite backup 一致快照 + chapters.json/project.json + training_data/）；解压到 `data/projects/<name>/` 即可在任一实例打开
 
 端点契约：`GET /api/projects`、`POST /api/projects/open`、`GET /api/projects/{name}/export` 及 `POST /api/gacha/confirm` 的 `project_name` 扩展，见 `docs/接口规范_part2.md` §9.6。
