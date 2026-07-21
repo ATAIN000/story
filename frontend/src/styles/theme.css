@@ -392,3 +392,44 @@ button { font: inherit; cursor: pointer; border: none; background: none; color: 
   background: var(--s2); margin: 4px 0; line-height: 1.6; }
 .ctx-fs.overdue { border-left-color: var(--danger); }
 .ctx-empty { font-size: 11px; color: var(--faint); line-height: 1.7; }
+
+/* ==========================================================================
+   抽卡开局（P8.6）—— 阶段 1 简化卡面。story.html 无对应物，按 editorial 风
+   新设（变量全复用；spinner 复用 .gc-spin；按钮复用 .btn-main/.btn-line）：
+   四栏卡区 grid（窄屏折行）+ 底栏按钮组 + 重置确认框 overlay。
+   ========================================================================== */
+.gacha { max-width: 1160px; margin: 0 auto; padding: 30px 34px 60px; }
+.gacha-head h2 { font: 700 22px var(--serif); margin-bottom: 4px; }
+.gacha-sub { font-size: 12px; color: var(--faint); }
+.gacha-status { display: inline-flex; align-items: center; gap: 8px; margin-top: 14px;
+  font-size: 12px; color: var(--primary); }
+.gacha-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 18px; }
+.gacha-col { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.gacha-card { flex: 1; border: 1px solid var(--line); border-radius: 10px; background: var(--s2);
+  padding: 14px 16px; display: flex; flex-direction: column; gap: 7px; min-height: 168px; }
+.gacha-src { align-self: flex-start; font-size: 10px; padding: 1px 7px; border-radius: 4px;
+  border: 1px solid var(--accent); color: var(--accent); }
+.gacha-src.synth { border-color: var(--violet); color: var(--violet); }
+.gacha-name { font: 700 16px var(--serif); word-break: break-all; }
+.gacha-desc { font-size: 11.5px; color: var(--ink2); line-height: 1.7; }
+.gacha-voice { font-size: 10px; color: var(--faint); margin-top: auto; }
+.gacha-rule { font-size: 11.5px; color: var(--ink2); line-height: 1.6;
+  border-left: 2px solid var(--line2); padding-left: 8px; }
+.gacha-rule b { display: block; color: var(--ink); font-weight: 600; }
+.gacha-rule span { font-size: 10.5px; color: var(--faint); }
+.gacha-synth-btn { display: inline-flex; align-items: center; justify-content: center; gap: 5px; }
+.gacha-foot { margin-top: 20px; display: flex; gap: 10px; justify-content: flex-end; align-items: center; }
+.gacha-loading { margin: 60px 0; display: flex; align-items: center; justify-content: center;
+  gap: 10px; color: var(--faint); font-size: 13px; }
+.gacha-overlay { position: fixed; inset: 0; z-index: 60; background: rgba(20, 16, 12, .45);
+  display: flex; align-items: center; justify-content: center; }
+.gacha-dialog { width: min(420px, calc(100vw - 40px)); background: var(--s2);
+  border: 1px solid var(--line2); border-radius: 10px; padding: 20px 22px; animation: pop .18s; }
+.gd-title { font: 700 16px var(--serif); margin-bottom: 8px; }
+.gd-desc { font-size: 12.5px; color: var(--ink2); line-height: 1.8; }
+.gd-act { margin-top: 16px; display: flex; gap: 10px; justify-content: flex-end; }
+@media (max-width: 1080px) { .gacha-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 620px) { .gacha-grid { grid-template-columns: 1fr; } }
+
+/* 写作台空态双 CTA 行（P8.6 抽卡开局入口） */
+.es-cta { display: flex; gap: 10px; }

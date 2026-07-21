@@ -19,7 +19,7 @@ const props = defineProps({
   project: { type: Object, default: null },
   config: { type: Object, default: null },
 })
-const emit = defineEmits(['refresh'])
+const emit = defineEmits(['refresh', 'navigate'])
 
 const { toast, toastError } = useToast()
 const { generating, runGeneration } = useGeneration()
@@ -254,11 +254,15 @@ function onParagraphTextUpdated() {
 </script>
 
 <template>
-  <!-- 零章冷启动（brief 空态口径）：CTA 直接触发 plan 流程 -->
+  <!-- 零章冷启动（brief 空态口径）：CTA 直接触发 plan 流程；P8.6 增「抽卡开局」入口 -->
   <div v-if="!hasChapters && flow === 'idle'" class="desk-empty">
     <EmptyState icon="pen" title="开始你的第一章"
       desc="新项目从第 1 章开始。系统先给本章方案（轨道调度 + 节拍 + 钩子），你批准后才真正成稿。">
-      <button class="btn-main" :disabled="busy || generating" @click="startPlan">看第 1 章方案</button>
+      <div class="es-cta">
+        <button class="btn-main" :disabled="busy || generating" @click="startPlan">看第 1 章方案</button>
+        <button class="btn-line" aria-label="抽卡开局，换一组题材文化配置再开工"
+                @click="emit('navigate', 'gacha')">抽卡开局</button>
+      </div>
     </EmptyState>
   </div>
 

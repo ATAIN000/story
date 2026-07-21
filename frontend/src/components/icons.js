@@ -23,8 +23,8 @@ export const ICONS = {
   sparkles: '<path d="M12 3l1.9 5.8L19.7 10.7l-5.8 1.9L12 18.4l-1.9-5.8L4.3 10.7l5.8-1.9L12 3z"/>',
 }
 
-// 导航图标映射（story.html :562 NAV_ICONS）
+// 导航图标映射（story.html :562 NAV_ICONS；P8.6 增 gacha）
 export const NAV_ICONS = {
   write: 'pen', card: 'sparkles', chars: 'users', world: 'map', timeline: 'clock',
-  threads: 'bookmark', plugins: 'puzzle', settings: 'sliders',
+  threads: 'bookmark', gacha: 'zap', plugins: 'puzzle', settings: 'sliders',
 }

@@ -12,6 +12,7 @@ import AppIcon from './components/AppIcon.vue'
 import { NAV_ICONS } from './components/icons'
 import ToastHost from './components/ToastHost.vue'
 import WriteView from './views/WriteView.vue'
+import GachaView from './views/GachaView.vue'
 import DecisionCardView from './views/DecisionCardView.vue'
 import CharsView from './views/CharsView.vue'
 import WorldView from './views/WorldView.vue'
@@ -31,7 +32,7 @@ function bumpFont(dir) {
   toast(`正文字号 ${fsSize.value}px`)
 }
 
-const VIEWS = { write: WriteView, card: DecisionCardView, chars: CharsView, world: WorldView, timeline: TimelineView, threads: ThreadsView, plugins: PluginsView, settings: SettingsView }
+const VIEWS = { write: WriteView, gacha: GachaView, card: DecisionCardView, chars: CharsView, world: WorldView, timeline: TimelineView, threads: ThreadsView, plugins: PluginsView, settings: SettingsView }
 const NAV = [
   { sec: '创作', items: [{ id: 'write', name: '写作台' }, { id: 'card', name: '决策卡' }] },
   { sec: '故事资产', items: [
@@ -40,6 +41,8 @@ const NAV = [
     { id: 'timeline', name: '时间线' },
     { id: 'threads', name: '伏笔账' },
   ] },
+  // P8.6 抽卡开局页：独立段置于「系统」段上方（plan Task 6 口径）
+  { sec: '开局', items: [{ id: 'gacha', name: '抽卡开局' }] },
   { sec: '系统', items: [
     { id: 'plugins', name: '插件' },
     { id: 'settings', name: '设置' },
@@ -71,6 +74,11 @@ async function refresh() {
   } catch (e) {
     toastError(`加载项目失败：${e.message}`)
   }
+}
+
+/* 视图内跳转（P8.6：写作台空态 CTA → 开局页；开局页确认开工 → 写作台） */
+function gotoView(id) {
+  if (VIEWS[id]) view.value = id
 }
 
 onMounted(async () => {
@@ -133,9 +141,9 @@ onMounted(async () => {
         </div>
       </header>
 
-      <!-- 视图区（状态机切换；组件只消费 adapter 视图模型） -->
+      <!-- 视图区（状态机切换；组件只消费 adapter 视图模型；navigate = 视图内跳转而发起，如空态 CTA / 抽卡确认开工） -->
       <main class="view" role="main" :aria-label="`视图：${view}`">
-        <component :is="activeView" :project="project" :config="config" @refresh="refresh" />
+        <component :is="activeView" :project="project" :config="config" @refresh="refresh" @navigate="gotoView" />
       </main>
     </div>
 

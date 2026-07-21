@@ -2,6 +2,7 @@
  * api.js —— 后端端点薄封装（只管传输，不管字段语义；字段语义见 adapters.js）。
  * P6 端点全量：plan / generate(mode) / deletePlan / intervene / interventions /
  * hitlRespond / trainingStats / paragraphRewrite / characters（backend/main.py）。
+ * P8 抽卡开局：gachaDraw / gachaConfirm / projectInit。
  */
 
 const BASE = ''
@@ -53,6 +54,11 @@ export const api = {
 
   /* --- Meta-Generator（题材配置，FE-4 用） --- */
   metaConfig: (intent) => post('/api/meta/config', intent),
+
+  /* --- 抽卡开局（P8.3-P8.5；confirm body = draw 返回的卡原样，含 synth 的 genre.yaml） --- */
+  gachaDraw: (mode = 'library', lock = null) => post('/api/gacha/draw', { mode, lock }),
+  gachaConfirm: (card) => post('/api/gacha/confirm', card),
+  projectInit: (genre, culture) => post('/api/project/init', { genre, culture }),
 
   /* --- 设置（P6.10 B9/B10） --- */
   settings: () => req('/api/settings'),
