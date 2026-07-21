@@ -1,4 +1,4 @@
-"""tests for story_engine.worldview（Phase 12.1：L0-L3 批1）
+"""tests for story_engine.worldview（Phase 12：全 10 层）
 
 覆盖 brief 要求的 3 个核心场景：
   1. 级联收窄：metaphysics=materialist → consciousness_nature 不含 soul_based

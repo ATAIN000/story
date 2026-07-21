@@ -116,7 +116,7 @@ class WorldviewProfile:
                           "desc": f"世界观存在超自然力量（{option_label('power_existence', pe)}）",
                           "expr": "has_supernatural"})
 
-        # 2. narrator_is_killer（L8+ 范畴，本批 L0-L3 暂不覆盖；保留 narrative 占位）
+        # 2. narrator_is_killer 等 3 个事实词汇仍无参数映射（5 事实词汇表覆盖留白）
         # 3. case_age_days / introduces_new_key_clue（悬疑专用，本批不覆盖）
 
         # 其余设定均无法落入 5 事实词汇表 → narrative
