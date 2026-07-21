@@ -65,3 +65,77 @@ class TestRegistryReload(unittest.TestCase):
                 self.assertEqual(k.registry.list_plugins(), before)
             finally:
                 k.close()
+
+
+class TestGachaDraw(unittest.TestCase):
+    PLUGIN_DIR = Path(__file__).resolve().parent.parent / "story_engine" / "plugins"
+
+    def _kernel(self, tmpdir, **kw):
+        from story_engine.kernel import Kernel
+        return Kernel(tmpdir, plugin_dir=self.PLUGIN_DIR, **kw)
+
+    def test_draw_library_fields_complete_and_lock(self):
+        import tempfile
+        from story_engine.meta.gacha import draw_card
+        with tempfile.TemporaryDirectory() as d:
+            k = self._kernel(d)
+            try:
+                card = draw_card(k, None, "library", None)
+                for key in ("mode", "genre", "culture", "archetype", "rule_packs", "note"):
+                    self.assertIn(key, card)
+                self.assertEqual(card["mode"], "library")
+                self.assertEqual(card["genre"]["source"], "library")
+                for key in ("name", "desc", "voice_hint"):
+                    self.assertIn(key, card["archetype"])
+                self.assertTrue(card["rule_packs"])
+                # lock 全四栏：锁定后重抽各栏不变
+                lock = {"genre": card["genre"]["name"],
+                        "culture": card["culture"]["name"],
+                        "archetype": card["archetype"]["name"],
+                        "rule_packs": [p["name"] for p in card["rule_packs"]]}
+                locked = draw_card(k, None, "library", lock)
+                self.assertEqual(locked["genre"]["name"], card["genre"]["name"])
+                self.assertEqual(locked["culture"]["name"], card["culture"]["name"])
+                self.assertEqual(locked["archetype"]["name"], card["archetype"]["name"])
+                self.assertEqual(sorted(p["name"] for p in locked["rule_packs"]),
+                                 sorted(p["name"] for p in card["rule_packs"]))
+            finally:
+                k.close()
+
+    def test_draw_mock_never_calls_llm(self):
+        import tempfile
+        from story_engine.kernel import LLMPool
+        from story_engine.meta.gacha import draw_card
+        calls = []
+
+        async def fake(*a, **kw):
+            calls.append(1)
+
+        with tempfile.TemporaryDirectory() as d:
+            # 显式 mock pool（不依赖环境变量）：synth 模式 + 注入 fake，
+            # mock 短路在注入点之前 → 恒降级 library 卡，零 LLM 调用（硬约束）
+            k = self._kernel(d, llm_pool=LLMPool(mode="mock"))
+            try:
+                card = draw_card(k, fake, "synth", None)
+                self.assertEqual(calls, [])
+                self.assertEqual(card["mode"], "library")
+                self.assertTrue(card["note"])
+            finally:
+                k.close()
+
+    def test_draw_endpoint_returns_card(self):
+        from fastapi.testclient import TestClient
+        from conftest import import_backend_main
+        backend = import_backend_main()
+        c = TestClient(backend.app)
+        r = c.post("/api/gacha/draw", json={"mode": "library"})
+        self.assertEqual(r.status_code, 200, r.text)
+        card = r.json()
+        for key in ("genre", "culture", "archetype", "rule_packs"):
+            self.assertIn(key, card)
+        self.assertEqual(card["genre"]["source"], "library")
+        # 端点锁栏：锁定 genre 后重抽不变
+        r2 = c.post("/api/gacha/draw",
+                    json={"mode": "library", "lock": {"genre": card["genre"]["name"]}})
+        self.assertEqual(r2.status_code, 200, r2.text)
+        self.assertEqual(r2.json()["genre"]["name"], card["genre"]["name"])
