@@ -2,6 +2,7 @@
 
 API：
   GET  /api/project            项目完整快照（世界状态/事件/伏笔/章节/决策卡/pending_plan）
+  GET  /api/projects           【P10.1 新增】项目列表（扫描 data/projects/*；老项目补写 project.json）
   POST /api/project/generate   生成下一章（核心循环；body 可选 mode: auto|confirm，P6.2）
   POST /api/project/plan       【P6.2 新增】只产决策卡（两阶段生成第一步）
   DELETE /api/project/plan     【P6.2 新增】作废待批准方案
@@ -23,11 +24,14 @@ API：
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import re
+import sqlite3
 import sys
 import tempfile
 from dataclasses import asdict
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal
 
@@ -77,33 +81,53 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"],
                    allow_methods=["*"], allow_headers=["*"])
 
 # === v0.2: Kernel/User 分离 — 先建 Kernel，注入 Engine 与 MetaGenerator ===
-# 传 initial_state_factory（静态方法可直接引用）：否则创世种子要靠
-# engine.reset() 重建 store 才能顺带注入（P9.x 原位清库后该掩蔽效应消失，必须显式传）
-kernel = Kernel(PROJECT_DIR, plugin_dir=ROOT / "story_engine" / "plugins",
-                initial_state_factory=StoryEngine._genesis_state)
-llm_client = kernel.llm  # 保留 llm_client 变量名，老 API 引用兼容
-engine = StoryEngine(kernel)
-meta_gen = MetaGenerator(kernel)
+# P10.1：五件套的构造收敛为 _build_stack 工厂（启动路径行为不变），模块级
+# 变量是栈内成员的别名（最小改动面：既有端点零改动）；P10.2 项目切换时整栈
+# 重建并重绑别名即可。
+def _make_regenerate_sync(stack: dict):
+    """regenerate_fn 闭包工厂（P10.1）：经 stack["engine"] 延迟解析当前
+    engine——project_init 会重绑栈内 engine，必须调用时取新引用而非构造时
+    绑死（与旧 _regenerate_sync 读模块全局的行为等价）。
 
-
-def _regenerate_sync() -> None:
-    """InterventionRouter.regenerate_fn 约定：无参同步 callable（P5.8）；
+    InterventionRouter.regenerate_fn 约定：无参同步 callable（P5.8）；
     engine.regenerate_current_chapter 是 async → 最小适配（P5.10 评审传导2）：
     asyncio.run 包一层。安全性：本函数只经 run_in_threadpool 在工作线程调用
     （无线程内运行中的事件循环），故 asyncio.run 合法；EventStore 为
     check_same_thread=False + 锁，跨线程 commit 安全；LLMPool 每次调用
     自建 httpx.AsyncClient，不绑定特定事件循环。"""
-    asyncio.run(engine.regenerate_current_chapter())
+    def _regenerate_sync() -> None:
+        asyncio.run(stack["engine"].regenerate_current_chapter())
+    return _regenerate_sync
 
 
-# === v0.5: HITL（P5.10）— InterventionRouter + TrainingPipeline 挂载 ===
-# 挂载点决策（任务卡落地要点）：engine 侧无 router/pipeline 实例（读 engine.py
-# 确认），参照 meta_gen 同款模式在 backend 侧构造，依赖 kernel 单例 +
-# regenerate_fn async 包装 + TrainingPipeline(kernel, project_dir)。
-training_pipeline = TrainingPipeline(kernel, PROJECT_DIR)
-intervention_router = InterventionRouter(
-    kernel, pipeline=training_pipeline, regenerate_fn=_regenerate_sync,
-    textual_apply_fn=engine.update_chapter_text)  # P6.1(B1)：textual 正文回写口子
+def _build_stack(project_dir: Path) -> dict:
+    """P10.1 项目栈工厂：kernel/engine/meta_gen/pipeline/router 一处构造。
+
+    传 initial_state_factory（静态方法可直接引用）：否则创世种子要靠
+    engine.reset() 重建 store 才能顺带注入（P9.x 原位清库后该掩蔽效应消失，
+    必须显式传）。挂载点决策（P5.10 任务卡）：engine 侧无 router/pipeline
+    实例，参照 meta_gen 同款模式在 backend 侧构造。router 的 textual_apply_fn
+    绑构造时的 engine（P6.1(B1) 正文回写口子；P8.5 前即如此，行为保持）。"""
+    kernel = Kernel(project_dir, plugin_dir=ROOT / "story_engine" / "plugins",
+                    initial_state_factory=StoryEngine._genesis_state)
+    engine = StoryEngine(kernel)
+    meta_gen = MetaGenerator(kernel)
+    pipeline = TrainingPipeline(kernel, project_dir)
+    stack = {"kernel": kernel, "engine": engine, "meta_gen": meta_gen,
+             "pipeline": pipeline}
+    stack["router"] = InterventionRouter(
+        kernel, pipeline=pipeline, regenerate_fn=_make_regenerate_sync(stack),
+        textual_apply_fn=engine.update_chapter_text)
+    return stack
+
+
+_stack = _build_stack(Path(PROJECT_DIR))
+kernel = _stack["kernel"]
+llm_client = kernel.llm  # 保留 llm_client 变量名，老 API 引用兼容
+engine = _stack["engine"]
+meta_gen = _stack["meta_gen"]
+training_pipeline = _stack["pipeline"]
+intervention_router = _stack["router"]
 
 
 class RollbackReq(BaseModel):
@@ -187,6 +211,105 @@ def config():
 @app.get("/api/project")
 def get_project():
     return engine.project_snapshot()
+
+
+# ---------- 多项目管理（P10.1：project.json 元数据 + 项目列表） ----------
+PROJECTS_ROOT = ROOT / "data" / "projects"
+PROJECT_META_NAME = "project.json"
+
+
+def _read_project_meta(project_dir: Path) -> dict | None:
+    """读 project.json；缺失/损坏/非 JSON 对象 → None（调用方按需补写）。"""
+    try:
+        meta = json.loads(
+            (Path(project_dir) / PROJECT_META_NAME).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return meta if isinstance(meta, dict) else None
+
+
+def _write_project_meta(project_dir: Path, **fields) -> dict:
+    """合并写 project.json（在既有元数据上更新给定字段），返回写后全文。
+    字段口径（P10.1）：name/genre/culture/created_at/last_opened_at；
+    engine.reset()/init/gacha confirm 处的写入 P10.2 统一接。"""
+    meta = _read_project_meta(project_dir) or {}
+    meta.update(fields)
+    (Path(project_dir) / PROJECT_META_NAME).write_text(
+        json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+    return meta
+
+
+def _count_active_chapters(project_dir: Path) -> int:
+    """chapters.json 中非 superseded 条数；文件缺失/损坏/非数组 → 0（不崩）。"""
+    try:
+        chapters = json.loads(
+            (Path(project_dir) / "chapters.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return 0
+    if not isinstance(chapters, list):
+        return 0
+    return sum(1 for c in chapters
+               if isinstance(c, dict) and not c.get("superseded"))
+
+
+def _read_head_tick(project_dir: Path) -> int:
+    """sqlite 只读连接取 heads 表 main 分支 head_tick（用完即关）；
+    库打不开/无表/无行 → 0（不崩）。"""
+    db_path = Path(project_dir) / "story.db"
+    try:
+        conn = sqlite3.connect(f"file:{db_path.as_posix()}?mode=ro", uri=True)
+        try:
+            row = conn.execute(
+                "SELECT head_tick FROM heads WHERE branch_id = 'main'").fetchone()
+        finally:
+            conn.close()
+    except sqlite3.Error:
+        return 0
+    return int(row[0]) if row else 0
+
+
+def _list_projects(root: Path) -> list[dict]:
+    """扫描 root 下项目目录（只认含 story.db 者），按目录名排序汇总列表项。
+
+    缺 project.json 的老项目迁移：genre/culture 用当前 engine（当前项目）或
+    env/内置默认（其余项目）推断并写回——本任务唯一的补写点。"""
+    items = []
+    if not Path(root).is_dir():
+        return items
+    current_name = Path(engine.project_dir).name
+    for d in sorted(Path(root).iterdir()):
+        if not d.is_dir() or not (d / "story.db").exists():
+            continue
+        meta = _read_project_meta(d)
+        if meta is None:
+            if d.name == current_name:
+                genre, culture = engine.genre.name, engine.culture.name
+            else:
+                genre = os.environ.get("STORY_ENGINE_GENRE", "mystery")
+                culture = os.environ.get("STORY_ENGINE_CULTURE",
+                                         "confucian_officialdom")
+            now = datetime.now().isoformat(timespec="seconds")
+            meta = _write_project_meta(
+                d, name=d.name, genre=genre, culture=culture,
+                created_at=now, last_opened_at=now)
+        items.append({
+            "name": d.name,
+            "genre": meta.get("genre"),
+            "culture": meta.get("culture"),
+            "chapter_count": _count_active_chapters(d),
+            "head_tick": _read_head_tick(d),
+            "last_opened_at": meta.get("last_opened_at"),
+            "current": d.name == current_name,
+        })
+    return items
+
+
+@app.get("/api/projects")
+def list_projects():
+    """【P10.1】项目列表：扫描 data/projects/* → [{name, genre, culture,
+    chapter_count, head_tick, last_opened_at, current}]。
+    坏目录不崩：无 story.db 跳过；坏 chapters.json/打不开 story.db → 计数 0。"""
+    return _list_projects(PROJECTS_ROOT)
 
 
 @app.post("/api/project/generate")
@@ -479,6 +602,7 @@ def project_init(body: dict):
         raise HTTPException(status_code=422, detail=str(e))
     engine.reset()
     engine = StoryEngine(engine.kernel, genre_name=genre, culture_name=culture)
+    _stack["engine"] = engine  # P10.1：栈内引用同步（regenerate_fn 经栈延迟解析）
     engine.discard_plan()  # 契约：init 后 pending_plan 必空（新实例本即 None，显式兜底）
     return {"ok": True, "project": {"genre": genre, "culture": culture}}
 
