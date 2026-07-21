@@ -29,7 +29,7 @@ const statsError = ref('')
 // 扩展点分组（从 config prop 派生，App 已拉过 /api/config）
 const EXTENSION_ORDER = [
   'story.genre', 'story.culture', 'story.language',
-  'story.skill', 'story.evaluator', 'world.rule',
+  'story.skill', 'story.evaluator', 'story.world.rule',
 ]
 const groups = computed(() => {
   const plugins = props.config?.plugins ?? {}

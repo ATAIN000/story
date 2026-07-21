@@ -5,8 +5,10 @@
 // 提示并停留）/ 当前项目继续（原 reset+init 路径）；synth 等待提示带已等待秒数。
 // 铁律执行：模板只消费 adapter VM（toGachaCardVM）；confirm payload 另持 draw
 // 原始返回（synth 卡的 genre.yaml 须原样回传后端复核落盘，VM 按约不消费它）。
-// 确认后跳写作台并触发第一章 plan：直接调 api.plan()（P6.6 最短真实路径）——
-// 后端落 pending_plan，WriteView watch project 拾起即进 planned 流。
+// 确认成功后整页刷新（P11.2：SPA 重拉 config + project，落在默认写作台视图，
+// WriteView watch project 拾起 pending_plan 即进 planned 流）；失败路径（409/错误
+// toast）不刷新、停留可重试。第一章 plan 由 confirm 成功后直接调 api.plan()
+// （P6.6 最短真实路径）落 pending_plan。
 import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { api } from '../api/api'
 import { toGachaCardVM, displayName } from '../api/adapters'
@@ -17,7 +19,8 @@ const props = defineProps({
   project: { type: Object, default: null },
   config: { type: Object, default: null },
 })
-const emit = defineEmits(['refresh', 'navigate'])
+// P11.2：confirm 成功改为整页刷新，不再 emit；声明保留以明示组件契约
+defineEmits(['refresh', 'navigate'])
 
 const { toast, toastError } = useToast()
 
@@ -154,14 +157,15 @@ async function doConfirm() {
     toast(asNew
       ? `新项目《${res.project?.name ?? name}》已开工：${dn(finalGenre)} × ${dn(culture)}${suffix}`
       : `已开工：${dn(finalGenre)} × ${dn(culture)}${suffix}`)
-    /* 第一章 plan：失败不阻塞跳转（写作台空态可重试同款 plan） */
+    /* 第一章 plan：失败不阻塞刷新（写作台空态可重试同款 plan） */
     try {
       await api.plan()
     } catch (e) {
       toastError(`第 1 章方案生成失败：${e.message}（可到写作台重试）`)
     }
-    emit('refresh')          // 项目已 reset+init（或整栈切到新项目）：重拉快照
-    emit('navigate', 'write')
+    /* 整页刷新（P11.2）：项目已 reset+init（或整栈切到新项目），SPA 重拉
+       config/project 落写作台，WriteView 拾起 pending_plan 进 planned 流 */
+    window.location.reload()
   } catch (e) {
     /* P10.4：409 项目重名 → 提示并停留弹层改名重试；其余错误同样停留可重试 */
     if (e.status === 409) {

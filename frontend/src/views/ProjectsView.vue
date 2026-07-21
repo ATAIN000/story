@@ -1,8 +1,9 @@
 <script setup>
 // 项目页（P10.4，多项目管理）：项目卡片网格 —— 名称 / 题材（displayName title +
 // id 小字副标）/ 文化 / 章数·tick / 最后打开 + current 徽标；卡片操作：
-// 「继续」（open → 全站刷新 → 写作台）/「导出」（浏览器直接下载 zip，不走 JSON
-// 通道）；顶部「导入 zip」（P10.6：multipart 上传外部项目包）/「开新项目」→ 开局页。
+// 「继续」（open → 整页刷新，SPA 重拉 config/project 落写作台）/「导出」（浏览器
+// 直接下载 zip，不走 JSON 通道）；顶部「导入 zip」（P10.6：multipart 上传外部
+// 项目包）/「开新项目」→ 开局页。
 // 铁律执行：列表只消费 toProjectsVM。
 import { ref, onMounted } from 'vue'
 import { api } from '../api/api'
@@ -66,16 +67,15 @@ async function onImportFile(e) {
   }
 }
 
-/* 继续：open 切栈 → 全站刷新（App 重拉 config + project，恢复项目自身题材）
-   → 跳写作台；失败停留本页（列表不变，可重试） */
+/* 继续：open 切栈 → 整页刷新（P11.2：SPA 重拉 config + project，恢复项目自身题材，
+   刷新后落在默认写作台视图）；失败停留本页（列表不变，可重试） */
 async function openProject(p) {
   if (p.current || opening.value) return
   opening.value = p.name
   try {
     await api.openProject(p.name)
     toast(`已切换到《${p.name}》`)
-    emit('refresh')
-    emit('navigate', 'write')
+    window.location.reload()
   } catch (e) {
     toastError(`切换项目失败：${e.message}`)
   } finally {
