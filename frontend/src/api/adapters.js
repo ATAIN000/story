@@ -470,6 +470,117 @@ export function toGachaCardVM(card) {
   }
 }
 
+/* ===== 世界观架构（P12.5：GET /api/worldview/schema → VM） =====
+ * 源：story_engine/worldview/layers.py LAYERS（L0-L3，共 31 参数）+
+ *     presets.py preset_summaries()（10 骨架）+ evaluate 端点返回。
+ * schema 端点带出 {layers, presets, param_count, layers_covered}；
+ * 这里把 layers 拍平成「按层分组、每参数带 options+label+hint+chain」的视图，
+ * 并补齐 L4-L9 占位层（前端 brief：未数据化层显示「即将上线」灰色占位），
+ * 由 PLACEHOLDER_LAYERS 静态注入。
+ *
+ * 返回的 VM 结构（GachaView 向导消费）::
+ *
+ *   {
+ *     layers: [{ id, name, desc, covered, params: [{key, label, options:[{value,
+ *                label, hint, chain}], ...}], ...}, ...],   // 10 层
+ *     layerIds: ['L0',...,'L9'],
+ *     presets: [{key, name, vibe, summary}],                // 10 骨架
+ *     paramMap: {<param_key>: <所属 layer VM>},             // 反查：违例时定位层
+ *     paramMeta: {<param_key>: {layerId, label}},           // 轻量反查
+ *     paramCount, layersCovered,
+ *   }
+ *
+ * option_label 不可得（前端无映射表）→ 改由后端已带 label/options 直接使用。
+ */
+const PLACEHOLDER_LAYERS = [
+  { id: 'L4', name: '物种生态', desc: '生命形态、物种关系、生态位与共生结构（即将上线）' },
+  { id: 'L5', name: '社会结构', desc: '政治、经济、阶层、组织形态（即将上线）' },
+  { id: 'L6', name: '文化与信仰', desc: '宗教、价值观、知识体系、艺术（即将上线）' },
+  { id: 'L7', name: '历史与时间线', desc: '起源叙事、纪元划分、重大事件（即将上线）' },
+  { id: 'L8', name: '认知与真相', desc: '信息不对称、知识禁忌、不可靠叙事（即将上线）' },
+  { id: 'L9', name: '存在级冲突', desc: '世界级张力和主题锚点（即将上线）' },
+]
+
+export function toWorldviewSchemaVM(raw) {
+  if (!raw) return null
+  const srcLayers = raw.layers ?? []
+  const covered = new Set(raw.layers_covered ?? srcLayers.map(l => l.id))
+  const presets = (raw.presets ?? []).map(p => ({
+    key: p.key ?? '',
+    name: p.name ?? '',
+    vibe: p.vibe ?? '',
+    /* 后端 summary 形如 "physics_deviation=none;metaphysics=materialist;..."
+       前端展示用做副标；键值中文映射留待视图按 paramMap 解析 */
+    summary: p.summary ?? '',
+  }))
+  /* 拍平每层参数：透传 options 数组，确保 hint/chain 字段在 */
+  const realLayers = srcLayers.map(layer => ({
+    id: layer.id ?? '',
+    name: layer.name ?? '',
+    desc: layer.desc ?? '',
+    covered: true,
+    params: (layer.params ?? []).map(p => ({
+      key: p.key ?? '',
+      label: p.label ?? p.key ?? '',
+      options: (p.options ?? []).map(o => ({
+        value: o.value ?? '',
+        label: o.label ?? o.value ?? '',
+        hint: o.hint ?? '',
+        chain: o.chain ?? '',
+      })),
+    })),
+  }))
+  /* 占位层（即将上线） */
+  const placeholder = PLACEHOLDER_LAYERS.map(l => ({
+    id: l.id, name: l.name, desc: l.desc, covered: false, params: [],
+  }))
+  const layers = [...realLayers, ...placeholder]
+  /* 反查表：param_key → layer VM */
+  const paramMap = {}
+  const paramMeta = {}
+  for (const layer of layers) {
+    for (const p of (layer.params ?? [])) {
+      paramMap[p.key] = layer
+      paramMeta[p.key] = { layerId: layer.id, label: p.label }
+    }
+  }
+  return {
+    layers,
+    layerIds: layers.map(l => l.id),
+    presets,
+    paramMap,
+    paramMeta,
+    paramCount: raw.param_count ?? 0,
+    layersCovered: Array.from(covered),
+  }
+}
+
+/* ===== 世界观 evaluate（POST /api/worldview/evaluate 返回 → VM） =====
+ * 源：worldview/predicates.py evaluate() → {allowed: {key: [vals]},
+ *     violations: [{param, value, message}]}。
+ * 这里只做字段重整：violations 按 param 索引成 map 便于视图 chip 标红，
+ * 并派生 violationSet（param 集合，用于进度轨标记）。 */
+export function toEvaluateVM(raw) {
+  if (!raw) return { allowed: {}, violations: [], byParam: {}, hasViolations: false }
+  const violations = (raw.violations ?? []).map(v => ({
+    param: v.param ?? '',
+    value: v.value ?? '',
+    message: v.message ?? '',
+  }))
+  const byParam = {}
+  for (const v of violations) {
+    if (!byParam[v.param]) byParam[v.param] = []
+    byParam[v.param].push(v)
+  }
+  return {
+    allowed: raw.allowed ?? {},
+    violations,
+    byParam,
+    violationSet: new Set(violations.map(v => v.param)),
+    hasViolations: violations.length > 0,
+  }
+}
+
 export function toProjectVM(snap) {
   if (!snap) return null
   const meta = snap.meta ?? {}

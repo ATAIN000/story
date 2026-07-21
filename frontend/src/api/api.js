@@ -81,4 +81,10 @@ export const api = {
   settings: () => req('/api/settings'),
   updateSettings: (patch) => post('/api/settings', patch),
   testLlm: (body = {}) => post('/api/settings/test_llm', body),
+
+  /* --- 世界观架构（P12.5：10 层分步向导 + 级联校验） ---
+     schema() → {layers[L0..L3], presets[10], param_count, layers_covered}
+     evaluate(profile) → profile: {L0:{param:value},...}，返回 {allowed, violations} */
+  worldviewSchema: () => req('/api/worldview/schema'),
+  worldviewEvaluate: (profile) => post('/api/worldview/evaluate', { profile }),
 }

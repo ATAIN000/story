@@ -478,3 +478,142 @@ button { font: inherit; cursor: pointer; border: none; background: none; color: 
 .gd-hint { margin-top: 4px; font-size: 10.5px; color: var(--faint); }
 .gd-hint.bad { color: var(--danger); }
 .gd-warn { margin: 6px 0 0 24px; font-size: 11.5px; color: var(--danger); line-height: 1.7; }
+
+/* ===== 世界观三段式向导（P12.5）=====
+   复用 .gacha / .btn-main / .btn-line / .gc-spin 基底；以下为三段式、骨架卡、
+   十层向导（左进度轨 + 右参数卡 + chips + 级联标红）专属样式。
+   所有动画 CSS-only（hover 上浮、进度填充 transition）；无新依赖。 */
+
+/* 三段式面包屑 */
+.gacha-stages { list-style: none; display: flex; gap: 14px; padding: 0; margin: 12px 0 0; }
+.gacha-stages li { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px;
+  color: var(--faint); }
+.gacha-stages li.active { color: var(--primary); }
+.gacha-stages li.done { color: var(--accent); }
+.gacha-stages li.disabled { opacity: .4; }
+.gacha-stages .gs-idx { display: inline-flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--line2);
+  font-size: 10px; font-weight: 700; }
+.gacha-stages li.active .gs-idx { background: var(--primary); border-color: var(--primary); color: var(--bg); }
+.gacha-stages li.done .gs-idx { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+.gacha-stages li:not(:last-child)::after { content: '→'; color: var(--line2); margin-left: 6px; }
+
+/* 段 2 骨架选择 */
+.wv-skeleton { margin-top: 18px; }
+.wv-intro { font-size: 12px; color: var(--ink2); line-height: 1.8; margin: 0 0 14px; }
+.wv-skel-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px; }
+.wv-skel-card { display: flex; flex-direction: column; gap: 6px; padding: 14px;
+  border: 1px solid var(--line); border-radius: 10px; background: var(--s2);
+  cursor: pointer; text-align: left; font: inherit; color: inherit;
+  transition: transform .12s ease, border-color .12s ease, box-shadow .12s ease; }
+.wv-skel-card:hover { transform: translateY(-2px); border-color: var(--line2);
+  box-shadow: 0 4px 12px rgba(0,0,0,.06); }
+.wv-skel-card:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.wv-skel-card.selected { border-color: var(--primary); background: var(--primary-tint);
+  box-shadow: inset 0 0 0 1px var(--primary); }
+.wv-skel-name { font: 700 15px var(--serif); color: var(--ink); }
+.wv-skel-vibe { font-size: 11.5px; color: var(--ink2); line-height: 1.7; }
+.wv-skel-chips { list-style: none; padding: 0; margin: 4px 0 0; display: flex; flex-wrap: wrap; gap: 4px; }
+.wv-skel-chips li { display: inline-flex; align-items: baseline; gap: 3px;
+  font-size: 10px; padding: 1px 6px; border: 1px solid var(--line); border-radius: 4px;
+  background: var(--s1); }
+.wv-skel-chip-label { color: var(--faint); }
+.wv-skel-chip-val { font-family: Menlo, Consolas, monospace; color: var(--ink); }
+.wv-skel-special { align-items: center; text-align: center; justify-content: center; min-height: 110px;
+  border-style: dashed; }
+.wv-skel-blank-mark { font-size: 22px; color: var(--primary); }
+@media (max-width: 720px) { .wv-skel-grid { grid-template-columns: 1fr; } }
+
+/* 段 3 十层向导：左进度轨 + 右参数面板 */
+.wv-wizard { display: grid; grid-template-columns: 220px 1fr; gap: 24px; margin-top: 18px;
+  min-height: 480px; }
+@media (max-width: 900px) { .wv-wizard { grid-template-columns: 1fr; } }
+
+/* 左进度轨 */
+.wv-rail { position: sticky; top: 12px; align-self: start; }
+.wv-rail-track { height: 3px; background: var(--line); border-radius: 2px; overflow: hidden;
+  margin-bottom: 12px; }
+.wv-rail-fill { height: 100%; background: var(--primary); border-radius: 2px;
+  transition: width .35s ease; }
+.wv-rail-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 2px; }
+.wv-rail-item { font-size: 11.5px; }
+.wv-rail-btn { display: flex; align-items: center; gap: 8px; width: 100%; padding: 7px 8px;
+  border: none; border-radius: 6px; background: transparent; color: var(--ink2);
+  cursor: pointer; text-align: left; font: inherit; transition: background .12s ease, color .12s ease; }
+.wv-rail-btn:hover:not(:disabled) { background: var(--s3); color: var(--ink); }
+.wv-rail-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+.wv-rail-btn:disabled { color: var(--faint); cursor: not-allowed; opacity: .65; }
+.wv-rail-item.active .wv-rail-btn { background: var(--primary-tint); color: var(--primary);
+  font-weight: 600; }
+.wv-rail-mark { display: inline-flex; align-items: center; justify-content: center;
+  width: 16px; height: 16px; flex-shrink: 0; font-size: 12px; }
+.wv-rail-item.st-done .wv-rail-mark { color: var(--accent); }
+.wv-rail-item.st-violation .wv-rail-mark { color: var(--danger); font-weight: 700; }
+.wv-rail-item.st-pending .wv-rail-mark { color: var(--line2); }
+.wv-rail-id { font-family: Menlo, Consolas, monospace; font-size: 10px; color: var(--faint);
+  width: 22px; flex-shrink: 0; }
+.wv-rail-name { flex: 1; min-width: 0; }
+.wv-rail-soon { font-size: 9px; padding: 1px 5px; border-radius: 3px;
+  background: var(--s3); color: var(--faint); }
+.wv-rail-item.st-pending .wv-rail-name { color: var(--faint); }
+
+/* 右参数面板 */
+.wv-panel { display: flex; flex-direction: column; gap: 14px;
+  border: 1px solid var(--line); border-radius: 10px; background: var(--s2);
+  padding: 18px 22px; min-height: 480px; }
+.wv-panel-head h3 { font: 700 17px var(--serif); margin: 0; color: var(--ink);
+  display: flex; align-items: baseline; gap: 8px; }
+.wv-panel-id { font-family: Menlo, Consolas, monospace; font-size: 11px;
+  color: var(--primary); background: var(--primary-tint); padding: 1px 7px; border-radius: 4px; }
+.wv-panel-desc { font-size: 11.5px; color: var(--ink2); line-height: 1.7; margin: 4px 0 0; }
+.wv-eval-pending { display: inline-flex; align-items: center; gap: 6px; margin-top: 8px;
+  font-size: 11px; color: var(--faint); }
+.gc-spin-sm { width: 11px; height: 11px; border-width: 1.5px; }
+.wv-eval-bad { margin-top: 8px; padding: 7px 10px; border-radius: 6px;
+  background: rgba(166,61,47,.10); border: 1px solid var(--danger);
+  font-size: 11.5px; color: var(--danger); line-height: 1.7; }
+.wv-eval-ok { margin-top: 8px; font-size: 11.5px; color: var(--accent); }
+
+/* 占位层 */
+.wv-soon-card { text-align: center; padding: 60px 20px; color: var(--faint); }
+.wv-soon-mark { font-size: 36px; opacity: .5; }
+.wv-soon-card p { font-size: 13px; line-height: 1.8; margin: 8px 0; }
+.wv-soon-hint { font-size: 11.5px !important; color: var(--faint); }
+
+/* 参数卡片 */
+.wv-params { display: flex; flex-direction: column; gap: 14px; flex: 1; }
+.wv-param { padding: 12px 0; border-bottom: 1px dashed var(--line); }
+.wv-param:last-child { border-bottom: none; }
+.wv-param.violated { background: rgba(166,61,47,.04); margin: 0 -12px; padding: 12px;
+  border-radius: 6px; border-bottom: none; }
+.wv-param-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.wv-param-label { font: 600 13.5px var(--serif); color: var(--ink); }
+.btn-line-xs { font-size: 10px; padding: 2px 8px; border-radius: 4px; }
+
+/* chips */
+.wv-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.wv-chip { display: flex; flex-direction: column; gap: 3px; padding: 6px 10px;
+  border: 1px solid var(--line); border-radius: 6px; background: var(--s1);
+  cursor: pointer; text-align: left; max-width: 220px; font: inherit; color: inherit;
+  transition: border-color .12s ease, background .12s ease, transform .1s ease; }
+.wv-chip:hover:not(.disabled):not(:disabled) { border-color: var(--primary); transform: translateY(-1px); }
+.wv-chip:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.wv-chip.selected { border-color: var(--primary); background: var(--primary-tint); }
+.wv-chip.selected .wv-chip-label { color: var(--primary); font-weight: 600; }
+.wv-chip.disabled, .wv-chip:disabled { opacity: .4; cursor: not-allowed;
+  text-decoration: line-through; text-decoration-color: var(--danger); }
+.wv-chip.violated { border-color: var(--danger) !important; background: rgba(166,61,47,.10) !important; }
+.wv-chip.violated .wv-chip-label { color: var(--danger); }
+.wv-chip-label { font-size: 12px; color: var(--ink); font-weight: 500; line-height: 1.3; }
+.wv-chip-hint { font-size: 10px; color: var(--faint); line-height: 1.5; }
+.wv-chain { margin: 6px 0 0; font-size: 10.5px; color: var(--accent); line-height: 1.6;
+  font-style: italic; }
+.wv-violations { list-style: none; padding: 0; margin: 6px 0 0; }
+.wv-violations li { font-size: 11px; color: var(--danger); line-height: 1.6;
+  padding: 4px 8px; background: rgba(166,61,47,.08); border-radius: 4px; margin-top: 3px; }
+
+/* 向导底部导航 */
+.wv-nav { display: flex; gap: 10px; justify-content: space-between; align-items: center;
+  padding-top: 12px; border-top: 1px solid var(--line); }
+.wv-nav .btn-main { margin-left: auto; }
