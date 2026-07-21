@@ -10,9 +10,11 @@ Phase 12.1 实现：
 from .layers import LAYERS, ALL_PARAMS, LAYER_BY_ID, param_values, option_label
 from .predicates import PREDICATES, evaluate
 from .profile import WorldviewProfile
+from .presets import PRESETS, PRESET_BY_KEY, preset_summaries
 
 __all__ = [
     "LAYERS", "ALL_PARAMS", "LAYER_BY_ID", "param_values", "option_label",
     "PREDICATES", "evaluate",
     "WorldviewProfile",
+    "PRESETS", "PRESET_BY_KEY", "preset_summaries",
 ]

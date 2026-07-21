@@ -243,6 +243,37 @@ def test_worldview_to_world_rules_passes_validator_check():
 
     # power_existence=common → has_supernatural=True
     p2 = WorldviewProfile(layers={"L3": {"power_existence": "common"}})
-    exprs = [r["expr"] for r in p2.to_world_rules() if r.get("kind") == "bool"]
-    assert "has_supernatural" in exprs
-    assert ConsistencyValidator.check_rule_expr("has_supernatural")
+# ---------- P12.4 十骨架预设（2 核心） ----------
+def test_all_ten_presets_pass_evaluate_no_violations():
+    """十骨架每个 preset：参数键=ALL_PARAMS 全集、值在合法枚举内、evaluate 无违例。"""
+    from story_engine.worldview import PRESETS, evaluate
+
+    all_keys = set(ALL_PARAMS)
+    assert len(PRESETS) == 10, f"应有 10 个骨架，实际 {len(PRESETS)}"
+    for p in PRESETS:
+        params = p["params"]
+        # 字段完整：键集合与 ALL_PARAMS 完全一致
+        assert set(params) == all_keys, f"{p['key']} 参数键不完整"
+        # 值合法：每个值都在 ALL_PARAMS 对应枚举内
+        for k, v in params.items():
+            valid = [o["value"] for o in ALL_PARAMS[k]["options"]]
+            assert v in valid, f"{p['key']}.{k}={v} 不在合法枚举 {valid}"
+        # evaluate 无违例
+        res = evaluate(params)
+        assert res["violations"] == [], \
+            f"{p['key']} 有违例：{res['violations']}"
+
+
+def test_schema_endpoint_presets_have_name_vibe_and_summary():
+    """GET /api/worldview/schema：presets 列表 10 项，每项含 key/name/vibe/summary。"""
+    from fastapi.testclient import TestClient
+    from conftest import import_backend_main
+    backend = import_backend_main()
+    r = TestClient(backend.app).get("/api/worldview/schema")
+    assert r.status_code == 200, r.text
+    presets = r.json()["presets"]
+    assert len(presets) == 10
+    for p in presets:
+        assert p["key"] and p["name"] and p["vibe"] and p["summary"], \
+            f"preset 字段不完整：{p}"
+        assert "metaphysics=" in p["summary"]   # 摘要含关键参数

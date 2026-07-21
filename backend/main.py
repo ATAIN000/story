@@ -69,6 +69,7 @@ from story_engine.worldview import (  # noqa: E402
     ALL_PARAMS as WV_ALL_PARAMS, LAYERS as WV_LAYERS,
     WorldviewProfile, evaluate as wv_evaluate,
     param_values as wv_param_values,
+    preset_summaries as wv_preset_summaries,
 )
 
 logger = logging.getLogger(__name__)
@@ -845,6 +846,7 @@ def worldview_schema():
         "layers": WV_LAYERS,
         "param_count": len(WV_ALL_PARAMS),
         "layers_covered": [layer["id"] for layer in WV_LAYERS],
+        "presets": wv_preset_summaries(),
     }
 
 
