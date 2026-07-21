@@ -95,19 +95,9 @@ class Kernel:
         self._branches: dict[BranchID, SnapshotID] = {}
 
     def _load_plugins(self, plugin_dir: Path) -> None:
-        plugin_dir = Path(plugin_dir)
-        for path in plugin_dir.rglob("*.yaml"):
-            # packs/ 由 load_packs 宽松加载（其 _index.yaml 是清单而非 manifest，
-            # 且 world.rule 等桶不在 EXTENSION_POINTS 契约内，不能走 register）
-            if "packs" in path.relative_to(plugin_dir).parts:
-                continue
-            self.register_plugin(PluginManifest.load(path))
-        # P7.1 L1：素材包分桶加载（draft 跳过、坏包 warning 不崩）
-        self.registry.load_packs(plugin_dir / "packs")
-        # P7.1 L2：active story.skill 包复用 P5.9 注册路径（kernel.register_plugin），
-        # 与训练管线结晶同源可见（/api/config plugins、training/stats 均枚举到）
-        for manifest in self.registry.pack_manifests("story.skill"):
-            self.register_plugin(manifest)
+        # 扫描逻辑收敛在 Registry.scan_plugins（P8.2：与 reload() 共用同一路径，
+        # register_plugin 即 registry.register，行为逐字等价）
+        self.registry.scan_plugins(plugin_dir)
 
     # =========================================================
     # 进程管理 (Agent Scheduler)

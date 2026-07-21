@@ -77,6 +77,8 @@ class ExtensionRegistry:
         # 与 _plugins 分离：pack 桶（如 world.rule）不受 EXTENSION_POINTS 契约约束，
         # 经 packs()/pack_manifests() 查询；list_plugins 合并展示。
         self._packs: dict[str, dict[str, _PluginEntry]] = {}
+        # 已挂载的插件目录（scan_plugins 记录），供 reload() 运行时重扫
+        self._plugin_dir: Path | None = None
 
     def register(self, manifest: PluginManifest) -> None:
         if manifest.extension_point not in EXTENSION_POINTS:
@@ -179,6 +181,42 @@ class ExtensionRegistry:
             if isinstance(entry, dict) and "pack" in entry:
                 status[str(entry["pack"])] = str(entry.get("status", "active"))
         return status
+
+    # =========================================================
+    # 目录扫描 + 运行时重扫（P8.2）
+    # =========================================================
+    def scan_plugins(self, plugin_dir: str | Path) -> None:
+        """递归扫描插件目录并注册（Kernel._load_plugins 的唯一入口）。
+
+        - packs/ 子目录跳过 rglob 注册，改由 load_packs 宽松加载
+          （其 _index.yaml 是清单而非 manifest，且 world.rule 等桶不在
+          EXTENSION_POINTS 契约内，不能走 register）
+        - P7.1 L2：active story.skill 包复用同一注册路径，
+          与训练管线结晶同源可见
+        - 记录 plugin_dir 供 reload() 复用
+        """
+        plugin_dir = Path(plugin_dir)
+        self._plugin_dir = plugin_dir
+        for path in plugin_dir.rglob("*.yaml"):
+            if "packs" in path.relative_to(plugin_dir).parts:
+                continue
+            self.register(PluginManifest.load(path))
+        # P7.1 L1：素材包分桶加载（draft 跳过、坏包 warning 不崩）
+        self.load_packs(plugin_dir / "packs")
+        for manifest in self.pack_manifests("story.skill"):
+            self.register(manifest)
+
+    def reload(self) -> None:
+        """运行时重扫已挂载插件目录（清索引 → 重扫，幂等替换）。
+
+        抽卡 confirm 落盘新 genre 后调用；懒实例化的 entry 随索引一并
+        重建，下次 get/packs 按新 manifest 实例化。未挂载过目录时无操作。
+        """
+        if self._plugin_dir is None:
+            return
+        self._plugins = {}
+        self._packs = {}
+        self.scan_plugins(self._plugin_dir)
 
     def packs(self, extension_point: str) -> list["PluginInstance"]:
         """按扩展点查素材包实例（懒实例化，与 get 同一包装）"""

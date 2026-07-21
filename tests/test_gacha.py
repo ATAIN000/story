@@ -23,3 +23,45 @@ class TestGenreValidator(unittest.TestCase):
         self.assertTrue(any("phase_beats" in e for e in errors))                # 缺 phase_beats
         self.assertTrue(any("alien_fact" in e for e in errors))                 # 超词汇表
         self.assertTrue(any("evaluation_weights" in e for e in errors))         # 权重和≠1
+
+
+class TestRegistryReload(unittest.TestCase):
+    PLUGIN_DIR = Path(__file__).resolve().parent.parent / "story_engine" / "plugins"
+    PROBE = PLUGIN_DIR / "genres" / "reload-probe.yaml"
+
+    def tearDown(self):
+        # 探针文件落在真实 plugins 目录，任何失败路径都必须清掉
+        if self.PROBE.exists():
+            self.PROBE.unlink()
+
+    def test_reload_picks_up_new_genre(self):
+        import tempfile
+        from story_engine.kernel import Kernel
+        with tempfile.TemporaryDirectory() as d:
+            k = Kernel(d, plugin_dir=self.PLUGIN_DIR)
+            try:
+                before = set(k.registry.list_plugins("story.genre")["story.genre"])
+                src = yaml.safe_load(
+                    (self.PLUGIN_DIR / "genres" / "romance.yaml").read_text(encoding="utf-8"))
+                src["name"] = "reload-probe"
+                src["activation_events"] = ["on_genre:reload-probe"]
+                self.PROBE.write_text(yaml.safe_dump(src, allow_unicode=True), encoding="utf-8")
+                k.registry.reload()
+                after = set(k.registry.list_plugins("story.genre")["story.genre"])
+                self.assertIn("reload-probe", after)
+                self.assertNotIn("reload-probe", before)
+                self.assertTrue(before <= after)  # 重扫不丢既有题材
+            finally:
+                k.close()
+
+    def test_reload_idempotent_without_changes(self):
+        import tempfile
+        from story_engine.kernel import Kernel
+        with tempfile.TemporaryDirectory() as d:
+            k = Kernel(d, plugin_dir=self.PLUGIN_DIR)
+            try:
+                before = k.registry.list_plugins()
+                k.registry.reload()
+                self.assertEqual(k.registry.list_plugins(), before)
+            finally:
+                k.close()
