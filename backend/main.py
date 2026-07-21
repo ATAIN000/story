@@ -16,18 +16,22 @@ API：
   POST /api/paragraph/rewrite  【P6.3 新增】段落重写（Realizer 单段渲染，只读不写）
   GET  /api/characters         【P6.4 新增】角色卡聚合（minds/关系/voice/arc，只增）
   POST /api/gacha/draw         【P8.3/P8.4】抽卡开局：library 随机组合 + lock 锁栏；synth LLM 合成（mock 短路降级）
+  POST /api/gacha/confirm      【P8.5】抽卡确认：synth 卡复核+落盘 plugins/genres/（原子写、重名后缀）→ reload → init
+  POST /api/project/init       【P8.5】开局切换：重置世界 → 按 genre/culture 重建 engine 单例（进程内覆盖，不改 env/.env）
 静态：/ → frontend/dist（Vue SPA）
 """
 from __future__ import annotations
 
 import asyncio
 import os
+import re
 import sys
 import tempfile
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Literal
 
+import yaml
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -46,6 +50,7 @@ from story_engine.kernel import Kernel, LLMPool  # noqa: E402
 from story_engine.llm import LLMError  # noqa: E402
 from story_engine.meta import MetaGenerator, UserIntent  # noqa: E402
 from story_engine.meta.gacha import draw_card_async  # noqa: E402
+from story_engine.meta.genre_validator import validate_genre_pack  # noqa: E402
 from story_engine.types import StoryEngineError  # noqa: E402
 
 
@@ -357,6 +362,101 @@ async def gacha_draw(req: GachaDrawReq):
                                      req.mode, req.lock)
     except StoryEngineError as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ---------- 抽卡确认 + 开局切换（P8.5：落盘 → reload → engine 单例重建） ----------
+# 题材名白名单：落盘文件名直接由它构成，拒绝对路径/穿越字符（防路径逃逸）
+GENRE_NAME_RE = re.compile(r"[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}")
+
+
+def _persist_genre_pack(pack: dict) -> str:
+    """合成 genre 包落盘到 plugins/genres/，返回最终题材名。
+
+    - 重名冲突：自动追加 -2/-3… 后缀（pack["name"] 同步改写，卡名与文件名一致）
+    - activation_events 对齐最终名（库内约定 on_genre:<name>）
+    - 原子写：先写同目录 .tmp 再 rename——最终路径要么不存在、要么完整，
+      不会留半写文件（同目录保证同文件系统，rename 才原子）；写失败清 tmp
+    """
+    genres_dir = ROOT / "story_engine" / "plugins" / "genres"
+    base = str(pack["name"])
+    name, i = base, 2
+    while (genres_dir / f"{name}.yaml").exists():
+        name = f"{base}-{i}"
+        i += 1
+    pack["name"] = name
+    pack["activation_events"] = [f"on_genre:{name}"]
+    path = genres_dir / f"{name}.yaml"
+    tmp = path.with_suffix(".tmp")
+    try:
+        tmp.write_text(yaml.safe_dump(pack, allow_unicode=True),
+                       encoding="utf-8")
+        tmp.rename(path)
+    except OSError:
+        tmp.unlink(missing_ok=True)
+        raise
+    return name
+
+
+@app.post("/api/gacha/confirm")
+def gacha_confirm(card: dict):
+    """【P8.5】确认抽卡：synth 卡复核 + 落盘 + registry 重扫，然后统一走 init 切换。
+
+    synth 卡不信任前端携带的校验结论：confirm 时 rerun validate_genre_pack
+    复核，不过 → 422 且不落盘不切换；过了才落盘（重名自动后缀，原子写）并
+    registry.reload() 让新题材立即可用。library 卡跳过落盘（persisted=false）
+    直接 init。响应 = init 响应 + {persisted, genre(最终名)}。
+    """
+    g = card.get("genre") or {}
+    persisted = False
+    name = g.get("name")
+    if g.get("source") == "synth":
+        pack = g.get("yaml")
+        if not isinstance(pack, dict) or not pack.get("name"):
+            raise HTTPException(status_code=422,
+                                detail="合成卡缺 genre.yaml 或 name 键")
+        if not GENRE_NAME_RE.fullmatch(str(pack["name"])):
+            raise HTTPException(
+                status_code=422,
+                detail=f"题材名非法：{pack['name']}（仅限字母/数字/-/_）")
+        errs = validate_genre_pack(pack)
+        if errs:
+            raise HTTPException(status_code=422,
+                                detail=f"合成包未过校验：{'；'.join(errs)}")
+        name = _persist_genre_pack(pack)
+        engine.kernel.registry.reload()
+        persisted = True
+    if not name:
+        raise HTTPException(status_code=422, detail="卡缺 genre.name")
+    culture = (card.get("culture") or {}).get("name") or "confucian_officialdom"
+    return {**project_init({"genre": name, "culture": culture}),
+            "persisted": persisted, "genre": name}
+
+
+@app.post("/api/project/init")
+def project_init(body: dict):
+    """【P8.5】开局切换：按 genre/culture 重建 engine 单例（进程内覆盖）。
+
+    语义决策：init = 开新局 —— 先调现有 engine.reset() 清世界状态/章节/
+    pending_plan，再在同一 Kernel 上重建 StoryEngine（genre/culture 子系统
+    随之重绑）。选「reset + 同 kernel 重建」而非「新建 Kernel」：模块级
+    kernel/llm_client/meta_gen/training_pipeline/intervention_router 单例
+    持有同一 Kernel 对象，全部保持相干，且复用已测的 reset 清库路径。
+    不改 STORY_ENGINE_GENRE/CULTURE env、不写 .env（重启回落 env/默认）。
+    组合合法性先校验再清库：非法 genre/culture → 422，项目原样保留。
+    genre/culture 缺省回落 env/内置默认（与 engine 构造口径一致）。
+    """
+    global engine
+    genre = body.get("genre") or os.environ.get("STORY_ENGINE_GENRE", "mystery")
+    culture = body.get("culture") or os.environ.get(
+        "STORY_ENGINE_CULTURE", "confucian_officialdom")
+    try:
+        engine.kernel.registry.validate_combo(genre, culture)
+    except StoryEngineError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    engine.reset()
+    engine = StoryEngine(engine.kernel, genre_name=genre, culture_name=culture)
+    engine.discard_plan()  # 契约：init 后 pending_plan 必空（新实例本即 None，显式兜底）
+    return {"ok": True, "project": {"genre": genre, "culture": culture}}
 
 
 # ---------- 设置（P6.10 B9/B10） ----------

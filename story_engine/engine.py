@@ -116,10 +116,14 @@ class _ChapterClosingKernelView:
 
 
 class StoryEngine:
-    def __init__(self, kernel_or_dir, llm_client=None):
+    def __init__(self, kernel_or_dir, llm_client=None,
+                 genre_name=None, culture_name=None):
         """两种构造方式（向后兼容）：
         - StoryEngine(kernel: Kernel)              # 推荐：注入外部 kernel
         - StoryEngine(project_dir: str|Path, llm_client=LLMClient())  # 旧式：自建
+        genre_name/culture_name（P8.5 可选，只增）：显式指定三正交轴题材/文化；
+        缺省（None/空串）回落 env（STORY_ENGINE_GENRE/CULTURE）→ 内置默认，
+        与之前行为逐字一致。抽卡 project init 用显式参数做进程内覆盖（不改 env）。
         """
         if isinstance(kernel_or_dir, Kernel):
             self.kernel = kernel_or_dir
@@ -145,9 +149,10 @@ class StoryEngine:
             self.llm = self.kernel.llm
             self.store = self.kernel.store
 
-        # 三正交轴配置（与原版一致）
-        genre_name = os.environ.get("STORY_ENGINE_GENRE", "mystery")
-        culture_name = os.environ.get("STORY_ENGINE_CULTURE", "confucian_officialdom")
+        # 三正交轴配置（P8.5：显式参数优先，缺省回落 env/内置默认，与原版一致）
+        genre_name = genre_name or os.environ.get("STORY_ENGINE_GENRE", "mystery")
+        culture_name = culture_name or os.environ.get(
+            "STORY_ENGINE_CULTURE", "confucian_officialdom")
         self.registry.validate_combo(genre_name, culture_name)
         self.genre = self.registry.get("story.genre", genre_name)
         self.culture = self.registry.get("story.culture", culture_name)

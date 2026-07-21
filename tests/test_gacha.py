@@ -1,5 +1,5 @@
 # tests/test_gacha.py
-import unittest, yaml
+import os, unittest, yaml
 from pathlib import Path
 from story_engine.meta.genre_validator import validate_genre_pack
 
@@ -275,3 +275,113 @@ class TestGachaSynth(unittest.TestCase):
                     self.assertIn(key, card)
             finally:
                 k.close()
+
+
+class TestGachaConfirmInit(unittest.TestCase):
+    """P8.5：confirm 落盘 + project init 切换（TestClient 走通）。
+
+    backend 单例全进程共享：每个用例 finally 必须把 engine 切回原题材/文化、
+    清掉落盘探针 yaml 并 reload registry，否则波及字母序靠后的 backend 用例。
+    """
+
+    GENRES_DIR = Path(__file__).resolve().parent.parent / "story_engine" / "plugins" / "genres"
+
+    def _backend(self):
+        from conftest import import_backend_main
+        return import_backend_main()
+
+    def _restore(self, backend, orig_genre, orig_culture):
+        """经 init 端点切回原题材/文化（兼清项目状态），并确保探针清除。"""
+        from fastapi.testclient import TestClient
+        for probe in ("test-synth.yaml", "test-synth-2.yaml"):
+            p = self.GENRES_DIR / probe
+            if p.exists():
+                p.unlink()
+        backend.kernel.registry.reload()
+        TestClient(backend.app).post(
+            "/api/project/init",
+            json={"genre": orig_genre, "culture": orig_culture})
+
+    @staticmethod
+    def _card(yaml_pack, source="synth", name="test-synth",
+              culture="confucian_officialdom"):
+        return {"mode": source,
+                "genre": {"name": name, "source": source, "desc": "d",
+                          "yaml": yaml_pack} if source == "synth" else
+                         {"name": name, "source": source, "desc": "d"},
+                "culture": {"name": culture},
+                "archetype": {"name": ""}, "rule_packs": [], "note": None}
+
+    def test_confirm_synth_persists_and_init_switches(self):
+        from fastapi.testclient import TestClient
+        backend = self._backend()
+        orig = (backend.engine.genre.name, backend.engine.culture.name)
+        env_before = {k: os.environ.get(k)
+                      for k in ("STORY_ENGINE_GENRE", "STORY_ENGINE_CULTURE")}
+        probe = self.GENRES_DIR / "test-synth.yaml"
+        probe2 = self.GENRES_DIR / "test-synth-2.yaml"
+        c = TestClient(backend.app)
+        try:
+            r = c.post("/api/gacha/confirm",
+                       json=self._card(yaml.safe_load(VALID_YAML)))
+            self.assertEqual(r.status_code, 200, r.text)
+            body = r.json()
+            self.assertTrue(body["ok"])
+            self.assertTrue(body["persisted"])
+            self.assertEqual(body["genre"], "test-synth")
+            self.assertEqual(body["project"]["genre"], "test-synth")
+            self.assertEqual(body["project"]["culture"], "confucian_officialdom")
+            self.assertTrue(probe.exists())
+            # engine 单例已切换；init 为进程内覆盖，env 不被改写
+            self.assertEqual(backend.engine.genre.name, "test-synth")
+            self.assertIsNone(backend.engine._pending_plan)
+            self.assertEqual({k: os.environ.get(k) for k in env_before},
+                             env_before)
+            # 重名冲突：同卡二次 confirm → 自动 -2 后缀落盘并切换
+            r2 = c.post("/api/gacha/confirm",
+                        json=self._card(yaml.safe_load(VALID_YAML)))
+            self.assertEqual(r2.status_code, 200, r2.text)
+            self.assertEqual(r2.json()["genre"], "test-synth-2")
+            self.assertTrue(probe2.exists())
+            self.assertEqual(backend.engine.genre.name, "test-synth-2")
+        finally:
+            self._restore(backend, *orig)
+
+    def test_confirm_invalid_synth_yaml_422(self):
+        from fastapi.testclient import TestClient
+        backend = self._backend()
+        orig = (backend.engine.genre.name, backend.engine.culture.name)
+        c = TestClient(backend.app)
+        try:
+            bad = yaml.safe_load(VALID_YAML)
+            bad["params"]["beats_per_chapter"] = 99  # 超 3-6 区间
+            r = c.post("/api/gacha/confirm", json=self._card(bad))
+            self.assertEqual(r.status_code, 422, r.text)
+            # 未过复核：不落盘、不切换
+            self.assertFalse((self.GENRES_DIR / "test-synth.yaml").exists())
+            self.assertEqual(backend.engine.genre.name, orig[0])
+        finally:
+            self._restore(backend, *orig)
+
+    def test_confirm_library_skips_persistence_and_switches(self):
+        from fastapi.testclient import TestClient
+        backend = self._backend()
+        orig = (backend.engine.genre.name, backend.engine.culture.name)
+        # romance/mystery 均非 culture_bound，与原文化组合必合法
+        other = "romance" if orig[0] != "romance" else "mystery"
+        c = TestClient(backend.app)
+        try:
+            r = c.post("/api/gacha/confirm",
+                       json=self._card(None, source="library", name=other,
+                                       culture=orig[1]))
+            self.assertEqual(r.status_code, 200, r.text)
+            body = r.json()
+            self.assertTrue(body["ok"])
+            self.assertFalse(body["persisted"])  # 库内卡不落盘
+            self.assertEqual(body["genre"], other)
+            self.assertEqual(body["project"]["genre"], other)
+            self.assertEqual(backend.engine.genre.name, other)
+            # 库内确认不在 genres 目录留临时/新文件
+            self.assertFalse((self.GENRES_DIR / f"{other}.tmp").exists())
+        finally:
+            self._restore(backend, *orig)
