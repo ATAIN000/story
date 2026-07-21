@@ -62,8 +62,9 @@ def test_evaluate_tolerates_empty_and_unknown_keys():
 
 # ---------- 数据完整性（轻量校验：素材忠实录入） ----------
 def test_layers_data_integrity():
-    # 4 层齐全
-    assert [l["id"] for l in LAYERS] == ["L0", "L1", "L2", "L3"]
+    # 8 层齐全（L0-L7）
+    assert [l["id"] for l in LAYERS] == [
+        "L0", "L1", "L2", "L3", "L4", "L5", "L6", "L7"]
     # 每参数至少 4 个枚举值，每值含 value/label
     for layer in LAYERS:
         for p in layer["params"]:
@@ -73,23 +74,30 @@ def test_layers_data_integrity():
     # 关键枚举值（素材原文）存在
     assert "soul_based" in [o["value"] for o in ALL_PARAMS["consciousness_nature"]["options"]]
     assert "materialist" in [o["value"] for o in ALL_PARAMS["metaphysics"]["options"]]
-    # 谓词条数符合预期（≥40）
-    assert len(PREDICATES) >= 40
+    # L4-L7 关键枚举值抽检（素材原文）
+    assert "conditional_immortal" in [o["value"] for o in ALL_PARAMS["mortality_model"]["options"]]
+    assert "theocracy" in [o["value"] for o in ALL_PARAMS["political_system"]["options"]]
+    assert "language_is_magic" in [o["value"] for o in ALL_PARAMS["language_paradigm"]["options"]]
+    assert "precursor" in [o["value"] for o in ALL_PARAMS["lost_civilizations"]["options"]]
+    # 谓词条数符合预期（批1 ≥40，批2 L4-L7 追加后 >40）
+    assert len(PREDICATES) > 40
 
 
 # ---------- P12.2 端点测试（3 核心） ----------
 def test_schema_endpoint_layers_and_param_count():
-    """GET /api/worldview/schema：layers 含 L0-L3、param_count 与 ALL_PARAMS 一致、
-    layers_covered 仅已数据化层。"""
+    """GET /api/worldview/schema：layers 含 L0-L7、param_count 与 ALL_PARAMS 一致、
+    layers_covered 为当前已数据化层。"""
     from fastapi.testclient import TestClient
     from conftest import import_backend_main
     backend = import_backend_main()
     r = TestClient(backend.app).get("/api/worldview/schema")
     assert r.status_code == 200, r.text
     body = r.json()
-    assert [l["id"] for l in body["layers"]] == ["L0", "L1", "L2", "L3"]
-    assert body["param_count"] == len(ALL_PARAMS)  # 31
-    assert body["layers_covered"] == ["L0", "L1", "L2", "L3"]
+    assert [l["id"] for l in body["layers"]] == [
+        "L0", "L1", "L2", "L3", "L4", "L5", "L6", "L7"]
+    assert body["param_count"] == len(ALL_PARAMS)  # 59
+    assert body["layers_covered"] == [
+        "L0", "L1", "L2", "L3", "L4", "L5", "L6", "L7"]
 
 
 def test_evaluate_endpoint_materialist_narrows_consciousness_nature():
@@ -250,15 +258,16 @@ def test_worldview_to_world_rules_passes_validator_check():
 
 # ---------- P12.4 十骨架预设（2 核心） ----------
 def test_all_ten_presets_pass_evaluate_no_violations():
-    """十骨架每个 preset：参数键=ALL_PARAMS 全集、值在合法枚举内、evaluate 无违例。"""
+    """十骨架每个 preset：参数键是 ALL_PARAMS 的子集（当前覆盖 L0-L3，
+    L4-L7 预设值待 P12.6 后半补全）、值在合法枚举内、evaluate 无违例。"""
     from story_engine.worldview import PRESETS, evaluate
 
     all_keys = set(ALL_PARAMS)
     assert len(PRESETS) == 10, f"应有 10 个骨架，实际 {len(PRESETS)}"
     for p in PRESETS:
         params = p["params"]
-        # 字段完整：键集合与 ALL_PARAMS 完全一致
-        assert set(params) == all_keys, f"{p['key']} 参数键不完整"
+        # 字段合法：键集合是 ALL_PARAMS 的子集（L4-L7 尚未补全预设值）
+        assert set(params) <= all_keys, f"{p['key']} 含未知参数键"
         # 值合法：每个值都在 ALL_PARAMS 对应枚举内
         for k, v in params.items():
             valid = [o["value"] for o in ALL_PARAMS[k]["options"]]

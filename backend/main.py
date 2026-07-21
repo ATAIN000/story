@@ -838,9 +838,9 @@ def characters():
 def worldview_schema():
     """【P12.2】返回世界观 10 层架构定义 + 当前已数据化的层。
 
-    前端据此渲染向导：``layers`` 是 L0-L3 的完整参数/枚举/连锁描述；
-    L4-L9 暂无参数（``layers_covered`` 仅含 L0-L3），UI 显示「即将上线」占位。
-    ``param_count`` 为当前已数据化参数总数（L0-L3 合计 31）。
+    前端据此渲染向导：``layers`` 是 L0-L7 的完整参数/枚举/连锁描述；
+    L8-L9 暂无参数（``layers_covered`` 仅含 L0-L7），UI 显示「即将上线」占位。
+    ``param_count`` 为当前已数据化参数总数（L0-L7 合计 59）。
     """
     return {
         "layers": WV_LAYERS,

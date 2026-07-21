@@ -1,4 +1,4 @@
-"""worldview predicates — 跨层一致性谓词（批1：L0-L3 相关）
+"""worldview predicates — 跨层一致性谓词（批2：L0-L7 相关）
 
 素材唯一来源：docs/世界观架构_参数全表.md
   - 各参数的「谓词」段（显式标记）
@@ -326,6 +326,163 @@ PREDICATES: list[dict] = [
         "then": {"power_regulation": {"disallow": ["suppressed"]}},
         "message": "全民皆有力量时压制不可行",
         "source": "P3.1 universal / P3.8 suppressed 连锁",
+    },
+
+    # ====================================================================
+    # L4-L7 跨层一致性谓词（批2）
+    # 素材：docs/世界观架构_参数全表.md L4-L7 各参数的「连锁影响」段
+    # 仅录入可机器执行的约束（when/then 均引用已数据化参数）；
+    # 指向 L8/L9（尚未数据化）的连锁以 require_note 软约束记录。
+    # ====================================================================
+
+    # ---- L4 → L0：mortality_model → metaphysics ----
+    {
+        "when": {"mortality_model": "transferable"},
+        "then": {"metaphysics": {"require": ["dualist"]}},
+        "message": "灵魂可转移要求形而上学为二元基底（灵魂独立于肉体）",
+        "source": "P4.4 transferable 连锁 / 行 457",
+    },
+
+    # ---- L4 → L1：biological_basis → divine_nature ----
+    {
+        "when": {"biological_basis": "divine"},
+        "then": {"divine_nature": {"disallow": ["absent"]}},
+        "message": "神意决定的物种要求非无神世界",
+        "source": "P4.6 divine 连锁 / 行 479",
+    },
+
+    # ---- L4 → L5：species_hierarchy → stratification_basis ----
+    {
+        "when": {"species_hierarchy": "hierarchical"},
+        "then": {"stratification_basis": {"require": ["species", "birth"]}},
+        "message": "种族等级排列：社会阶层由种族/血统决定",
+        "source": "P4.3 hierarchical 连锁 / 行 444",
+    },
+    {
+        "when": {"species_hierarchy": "predator_prey"},
+        "then": {"require_note": "食物链关系：种族间不可能和平共处（生存冲突为核心）"},
+        "message": "食物链关系的种族不可能和平共处",
+        "source": "P4.3 predator_prey 连锁 / 行 441",
+    },
+
+    # ---- L4 内部：mortality_model ↔ death_customs（与 L6 互参） ----
+    {
+        "when": {"mortality_model": "reincarnation"},
+        "then": {"death_customs": {"require": ["cycle", "transition"]}},
+        "message": "转世模式：死亡观须为轮回或过渡（死亡不是终点）",
+        "source": "P4.4 reincarnation / P6.5 cycle 连锁 / 行 454, 663",
+    },
+
+    # ---- L5 → L1：political_system → divine_nature / consciousness_nature ----
+    {
+        "when": {"political_system": "theocracy"},
+        "then": {"divine_nature": {"disallow": ["absent"]}},
+        "message": "神权制要求非无神世界（神真实存在或被声称存在）",
+        "source": "P5.1 theocracy 连锁 / 行 504",
+    },
+    {
+        "when": {"political_system": "hive"},
+        "then": {"consciousness_nature": {"require": ["collective"]}},
+        "message": "蜂巢/集体意识政体要求意识本质为集体意识",
+        "source": "P5.1 hive 连锁 / 行 511",
+    },
+    {
+        "when": {"political_system": "magocracy"},
+        "then": {"power_society_relation": {"require": ["stratifying"]}},
+        "message": "魔法/力量统治：力量者=统治阶级，力量决定社会地位",
+        "source": "P5.1 magocracy 连锁 / 行 505",
+    },
+
+    # ---- L5 → L0：knowledge_distribution → information_laws ----
+    {
+        "when": {"knowledge_distribution": "dangerous"},
+        "then": {"information_laws": {"require": ["infectious"]}},
+        "message": "知识本身危险（克苏鲁/模因）要求信息可感染/寄生",
+        "source": "P5.4 dangerous 连锁 / 行 555",
+    },
+
+    # ---- L6 → L0：language_paradigm → information_laws / causality ----
+    {
+        "when": {"language_paradigm": "ancient_power"},
+        "then": {"information_laws": {"require": ["supernatural"]}},
+        "message": "古语有力量（真名/咒语）要求信息有超自然属性",
+        "source": "P6.1 ancient_power 连锁 / 行 608",
+    },
+    {
+        "when": {"language_paradigm": "language_is_magic"},
+        "then": {"causality": {"require": ["intentional"]}},
+        "message": "语言本身=魔法要求因果律为意志驱动（说出即实现）",
+        "source": "P6.1 language_is_magic 连锁 / 行 609",
+    },
+
+    # ---- L6 → L0：religion_type → metaphysics ----
+    {
+        "when": {"religion_type": "animist"},
+        "then": {"metaphysics": {"require": ["animist"]}},
+        "message": "万物有灵/泛灵论宗教要求形而上学为万物有灵基底",
+        "source": "P6.2 animist 连锁 / 行 619",
+    },
+    {
+        "when": {"religion_type": "verified"},
+        "then": {"divine_nature": {"disallow": ["absent"]}},
+        "message": "神真实存在且可验证：非无神世界",
+        "source": "P6.2 verified 连锁 / 行 623",
+    },
+
+    # ---- L6 → L1：death_customs → plane_structure / time_structure ----
+    {
+        "when": {"death_customs": "transition"},
+        "then": {"plane_structure": {"require": ["dual", "multiple"]}},
+        "message": "死亡是过渡（去另一个世界）要求双世界或多位面结构",
+        "source": "P6.5 transition 连锁 / 行 662",
+    },
+    {
+        "when": {"death_customs": "cycle"},
+        "then": {"time_structure": {"require": ["cyclic"]}},
+        "message": "死亡=重生（轮回）要求时间为循环结构",
+        "source": "P6.5 cycle 连锁 / 行 663",
+    },
+    {
+        "when": {"death_customs": "meaningless"},
+        "then": {"metaphysics": {"require": ["materialist"]}},
+        "message": "死亡无意义（物质消散）要求唯物形而上学基底",
+        "source": "P6.5 meaningless 连锁 / 行 665",
+    },
+
+    # ---- L6 → L4：death_customs → transformation_type ----
+    {
+        "when": {"death_customs": "contagious"},
+        "then": {"transformation_type": {"require": ["forced"]}},
+        "message": "死亡会传播（丧尸/吸血鬼转化）要求被外力转化模式",
+        "source": "P6.5 contagious 连锁 / 行 666",
+    },
+
+    # ---- L7 → L0：civilization_cycle → time_structure ----
+    {
+        "when": {"civilization_cycle": "cyclical"},
+        "then": {"time_structure": {"require": ["cyclic"]}},
+        "message": "文明周期性兴衰要求时间为循环结构",
+        "source": "P7.3 cyclical 连锁 / 行 744",
+    },
+    {
+        "when": {"civilization_cycle": "reset"},
+        "then": {"lost_civilizations": {"disallow": ["none"]}},
+        "message": "文明被周期性重置：必定存在上一轮的遗产（失落文明）",
+        "source": "P7.3 reset 连锁 / 行 746",
+    },
+
+    # ---- L7 软约束（指向未数据化 L8） ----
+    {
+        "when": {"history_accuracy": "false"},
+        "then": {"require_note": "历史完全是假的（世界最近创造/模拟）：L8 终极真相颠覆"},
+        "message": "完全虚假的历史将颠覆终极真相",
+        "source": "P7.2 false 连锁 / 行 734",
+    },
+    {
+        "when": {"history_accuracy": "revised"},
+        "then": {"require_note": "历史被篡改：L8 真相vs官方说法，揭露=高潮"},
+        "message": "被篡改的历史：真相与官方说法对立",
+        "source": "P7.2 revised 连锁 / 行 730",
     },
 ]
 
