@@ -14,6 +14,7 @@ culture_bound: false
 allowed_cultures: ["*"]
 
 params:
+  title: "奇幻推理"  # P9.1 中文显示名（id 仍为功能键，不变）
   pacing_curve: "魔法社会日常→密室/不可能犯罪→魔法规则排查→锁定可能性→真相"
   power_system: "constrained_magic"          # 必须有明确限制的魔法
   emotion_arcs: [man_in_hole, oedipus]       # 探案低谷回升 + 凶手/权者的坠落弧

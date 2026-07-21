@@ -2,6 +2,7 @@ manifest_version: 1
 name: reader-engagement
 extension_point: story.evaluator
 params:
+  title: "读者投入"  # P9.1 中文显示名（id 仍为功能键，不变）
   dimension: reader_engagement
   guide: |
     评估读者代入感与续读驱动力（行为预测，非打分——对应 Story Engine 的 Reader Proxy 模块）：

@@ -2,6 +2,7 @@ manifest_version: 1
 name: wuxia-taboo
 extension_point: story.world.rule
 params:
+  title: "武侠禁忌"  # P9.1 中文显示名（id 仍为功能键，不变）
   desc: "武侠类型禁忌：维护江湖世界内在逻辑和武学一致性的底线规则"
   rules:
     - id: wuxia_power_scaling

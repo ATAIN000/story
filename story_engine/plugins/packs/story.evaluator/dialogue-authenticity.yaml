@@ -2,6 +2,7 @@ manifest_version: 1
 name: dialogue-authenticity
 extension_point: story.evaluator
 params:
+  title: "对话真实度"  # P9.1 中文显示名（id 仍为功能键，不变）
   dimension: dialogue_authenticity
   guide: |
     评估对白的真实性和角色区分度（补充核心循环 state-checker 无法覆盖的文本质量盲区）：

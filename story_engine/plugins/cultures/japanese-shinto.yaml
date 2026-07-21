@@ -4,6 +4,7 @@ extension_point: story.culture
 activation_events: ["on_culture:japanese-shinto"]
 
 params:
+  title: "日本神道"  # P9.1 中文显示名（id 仍为功能键，不变）
   power_distance: 52            # 中高：前辈后辈制度严格
   individualism: 45             # 中低：读空气、和以贵
   masculinity: 94               # 极高：工作至上、极致追求

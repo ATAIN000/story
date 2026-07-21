@@ -2,6 +2,7 @@ manifest_version: 1
 name: wandering-swordsman
 extension_point: story.character.archetype
 params:
+  title: "游侠浪子"  # P9.1 中文显示名（id 仍为功能键，不变）
   desc: "游侠/浪子：武功高强但拒绝归属，背负过去，在江湖漂泊中寻找意义"
   persona:
     traits: [洒脱, 孤傲, 重情义, 自责, 酗酒]

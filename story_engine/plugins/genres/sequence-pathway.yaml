@@ -13,6 +13,7 @@ culture_bound: false
 allowed_cultures: ["*"]
 
 params:
+  title: "序列途径"  # P9.1 中文显示名（id 仍为功能键，不变）
   pacing_curve: "觉醒途径→序列9入门→逐级晋升→失控危机→序列0封神"
   power_system: "pathway_sequences"         # 序列途径：22条途径，每条9→0
   emotion_arcs: [cinderella, icarus]        # 崛起但伴随失控风险

@@ -2,6 +2,7 @@ manifest_version: 1
 name: worldbuilding-coherence
 extension_point: story.evaluator
 params:
+  title: "设定一致性"  # P9.1 中文显示名（id 仍为功能键，不变）
   dimension: worldbuilding_coherence
   guide: |
     评估世界观构建的内在一致性（与 setting_consistency 互补——后者管"本章场景自洽"，本维度管"全书世界自洽"）：

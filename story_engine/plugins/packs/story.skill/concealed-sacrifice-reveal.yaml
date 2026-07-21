@@ -2,6 +2,7 @@ manifest_version: 1
 name: concealed-sacrifice-reveal
 extension_point: story.skill
 params:
+  title: "隐线牺牲"  # P9.1 中文显示名（id 仍为功能键，不变）
   desc: "隐忍牺牲揭露：角色默默承受的牺牲被对方意外发现，形成情感核弹"
   trigger: "言情/虐心/和解章节，需要制造情感爆点"
   prompt_template: |

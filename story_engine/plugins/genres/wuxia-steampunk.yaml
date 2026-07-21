@@ -15,6 +15,7 @@ culture_bound: false
 allowed_cultures: ["*"]
 
 params:
+  title: "蒸汽武侠"  # P9.1 中文显示名（id 仍为功能键，不变）
   pacing_curve: "武馆旧序→蒸汽机侵入→拳师对机械师→新旧秩序相撞→融合或消亡"
   power_system: "qi_vs_steam"                 # 内力 vs 蒸汽动力双体系
   emotion_arcs: [riches_to_rags, oedipus]    # 旧时代的挽歌

@@ -2,6 +2,7 @@ manifest_version: 1
 name: pacing-rhythm
 extension_point: story.evaluator
 params:
+  title: "节奏韵律"  # P9.1 中文显示名（id 仍为功能键，不变）
   dimension: pacing_rhythm
   guide: |
     评估叙事节奏与韵律质量：

@@ -4,6 +4,7 @@ extension_point: story.culture
 activation_events: ["on_culture:south-asian"]
 
 params:
+  title: "南亚家族"  # P9.1 中文显示名（id 仍为功能键，不变）
   power_distance: 77            # 高：种姓残余、长辈权威
   individualism: 48             # 中低：大家庭、包办婚姻
   masculinity: 56               # 中：传统性别角色在变化

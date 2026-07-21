@@ -2,6 +2,7 @@ manifest_version: 1
 name: corrupt-elder
 extension_point: story.character.archetype
 params:
+  title: "腐化长老"  # P9.1 中文显示名（id 仍为功能键，不变）
   desc: "腐化长老/掌门：道貌岸然实则为私利出卖门派，是体制性反派的典型"
   persona:
     traits: [伪善, 权欲强, 老练, 嫉妒, 冷酷]

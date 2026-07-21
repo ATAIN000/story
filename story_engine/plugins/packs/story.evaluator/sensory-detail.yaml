@@ -2,6 +2,7 @@ manifest_version: 1
 name: sensory-detail
 extension_point: story.evaluator
 params:
+  title: "感官细节"  # P9.1 中文显示名（id 仍为功能键，不变）
   dimension: sensory_detail
   guide: |
     评估感官细节（Sensory Detail）的质量和密度：

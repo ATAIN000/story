@@ -2,6 +2,7 @@ manifest_version: 1
 name: cold-tycoon
 extension_point: story.character.archetype
 params:
+  title: "冷酷霸总"  # P9.1 中文显示名（id 仍为功能键，不变）
   desc: "冷酷霸总：外表冰冷控制欲强，内心有创伤或柔软处。言情短剧核心男主原型"
   persona:
     traits: [冷峻, 控制欲强, 高效, 隐忍, 占有欲强]

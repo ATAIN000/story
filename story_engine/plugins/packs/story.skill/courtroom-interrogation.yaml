@@ -2,6 +2,7 @@ manifest_version: 1
 name: courtroom-interrogation
 extension_point: story.skill
 params:
+  title: "公堂问审"  # P9.1 中文显示名（id 仍为功能键，不变）
   desc: "公堂问审：先问行踪、后亮物证的逼问节奏，层层收紧让嫌疑人自相矛盾"
   trigger: "公堂/审问/提审/对质场景，或需要施压揭穿谎言的对话"
   prompt_template: |

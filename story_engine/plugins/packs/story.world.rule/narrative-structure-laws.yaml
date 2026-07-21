@@ -2,6 +2,7 @@ manifest_version: 1
 name: narrative-structure-laws
 extension_point: story.world.rule
 params:
+  title: "叙事结构法则"  # P9.1 中文显示名（id 仍为功能键，不变）
   desc: "通用叙事结构法则：跨类型适用的故事质量底线规则"
   rules:
     - id: setup_payoff_balance

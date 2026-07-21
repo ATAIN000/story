@@ -14,6 +14,7 @@ culture_bound: false
 allowed_cultures: ["*"]
 
 params:
+  title: "律政职场"  # P9.1 中文显示名（id 仍为功能键，不变）
   pacing_curve: "入职/入宫→摸清规则→站队→宫斗/职场战→上位→权力反思"
   power_system: "social_strategy"            # 社交策略是核心能力
   emotion_arcs: [cinderella, icarus]

@@ -123,6 +123,19 @@ class ExtensionRegistry:
                      if n not in names)
         return names
 
+    def display_map(self) -> dict[str, str]:
+        """{name: params.title or name} 合并表（P9.1 显示名中文化，纯展示层）。
+
+        覆盖全部已注册 manifest（_plugins）与素材包（_packs）；
+        无 title 的包回落 id 本身，前端可无条件查表。"""
+        result: dict[str, str] = {}
+        for bucket in (self._packs, self._plugins):
+            for entries in bucket.values():
+                for name, entry in entries.items():
+                    title = entry.manifest.params.get("title")
+                    result[name] = str(title) if title else name
+        return result
+
     # =========================================================
     # 素材包（P7.1 L1）：plugins/packs/ 宽松扫描 + 分桶查询
     # =========================================================

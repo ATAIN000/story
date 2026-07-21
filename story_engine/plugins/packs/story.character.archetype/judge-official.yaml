@@ -2,6 +2,7 @@ manifest_version: 1
 name: judge-official
 extension_point: story.character.archetype
 params:
+  title: "判官"  # P9.1 中文显示名（id 仍为功能键，不变）
   desc: "判官：沉静多疑，证据至上，以理服人而非以权压人"
   persona:
     traits:

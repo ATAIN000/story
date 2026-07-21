@@ -4,6 +4,7 @@ extension_point: story.culture
 activation_events: ["on_culture:scandinavian-protestant"]
 
 params:
+  title: "北欧新教"  # P9.1 中文显示名（id 仍为功能键，不变）
   power_distance: 25            # 极低：平权社会，Janteloven（不要觉得自己了不起）
   individualism: 85             # 极高：个人主义至上
   masculinity: 15               # 极低：性别平等、生活品质>成就

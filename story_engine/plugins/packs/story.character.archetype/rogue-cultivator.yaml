@@ -2,6 +2,7 @@ manifest_version: 1
 name: rogue-cultivator
 extension_point: story.character.archetype
 params:
+  title: "散修"  # P9.1 中文显示名（id 仍为功能键，不变）
   desc: "散修/凡人流主角：无门无派，资质平庸，靠谨慎和算计在残酷修仙界求生"
   persona:
     traits: [谨慎, 务实, 隐忍, 多疑, 不沾因果]

@@ -2,6 +2,7 @@ manifest_version: 1
 name: cliffhanger-split
 extension_point: story.skill
 params:
+  title: "章末扣子"  # P9.1 中文显示名（id 仍为功能键，不变）
   desc: "评书扣子（悬念截断）：在关键转折处骤然截断，制造强烈的「欲知后事」冲动"
   trigger: "章末/集末，或需要在情节高潮处制造断点"
   prompt_template: |

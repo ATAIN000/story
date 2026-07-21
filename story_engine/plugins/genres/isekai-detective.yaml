@@ -15,6 +15,7 @@ culture_bound: false
 allowed_cultures: ["*"]
 
 params:
+  title: "穿越侦探"  # P9.1 中文显示名（id 仍为功能键，不变）
   pacing_curve: "穿越落地→展示专长→接案→科学断案→权力阻挠→真相与正义的抉择"
   power_system: "modern_forensics"           # 法医/刑侦/化学知识
   emotion_arcs: [man_in_hole, cinderella]

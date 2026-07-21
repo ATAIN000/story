@@ -3,6 +3,7 @@ manifest_version: 1
 name: fair-play
 extension_point: story.world.rule
 params:
+  title: "公平竞争"  # P9.1 中文显示名（id 仍为功能键，不变）
   rules:
     - id: fair_play
       kind: bool

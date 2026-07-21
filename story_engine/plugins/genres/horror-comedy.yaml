@@ -14,6 +14,7 @@ culture_bound: false
 allowed_cultures: ["*"]
 
 params:
+  title: "恐怖喜剧"  # P9.1 中文显示名（id 仍为功能键，不变）
   pacing_curve: "日常→灵异初现（搞笑反应）→升级→搞笑与恐怖交替→高潮（笑着尖叫）"
   power_system: "tonal_switch"                # 基调快速切换
   emotion_arcs: [man_in_hole, cinderella]     # 低谷挣扎 + 倒霉蛋的反转回升

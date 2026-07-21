@@ -13,6 +13,7 @@ culture_bound: false
 allowed_cultures: ["*"]
 
 params:
+  title: "系统穿越"  # P9.1 中文显示名（id 仍为功能键，不变）
   pacing_curve: "穿越绑定系统→新手任务→系统升级→系统秘密→系统真相"
   power_system: "game_ui_overlay"            # 可视化数值面板+任务+商店
   emotion_arcs: [cinderella, rags_to_riches]

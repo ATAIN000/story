@@ -14,6 +14,7 @@ culture_bound: false
 allowed_cultures: ["*"]
 
 params:
+  title: "治愈奇幻推理"  # P9.1 中文显示名（id 仍为功能键，不变）
   pacing_curve: "社区日常→案件发生→温馨调查→温情推理→真相（不血腥）→社区修复"
   power_system: "low_magic_domestic"         # 低魔：小魔法用于日常，不用于暴力
   emotion_arcs: [cinderella, man_in_hole]    # 温暖基调 + 探案低谷回升

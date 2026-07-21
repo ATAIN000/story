@@ -2,6 +2,7 @@ manifest_version: 1
 name: push-pull-tension
 extension_point: story.skill
 params:
+  title: "推拉张力"  # P9.1 中文显示名（id 仍为功能键，不变）
   desc: "情感推拉：亲近与疏离的交替节奏，在距离感中制造情感张力"
   trigger: "言情/暧昧/暗恋章节，需要制造暧昧张力"
   prompt_template: |

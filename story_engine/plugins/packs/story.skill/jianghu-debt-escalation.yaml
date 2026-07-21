@@ -2,6 +2,7 @@ manifest_version: 1
 name: jianghu-debt-escalation
 extension_point: story.skill
 params:
+  title: "江湖恩怨"  # P9.1 中文显示名（id 仍为功能键，不变）
   desc: "江湖恩怨递进：私人恩怨层层升级为门派之争、正邪之战，每层都有新势力卷入"
   trigger: "武侠/江湖冲突章节，需要升级矛盾规模"
   prompt_template: |

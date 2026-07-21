@@ -2,6 +2,7 @@ manifest_version: 1
 name: gongan-taboo
 extension_point: story.world.rule
 params:
+  title: "公案禁忌"  # P9.1 中文显示名（id 仍为功能键，不变）
   desc: "公案/推理类型禁忌：维护推理公平性和逻辑严谨性的底线规则"
   rules:
     - id: gongan_no_deus_ex_machina

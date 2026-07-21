@@ -14,6 +14,7 @@ culture_bound: false
 allowed_cultures: ["*"]
 
 params:
+  title: "修仙克苏鲁"  # P9.1 中文显示名（id 仍为功能键，不变）
   pacing_curve: "凡人入门→诡异初现→越修越怖→认知崩溃→终极抉择"
   power_system: "eerie_cultivation"        # 诡异修仙：境界越高越接近不可名状
   emotion_arcs: [man_in_hole, riches_to_rags]  # 越强越绝望

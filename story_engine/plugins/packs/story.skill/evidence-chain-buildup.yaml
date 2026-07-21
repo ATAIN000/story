@@ -2,6 +2,7 @@ manifest_version: 1
 name: evidence-chain-buildup
 extension_point: story.skill
 params:
+  title: "证据链推进"  # P9.1 中文显示名（id 仍为功能键，不变）
   desc: "链式取证：物证逐层递进，每环扣住前环，形成不可辩驳的证据链"
   trigger: "调查/取证/推理章节，需要系统性铺排证据"
   prompt_template: |

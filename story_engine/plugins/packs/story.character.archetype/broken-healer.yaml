@@ -2,6 +2,7 @@ manifest_version: 1
 name: broken-healer
 extension_point: story.character.archetype
 params:
+  title: "破碎治愈者"  # P9.1 中文显示名（id 仍为功能键，不变）
   desc: "破碎治愈者：自己有深刻创伤，却成为他人的救赎。温柔的悲剧底色"
   persona:
     traits: [温柔, 共情强, 自毁倾向, 隐忍, 洞察人心]

@@ -4,6 +4,7 @@ extension_point: story.culture
 activation_events: ["on_culture:korean-hwarang"]
 
 params:
+  title: "韩国花郎"  # P9.1 中文显示名（id 仍为功能键，不变）
   power_distance: 60            # 中高：长幼/前后辈制度（sunbae-hubae）
   individualism: 18             # 极低：集体和谐、nunchi（눈치读空气）
   masculinity: 39               # 低：情感表达细腻、韩流柔情美学

@@ -2,6 +2,7 @@ manifest_version: 1
 name: sanderson-laws
 extension_point: story.world.rule
 params:
+  title: "桑德森法则"  # P9.1 中文显示名（id 仍为功能键，不变）
   desc: "桑德森魔法三法则：作者用魔法解决冲突的能力，与读者对魔法的理解程度成正比"
   rules:
     - id: sanderson_1

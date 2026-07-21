@@ -2,6 +2,7 @@ manifest_version: 1
 name: neutral-observer
 extension_point: story.character.archetype
 params:
+  title: "中立观察者"  # P9.1 中文显示名（id 仍为功能键，不变）
   desc: "中立观察者/记录者：置身事外的视角人物，推动信息流动，自身可能有秘密立场"
   persona:
     traits: [冷静, 客观, 神秘, 谨慎, 有隐藏立场]

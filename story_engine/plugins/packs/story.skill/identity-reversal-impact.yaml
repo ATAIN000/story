@@ -2,6 +2,7 @@ manifest_version: 1
 name: identity-reversal-impact
 extension_point: story.skill
 params:
+  title: "身份反转"  # P9.1 中文显示名（id 仍为功能键，不变）
   desc: "身份错位反转：核心身份（阶级/血缘/敌我）的突然揭露，颠覆已建立的全部关系"
   trigger: "言情/悬疑/权谋章节，需要重大反转"
   prompt_template: |

@@ -2,6 +2,7 @@ manifest_version: 1
 name: antagonist-mastermind
 extension_point: story.character.archetype
 params:
+  title: "幕后元凶"  # P9.1 中文显示名（id 仍为功能键，不变）
   desc: "反派元凶：智商高、城府深、动机合理（不是为恶而恶），是主角的镜像而非反面"
   persona:
     traits:

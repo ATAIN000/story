@@ -3,6 +3,7 @@ manifest_version: 1
 name: deliberate-slip
 extension_point: story.skill
 params:
+  title: "露怯笔法"  # P9.1 中文显示名（id 仍为功能键，不变）
   desc: "露怯笔法：嫌疑人说出本不该知道的信息"
   trigger: "嫌疑人应答/辩解/自白场景"
   prompt_template: |

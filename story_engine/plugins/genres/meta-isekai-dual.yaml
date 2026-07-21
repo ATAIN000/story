@@ -14,6 +14,7 @@ culture_bound: false
 allowed_cultures: ["*"]
 
 params:
+  title: "元穿双界"  # P9.1 中文显示名（id 仍为功能键，不变）
   pacing_curve: "各自穿越→发现对方→试探合作→信息差博弈→联手or对决"
   power_system: "meta_knowledge"             # 剧情预知=核心能力
   emotion_arcs: [man_in_hole, cinderella]

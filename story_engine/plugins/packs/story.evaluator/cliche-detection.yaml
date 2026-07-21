@@ -2,6 +2,7 @@ manifest_version: 1
 name: cliche-detection
 extension_point: story.evaluator
 params:
+  title: "套路检测"  # P9.1 中文显示名（id 仍为功能键，不变）
   dimension: cliche_detection
   guide: |
     评估套路/陈词滥调的密度与创新度：

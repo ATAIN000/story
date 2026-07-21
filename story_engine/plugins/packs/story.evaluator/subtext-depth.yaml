@@ -2,6 +2,7 @@ manifest_version: 1
 name: subtext-depth
 extension_point: story.evaluator
 params:
+  title: "潜台词深度"  # P9.1 中文显示名（id 仍为功能键，不变）
   dimension: subtext_depth
   guide: |
     评估潜台词深度（与 dialogue_authenticity 互补——后者管"像不像"，本维度管"深不深"）：

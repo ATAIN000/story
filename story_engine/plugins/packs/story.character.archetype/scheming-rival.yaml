@@ -2,6 +2,7 @@ manifest_version: 1
 name: scheming-rival
 extension_point: story.character.archetype
 params:
+  title: "心机情敌"  # P9.1 中文显示名（id 仍为功能键，不变）
   desc: "心机情敌/对手：表面友善实则算计，制造误会的核心引擎"
   persona:
     traits: [圆滑, 善妒, 精明, 伪装, 不择手段]

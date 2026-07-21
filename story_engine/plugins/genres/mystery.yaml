@@ -9,6 +9,7 @@ culture_bound: false
 allowed_cultures: ["*"]
 
 params:
+  title: "公案悬疑"  # P9.1 中文显示名（id 仍为功能键，不变）
   pacing_curve: slow_burn
   emotion_arcs: [man_in_hole, cinderella, icarus]
   information_distribution: fair_play

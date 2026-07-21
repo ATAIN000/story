@@ -14,6 +14,7 @@ culture_bound: false
 allowed_cultures: ["*"]
 
 params:
+  title: "言情悬疑"  # P9.1 中文显示名（id 仍为功能键，不变）
   pacing_curve: "相遇相知→疑点初现→信任动摇→真相逼近→终极抉择（爱还是揭穿）"
   power_system: "psychological"               # 心理博弈为主
   emotion_arcs: [icarus, oedipus]             # 升起后坠落

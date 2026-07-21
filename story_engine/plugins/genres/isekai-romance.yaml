@@ -14,6 +14,7 @@ culture_bound: false
 allowed_cultures: ["*"]
 
 params:
+  title: "穿越情缘"  # P9.1 中文显示名（id 仍为功能键，不变）
   pacing_curve: "穿越落地→身份困境→情感萌芽→价值观冲突→觉醒抉择→爱情与自我和解"
   power_system: "modern_mindset"             # 现代思维是核心"武器"
   emotion_arcs: [cinderella, man_in_hole]

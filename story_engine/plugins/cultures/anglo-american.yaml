@@ -4,6 +4,7 @@ extension_point: story.culture
 activation_events: ["on_culture:anglo-american"]
 
 params:
+  title: "美式个人主义"  # P9.1 中文显示名（id 仍为功能键，不变）
   power_distance: 35            # 中低：平等主义但有阶层
   individualism: 90             # 极高：美国梦=个人奋斗
   masculinity: 60               # 中高：竞争导向、赢家通吃

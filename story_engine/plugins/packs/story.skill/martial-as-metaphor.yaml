@@ -2,6 +2,7 @@ manifest_version: 1
 name: martial-as-metaphor
 extension_point: story.skill
 params:
+  title: "武戏隐喻"  # P9.1 中文显示名（id 仍为功能键，不变）
   desc: "以武喻理：武打场面承载人物性格冲突和价值观对撞，不是单纯的打斗"
   trigger: "武侠/对决/论道场景，需要武打承载主题"
   prompt_template: |

@@ -170,6 +170,8 @@ def config():
         "llm_model": llm_client.model,
         "base_url": llm_client.base_url if not llm_client.is_mock else None,
         "plugins": engine.registry.list_plugins(),
+        # P9.1 显示名中文化：{id: 中文 title} 合并表，纯展示层叠加（只增不改）
+        "display_names": engine.kernel.registry.display_map(),
         "axes": {"genre": engine.genre.name,
                  "culture": engine.culture.name, "language": "zh"},
         "kernel": {

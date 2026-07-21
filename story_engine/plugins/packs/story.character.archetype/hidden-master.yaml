@@ -2,6 +2,7 @@ manifest_version: 1
 name: hidden-master
 extension_point: story.character.archetype
 params:
+  title: "隐世高人"  # P9.1 中文显示名（id 仍为功能键，不变）
   desc: "隐世高人：实力深不可测但隐居不出，因某个契机重出江湖。导师+战斗力双重角色"
   persona:
     traits: [深沉, 洞彻, 散淡, 怀旧, 克制]

@@ -2,6 +2,7 @@ manifest_version: 1
 name: reversal-quality
 extension_point: story.evaluator
 params:
+  title: "反转质量"  # P9.1 中文显示名（id 仍为功能键，不变）
   dimension: reversal_quality
   guide: |
     评估反转/转折的质量（参照 Knox 反转十律与 Schulz 2024 心跳理论）：

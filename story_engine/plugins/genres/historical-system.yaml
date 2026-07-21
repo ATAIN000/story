@@ -14,6 +14,7 @@ culture_bound: false
 allowed_cultures: ["*"]
 
 params:
+  title: "历史系统流"  # P9.1 中文显示名（id 仍为功能键，不变）
   pacing_curve: "系统绑定→新手任务（小事）→历史节点任务→蝴蝶效应→系统vs历史的矛盾"
   power_system: "history_quest_system"       # 任务驱动历史干预
   emotion_arcs: [cinderella, oedipus]

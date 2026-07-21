@@ -4,7 +4,7 @@
 // brief 允许「静态读或省略」）；条目从 world 快照聚合（physical/relationships/minds），
 // 不编造。稀疏时友好提示「世界观条目由生成过程填充，本视图展示已建立的规则与出场统计」。
 import { computed, ref, watch } from 'vue'
-import { toWorldViewVM } from '../api/adapters'
+import { toWorldViewVM, displayName } from '../api/adapters'
 import EmptyState from '../components/EmptyState.vue'
 
 const props = defineProps({
@@ -39,7 +39,8 @@ watch(CATS, ensureSelection, { immediate: true })
 
 const activeGroup = computed(() => CATS.value.find(c => c.name === activeCat.value) ?? null)
 
-const GENRE_LABEL = { mystery: '悬疑 · 公案', romance: '言情', wuxia: '武侠' }
+/* P9.1：题材名统一走 displayName（/api/config display_names；回落 id） */
+const genreLabel = computed(() => displayName(props.config, vm.value.genre) || '—')
 </script>
 
 <template>
@@ -66,7 +67,7 @@ const GENRE_LABEL = { mystery: '悬疑 · 公案', romance: '言情', wuxia: '�
       <div class="w-entry">
         <!-- 规则卡 -->
         <template v-if="activeGroup?.type === 'rules'">
-          <h2>世界规则 <span class="w-genre">{{ GENRE_LABEL[vm.genre] || vm.genre || '—' }}</span></h2>
+          <h2>世界规则 <span class="w-genre">{{ genreLabel }}</span></h2>
           <div class="w-type">Z3 SMT 硬约束 · validator 实时校验 · 违反即拒绝事件提交</div>
           <div v-for="(r, i) in activeGroup.items" :key="i" class="rule-card">
             <div class="r-id">{{ r.id }} · {{ r.kind }}</div>

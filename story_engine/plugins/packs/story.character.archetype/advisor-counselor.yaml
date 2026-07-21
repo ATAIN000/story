@@ -2,6 +2,7 @@ manifest_version: 1
 name: advisor-counselor
 extension_point: story.character.archetype
 params:
+  title: "师爷幕僚"  # P9.1 中文显示名（id 仍为功能键，不变）
   desc: "师爷/幕僚：心思缜密，善于察言观色，是智囊但也可能有自己的算盘"
   persona:
     traits:

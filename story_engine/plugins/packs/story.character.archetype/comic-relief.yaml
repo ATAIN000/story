@@ -2,6 +2,7 @@ manifest_version: 1
 name: comic-relief
 extension_point: story.character.archetype
 params:
+  title: "搞笑担当"  # P9.1 中文显示名（id 仍为功能键，不变）
   desc: "搞笑担当：用幽默化解紧张，但自身有完整人格不是纯粹的工具人"
   persona:
     traits: [幽默, 自嘲, 看似没心没肺, 实则洞察, 忠诚]

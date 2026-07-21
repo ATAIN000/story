@@ -2,6 +2,7 @@ manifest_version: 1
 name: strong-female-lead
 extension_point: story.character.archetype
 params:
+  title: "大女主"  # P9.1 中文显示名（id 仍为功能键，不变）
   desc: "大女主：独立自强不依附男性，靠智慧和韧性破局。女频/穿越流核心原型"
   persona:
     traits: [坚韧, 独立, 聪慧, 隐忍, 有底线]

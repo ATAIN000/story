@@ -208,7 +208,9 @@ export function toCharactersVM(list) {
 
 /* ===== 运行配置（GET /api/config → VM，P6.6 传导修复） =====
  * 源：backend/main.py config()。plugins 为 {挂载点: [名称...]} 原样透传
- * （P6.10 插件视图消费），pluginCount 为各挂载点插件数之和（App 徽标）。 */
+ * （P6.10 插件视图消费），pluginCount 为各挂载点插件数之和（App 徽标）。
+ * P9.1：displayNames 为 {id: 中文 title} 合并表（registry.display_map），
+ * 视图一律经 displayName() 解析显示名，id 仅作功能键/小字副标。 */
 export function toConfigVM(cfg) {
   if (!cfg) return null
   const plugins = cfg.plugins ?? {}
@@ -221,6 +223,7 @@ export function toConfigVM(cfg) {
     plugins,
     pluginCount: Object.values(plugins)
       .reduce((n, names) => n + (Array.isArray(names) ? names.length : 0), 0),
+    displayNames: cfg.display_names ?? {},   // P9.1 {id: title}，无 title 后端已回落 id
     axes: {
       genre: axes.genre ?? '',
       culture: axes.culture ?? '',
@@ -231,6 +234,14 @@ export function toConfigVM(cfg) {
       actors: kernel.actors ?? [],
     },
   }
+}
+
+/* P9.1 显示名解析：cfg 为 toConfigVM 的 VM（也宽容接受原始 config JSON）。
+ * 查不到（如 synth 新题材尚未入库）原样回落 id。 */
+export function displayName(cfg, id) {
+  if (!id) return id ?? ''
+  const map = cfg?.displayNames ?? cfg?.display_names ?? {}
+  return map[id] || id
 }
 
 /* ===== 生成回放（POST /api/project/generate 返回体 → VM，P6.6 步骤回放） =====

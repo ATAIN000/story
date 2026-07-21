@@ -8,7 +8,7 @@
 // 题材实验室不做混合合成（评审意见 9）：只展示生成的配置，不写入引擎。
 import { ref, computed, onMounted } from 'vue'
 import { api } from '../api/api'
-import { toTrainingStatsVM, toMetaConfigVM } from '../api/adapters'
+import { toTrainingStatsVM, toMetaConfigVM, displayName } from '../api/adapters'
 import { useToast } from '../composables/useToast'
 import EmptyState from '../components/EmptyState.vue'
 
@@ -18,6 +18,9 @@ const props = defineProps({
 })
 
 const { toast, toastError } = useToast()
+
+/* P9.1：显示名中文化——标题列显示 title，id 降为小字副标 */
+const dn = (id) => displayName(props.config, id)
 
 const stats = ref(null)
 const statsLoading = ref(false)
@@ -78,7 +81,7 @@ async function genConfig() {
       platform: 'novel',
     })
     metaResult.value = toMetaConfigVM(raw)
-    toast(`配置已生成 · ${metaResult.value.genre} × ${metaResult.value.culture}`)
+    toast(`配置已生成 · ${dn(metaResult.value.genre)} × ${dn(metaResult.value.culture)}`)
   } catch (e) {
     toastError(`配置生成失败：${e.message}`)
   } finally {
@@ -102,7 +105,7 @@ async function genConfig() {
             <div class="ext-point">{{ g.point }}</div>
             <div v-if="g.items.length" class="ext-items">
               <div v-for="name in g.items" :key="name" class="ext-item">
-                <span class="ext-name">{{ name }}</span>
+                <span class="ext-name">{{ dn(name) }}<span v-if="dn(name) !== name" class="ext-id">{{ name }}</span></span>
                 <label class="ro-switch" @click.prevent="onToggleClick(g.point, name)" title="只读，点击查看说明">
                   <input type="checkbox" checked disabled :aria-label="`启停：${name}`" />
                   <span class="slider"></span>
@@ -182,8 +185,8 @@ async function genConfig() {
 
           <div v-if="metaResult" class="gl-result">
             <div class="gl-result-h">StoryConfig 预览</div>
-            <div class="kv"><span class="k">genre</span><span class="v mono">{{ metaResult.genre || '—' }}</span></div>
-            <div class="kv"><span class="k">culture</span><span class="v mono">{{ metaResult.culture || '—' }}</span></div>
+            <div class="kv"><span class="k">genre</span><span class="v">{{ dn(metaResult.genre) || '—' }}<span v-if="metaResult.genre" class="ext-id">{{ metaResult.genre }}</span></span></div>
+            <div class="kv"><span class="k">culture</span><span class="v">{{ dn(metaResult.culture) || '—' }}<span v-if="metaResult.culture" class="ext-id">{{ metaResult.culture }}</span></span></div>
             <div class="kv"><span class="k">language</span><span class="v mono">{{ metaResult.language || '—' }}</span></div>
             <div class="kv"><span class="k">target_length</span><span class="v mono">{{ metaResult.targetLength }} 章</span></div>
             <div v-if="metaResult.theme" class="kv"><span class="k">theme</span><span class="v">{{ metaResult.theme }}</span></div>
@@ -222,6 +225,7 @@ async function genConfig() {
 .ext-item { display: flex; align-items: center; justify-content: space-between;
   padding: 4px 0; font-size: 12.5px; }
 .ext-name { color: var(--ink2); }
+.ext-id { font-family: Menlo, Consolas, monospace; font-size: 10.5px; color: var(--faint); margin-left: 8px; }
 
 /* 只读开关（disabled，仅展示，点击 toast） */
 .ro-switch { position: relative; display: inline-block; width: 32px; height: 18px; cursor: pointer; }

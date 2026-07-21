@@ -7,7 +7,7 @@
 // 后端落 pending_plan，WriteView watch project 拾起即进 planned 流。
 import { ref, computed, onMounted, nextTick } from 'vue'
 import { api } from '../api/api'
-import { toGachaCardVM } from '../api/adapters'
+import { toGachaCardVM, displayName } from '../api/adapters'
 import { useToast } from '../composables/useToast'
 import AppIcon from '../components/AppIcon.vue'
 
@@ -18,6 +18,9 @@ const props = defineProps({
 const emit = defineEmits(['refresh', 'navigate'])
 
 const { toast, toastError } = useToast()
+
+/* P9.1：卡名显示中文 title，id 降为小字副标（synth 新题材未入库时回落 id） */
+const dn = (id) => displayName(props.config, id)
 
 const rawCard = ref(null)              // draw 原始返回（confirm payload；不进模板）
 const card = computed(() => toGachaCardVM(rawCard.value))
@@ -111,7 +114,7 @@ async function doConfirm() {
     /* 最终 genre 名以后端响应为准（synth 重名落盘可能带 -2 后缀，P8.5） */
     const finalGenre = res.genre ?? ''
     const culture = res.project?.culture ?? ''
-    toast(`已开工：${finalGenre} × ${culture}${res.persisted ? '（新题材已入库）' : ''}`)
+    toast(`已开工：${dn(finalGenre)} × ${dn(culture)}${res.persisted ? '（新题材已入库）' : ''}`)
     /* 第一章 plan：失败不阻塞跳转（写作台空态可重试同款 plan） */
     try {
       await api.plan()
@@ -144,24 +147,27 @@ async function doConfirm() {
         <div class="gc-col-t">{{ col.label }}</div>
 
         <div class="gacha-card">
-          <!-- 题材：卡名 + source 徽标 + desc -->
+          <!-- 题材：卡名 + source 徽标 + desc（P9.1：title 主显，id 小字） -->
           <template v-if="col.key === 'genre'">
             <span class="gacha-src" :class="{ synth: card.genre.source === 'synth' }">
               {{ card.genre.source === 'synth' ? 'AI 合成' : '库内' }}
             </span>
-            <div class="gacha-name">{{ card.genre.name || '—' }}</div>
+            <div class="gacha-name">{{ dn(card.genre.name) || '—' }}</div>
+            <div v-if="card.genre.name && dn(card.genre.name) !== card.genre.name" class="gacha-id">{{ card.genre.name }}</div>
             <div class="gacha-desc">{{ card.genre.desc || '—' }}</div>
           </template>
 
           <!-- 文化 -->
           <template v-else-if="col.key === 'culture'">
-            <div class="gacha-name">{{ card.culture.name || '—' }}</div>
+            <div class="gacha-name">{{ dn(card.culture.name) || '—' }}</div>
+            <div v-if="card.culture.name && dn(card.culture.name) !== card.culture.name" class="gacha-id">{{ card.culture.name }}</div>
             <div class="gacha-desc">{{ card.culture.desc || '—' }}</div>
           </template>
 
           <!-- 人物原型：desc + 语气提示 -->
           <template v-else-if="col.key === 'archetype'">
-            <div class="gacha-name">{{ card.archetype.name || '—' }}</div>
+            <div class="gacha-name">{{ dn(card.archetype.name) || '—' }}</div>
+            <div v-if="card.archetype.name && dn(card.archetype.name) !== card.archetype.name" class="gacha-id">{{ card.archetype.name }}</div>
             <div class="gacha-desc">{{ card.archetype.desc || '—' }}</div>
             <div v-if="card.archetype.voiceHint" class="gacha-voice">语气：{{ card.archetype.voiceHint }}</div>
           </template>
@@ -170,7 +176,7 @@ async function doConfirm() {
           <template v-else>
             <template v-if="card.rulePacks.length">
               <div v-for="r in card.rulePacks" :key="r.name" class="gacha-rule">
-                <b>{{ r.name }}</b>
+                <b>{{ dn(r.name) }}<span v-if="dn(r.name) !== r.name" class="gacha-id"> {{ r.name }}</span></b>
                 <span>{{ r.desc || '—' }}</span>
               </div>
             </template>

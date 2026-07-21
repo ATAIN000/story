@@ -2,6 +2,7 @@ manifest_version: 1
 name: romance-taboo
 extension_point: story.world.rule
 params:
+  title: "言情禁忌"  # P9.1 中文显示名（id 仍为功能键，不变）
   desc: "言情类型禁忌：维护情感真实性和角色自主性的底线规则"
   rules:
     - id: romance_no_character_assassination

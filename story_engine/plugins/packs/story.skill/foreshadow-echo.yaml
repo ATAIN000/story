@@ -3,6 +3,7 @@ manifest_version: 1
 name: foreshadow-echo
 extension_point: story.skill
 params:
+  title: "伏笔回响"  # P9.1 中文显示名（id 仍为功能键，不变）
   desc: "伏笔回收写法：让读者自己想起来，而不是被告知"
   trigger: "伏笔到期/真相揭晓/证据闭合场景"
   prompt_template: |

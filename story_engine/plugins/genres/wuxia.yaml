@@ -10,6 +10,7 @@ culture_bound: true
 allowed_cultures: [confucian_officialdom, taoist_chinese]
 
 params:
+  title: "武侠江湖"  # P9.1 中文显示名（id 仍为功能键，不变）
   pacing_curve: "隐忍→寻师→历练→恩怨→对决"
   power_system: martial_arts
   social_space: jianghu

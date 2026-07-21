@@ -2,6 +2,7 @@ manifest_version: 1
 name: loyal-guard
 extension_point: story.character.archetype
 params:
+  title: "忠勇护卫"  # P9.1 中文显示名（id 仍为功能键，不变）
   desc: "忠卫：沉默寡言，武力值高，忠诚是核心驱动力但也是致命弱点"
   persona:
     traits:

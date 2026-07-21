@@ -9,6 +9,7 @@ culture_bound: false
 allowed_cultures: ["*"]
 
 params:
+  title: "古代言情"  # P9.1 中文显示名（id 仍为功能键，不变）
   pacing_curve: wave_rise
   emotion_arcs: [rags_to_riches, cinderella, man_in_hole]
   information_distribution: dramatic_irony

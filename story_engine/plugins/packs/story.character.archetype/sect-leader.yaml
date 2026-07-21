@@ -2,6 +2,7 @@ manifest_version: 1
 name: sect-leader
 extension_point: story.character.archetype
 params:
+  title: "门派掌门"  # P9.1 中文显示名（id 仍为功能键，不变）
   desc: "门派掌门/家主：权力顶端但被规则和责任束缚，在门派利益与个人道义间挣扎"
   persona:
     traits: [威严, 深沉, 务实, 孤独, 被责任绑架]

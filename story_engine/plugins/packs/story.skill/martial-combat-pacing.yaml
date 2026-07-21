@@ -2,6 +2,7 @@ manifest_version: 1
 name: martial-combat-pacing
 extension_point: story.skill
 params:
+  title: "武打节奏"  # P9.1 中文显示名（id 仍为功能键，不变）
   desc: "武打四拍节奏：架（起势）→动（交锋）→招（特色技）→果（一击定胜负），避免流水账"
   trigger: "武侠/打斗/对决场景"
   prompt_template: |

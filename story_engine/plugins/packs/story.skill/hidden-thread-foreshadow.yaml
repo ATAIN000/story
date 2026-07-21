@@ -2,6 +2,7 @@ manifest_version: 1
 name: hidden-thread-foreshadow
 extension_point: story.skill
 params:
+  title: "暗线伏笔"  # P9.1 中文显示名（id 仍为功能键，不变）
   desc: "草蛇灰线：伏笔断续埋设，千里之外收束呼应，前引后应暗示命运走向"
   trigger: "需要铺设长程伏笔的章节，或需要在关键时刻回收前文细节"
   prompt_template: |

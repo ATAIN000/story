@@ -4,6 +4,7 @@ extension_point: story.culture
 activation_events: ["on_culture:latin-mediterranean"]
 
 params:
+  title: "拉丁地中海"  # P9.1 中文显示名（id 仍为功能键，不变）
   power_distance: 60            # 中高：教父式权威、家族等级
   individualism: 40             # 中低：家族共同体>个人
   masculinity: 65               # 中高：荣誉文化、激情、男子气概

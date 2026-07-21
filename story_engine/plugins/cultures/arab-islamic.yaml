@@ -4,6 +4,7 @@ extension_point: story.culture
 activation_events: ["on_culture:arab-islamic"]
 
 params:
+  title: "伊斯兰部落"  # P9.1 中文显示名（id 仍为功能键，不变）
   power_distance: 80            # 高：部落长老/宗教权威
   individualism: 38             # 低：乌玛（ummah）共同体、部落忠诚
   masculinity: 52               # 中：男性主导但女性在家庭中有权

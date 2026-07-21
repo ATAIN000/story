@@ -2,6 +2,7 @@ manifest_version: 1
 name: en-literary-register
 extension_point: story.language
 params:
+  title: "英文文学语域"  # P9.1 中文显示名（id 仍为功能键，不变）
   language: en
   resources:
     sentence_frames:

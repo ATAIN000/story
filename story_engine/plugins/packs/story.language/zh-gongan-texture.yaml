@@ -4,6 +4,7 @@ manifest_version: 1
 name: zh-gongan-texture
 extension_point: story.language
 params:
+  title: "公案文白质感"  # P9.1 中文显示名（id 仍为功能键，不变）
   language: zh
   resources:
     四字格:

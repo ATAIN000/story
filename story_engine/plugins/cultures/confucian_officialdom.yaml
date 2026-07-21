@@ -5,6 +5,7 @@ extension_point: story.culture
 activation_events: ["on_culture:confucian_officialdom"]
 
 params:
+  title: "儒家官场"  # P9.1 中文显示名（id 仍为功能键，不变）
   # Hofstede 6维（可微调先验，参考 Akaliyski 2025 修订）
   power_distance: 80
   individualism: 20

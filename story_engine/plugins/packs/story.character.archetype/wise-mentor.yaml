@@ -2,6 +2,7 @@ manifest_version: 1
 name: wise-mentor
 extension_point: story.character.archetype
 params:
+  title: "睿智导师"  # P9.1 中文显示名（id 仍为功能键，不变）
   desc: "导师/师父：传授知识技艺，但自身有局限或秘密。培养主角成长的引路人"
   persona:
     traits: [博学, 耐心, 幽默, 谜语人, 有隐藏的过去]

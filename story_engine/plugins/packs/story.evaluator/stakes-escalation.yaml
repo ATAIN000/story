@@ -2,6 +2,7 @@ manifest_version: 1
 name: stakes-escalation
 extension_point: story.evaluator
 params:
+  title: "代价升级"  # P9.1 中文显示名（id 仍为功能键，不变）
   dimension: stakes_escalation
   guide: |
     评估赌注/危机的递进质量（McKee 价值转折理论 + 通用叙事法则）：

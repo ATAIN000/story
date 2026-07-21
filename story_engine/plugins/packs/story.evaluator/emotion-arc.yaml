@@ -3,6 +3,7 @@ manifest_version: 1
 name: emotion-arc
 extension_point: story.evaluator
 params:
+  title: "情感弧"  # P9.1 中文显示名（id 仍为功能键，不变）
   dimension: emotion_arc
   guide: |
     评估情感弧（Emotion Arc）的推进质量：

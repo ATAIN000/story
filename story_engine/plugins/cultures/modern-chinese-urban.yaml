@@ -4,6 +4,7 @@ extension_point: story.culture
 activation_events: ["on_culture:modern-chinese-urban"]
 
 params:
+  title: "现代中国都市"  # P9.1 中文显示名（id 仍为功能键，不变）
   power_distance: 55            # 中：职场等级存在但可被能力打破
   individualism: 50             # 中：个人奋斗vs家庭期望的拉扯
   masculinity: 55               # 中：男女平等意识提升

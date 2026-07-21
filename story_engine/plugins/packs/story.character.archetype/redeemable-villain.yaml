@@ -2,6 +2,7 @@ manifest_version: 1
 name: redeemable-villain
 extension_point: story.character.archetype
 params:
+  title: "可救赎反派"  # P9.1 中文显示名（id 仍为功能键，不变）
   desc: "可救赎反派：做了恶事但有可被理解的动机和转变空间。比纯反派更有戏剧张力"
   persona:
     traits: [骄傲, 受过深重伤害, 执念深, 内心尚存善念, 自毁倾向]

@@ -3,7 +3,7 @@
 // 布局/样式迁移自 story.html :41-73 / :432-464；视图占位 stub 由 P6.6-P6.10 填充。
 import { ref, computed, onMounted } from 'vue'
 import { api } from './api/api'
-import { toProjectVM, toConfigVM } from './api/adapters'
+import { toProjectVM, toConfigVM, displayName } from './api/adapters'
 import { useTheme } from './composables/useTheme'
 import { useToast } from './composables/useToast'
 import { useGeneration } from './composables/useGeneration'
@@ -56,6 +56,9 @@ const pluginCount = computed(() => config.value?.pluginCount ?? 0)
 
 const activeView = computed(() => VIEWS[view.value] || WriteView)
 const meta = computed(() => project.value?.meta || {})
+
+/* P9.1：顶栏/导航脚注的题材·文化名走 displayName（中文 title，回落 id） */
+const dn = (id) => displayName(config.value, id)
 
 // nav 计数徽标：只展示后端可核实的真实计数（8.2-#7/8 不用内存态冒充）
 function navCount(id) {
@@ -111,7 +114,7 @@ onMounted(async () => {
         </button>
       </template>
       <div class="nav-foot">
-        {{ meta.genre || '—' }} × {{ meta.culture || '—' }} × {{ meta.language || 'zh' }}<br>
+        {{ dn(meta.genre) || '—' }} × {{ dn(meta.culture) || '—' }} × {{ meta.language || 'zh' }}<br>
         editorial · 双主题
       </div>
     </nav>
@@ -120,7 +123,7 @@ onMounted(async () => {
       <!-- 顶栏（story.html :450-464） -->
       <header class="topbar">
         <span class="proj">《{{ meta.name || '加载中' }}》</span>
-        <span class="crumb">{{ meta.genre }} × {{ meta.culture }}</span>
+        <span class="crumb">{{ dn(meta.genre) }} × {{ dn(meta.culture) }}</span>
         <span v-if="meta.llmMode" class="tb-badge llm" :class="{ mock: meta.llmMode === 'mock' }">
           {{ meta.llmMode === 'mock' ? 'MOCK 剧本' : meta.llmModel }}
         </span>

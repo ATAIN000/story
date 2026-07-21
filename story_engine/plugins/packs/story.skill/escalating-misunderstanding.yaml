@@ -2,6 +2,7 @@ manifest_version: 1
 name: escalating-misunderstanding
 extension_point: story.skill
 params:
+  title: "误会升级"  # P9.1 中文显示名（id 仍为功能键，不变）
   desc: "误会递进：从微小的信息不对称开始，层层加深至致命误解，每层都有合理的信息障碍"
   trigger: "言情/情感冲突章节，需要制造虐心误解"
   prompt_template: |

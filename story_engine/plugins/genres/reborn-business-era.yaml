@@ -14,6 +14,7 @@ culture_bound: false
 allowed_cultures: ["*"]
 
 params:
+  title: "重生商战"  # P9.1 中文显示名（id 仍为功能键，不变）
   pacing_curve: "重生节点→第一桶金→站稳脚跟→时代风口→商业帝国→回首人生"
   power_system: "future_memory"              # 未来记忆=唯一金手指
   emotion_arcs: [rags_to_riches, cinderella]

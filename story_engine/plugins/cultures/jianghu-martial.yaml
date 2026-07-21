@@ -4,6 +4,7 @@ extension_point: story.culture
 activation_events: ["on_culture:jianghu-martial"]
 
 params:
+  title: "江湖武侠"  # P9.1 中文显示名（id 仍为功能键，不变）
   power_distance: 35            # 低：江湖讲究辈分但不绝对服从
   individualism: 60             # 中高：侠客个人英雄主义
   masculinity: 75               # 高：尚武、义气、血性

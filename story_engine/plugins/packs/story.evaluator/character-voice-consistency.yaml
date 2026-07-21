@@ -2,6 +2,7 @@ manifest_version: 1
 name: character-voice-consistency
 extension_point: story.evaluator
 params:
+  title: "角色声线一致"  # P9.1 中文显示名（id 仍为功能键，不变）
   dimension: character_voice_consistency
   guide: |
     评估角色声音的一致性（VoiceProfile 合规检查——补充 character_motivation 的"动机"层面，专管"说话方式"）：

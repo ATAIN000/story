@@ -2,6 +2,7 @@ manifest_version: 1
 name: wronged-victim
 extension_point: story.character.archetype
 params:
+  title: "苦主"  # P9.1 中文显示名（id 仍为功能键，不变）
   desc: "苦主：含冤受屈，是案件的情感核心，但自身也可能隐藏秘密"
   persona:
     traits:

@@ -2,6 +2,7 @@ manifest_version: 1
 name: theme-depth
 extension_point: story.evaluator
 params:
+  title: "主题深度"  # P9.1 中文显示名（id 仍为功能键，不变）
   dimension: theme_depth
   guide: |
     评估主题深度与表达方式（McKee 控制思想 + Show-don't-tell）：

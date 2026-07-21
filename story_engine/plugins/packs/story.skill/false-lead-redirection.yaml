@@ -2,6 +2,7 @@ manifest_version: 1
 name: false-lead-redirection
 extension_point: story.skill
 params:
+  title: "假线索误导"  # P9.1 中文显示名（id 仍为功能键，不变）
   desc: "明暗双线误导：铺设表面线索引向错误方向，暗线真相在背后推进"
   trigger: "推理/悬疑/反转章节，需要误导读者预期"
   prompt_template: |

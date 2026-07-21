@@ -2,6 +2,7 @@ manifest_version: 1
 name: genius-junior
 extension_point: story.character.archetype
 params:
+  title: "天才晚辈"  # P9.1 中文显示名（id 仍为功能键，不变）
   desc: "天才晚辈：天赋极高但心智未成熟，需要挫折才能成长为真正的强者。热血向核心原型"
   persona:
     traits: [自信, 冲动, 重情义, 倔强, 天真]

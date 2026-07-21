@@ -2,6 +2,7 @@ manifest_version: 1
 name: fair-play-knox
 extension_point: story.world.rule
 params:
+  title: "诺克斯十诫"  # P9.1 中文显示名（id 仍为功能键，不变）
   desc: "Knox 侦探小说十诫（1928）：黄金时代公平推理规则，确保读者享有与侦探平等的推理权"
   rules:
     - id: knox_1

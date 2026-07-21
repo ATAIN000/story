@@ -2,6 +2,7 @@ manifest_version: 1
 name: foreshadowing-payoff
 extension_point: story.evaluator
 params:
+  title: "伏笔回收"  # P9.1 中文显示名（id 仍为功能键，不变）
   dimension: foreshadowing_payoff
   guide: |
     评估伏笔铺设与回收的质量（草蛇灰线法的质检版）：
