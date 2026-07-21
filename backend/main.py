@@ -15,7 +15,7 @@ API：
   GET  /api/training/stats     【P6.1 新增】训练信号计数（skills/preferences/style）
   POST /api/paragraph/rewrite  【P6.3 新增】段落重写（Realizer 单段渲染，只读不写）
   GET  /api/characters         【P6.4 新增】角色卡聚合（minds/关系/voice/arc，只增）
-  POST /api/gacha/draw         【P8.3 新增】抽卡开局：library 随机组合 + lock 锁栏（零 LLM）
+  POST /api/gacha/draw         【P8.3/P8.4】抽卡开局：library 随机组合 + lock 锁栏；synth LLM 合成（mock 短路降级）
 静态：/ → frontend/dist（Vue SPA）
 """
 from __future__ import annotations
@@ -45,7 +45,7 @@ from story_engine.hitl import (  # noqa: E402
 from story_engine.kernel import Kernel, LLMPool  # noqa: E402
 from story_engine.llm import LLMError  # noqa: E402
 from story_engine.meta import MetaGenerator, UserIntent  # noqa: E402
-from story_engine.meta.gacha import draw_card  # noqa: E402
+from story_engine.meta.gacha import draw_card_async  # noqa: E402
 from story_engine.types import StoryEngineError  # noqa: E402
 
 
@@ -144,7 +144,7 @@ class SettingsReq(BaseModel):
 
 
 class GachaDrawReq(BaseModel):
-    """抽卡 body（P8.3）：mode=library|synth（synth 的 LLM 合成见 P8.4）；
+    """抽卡 body（P8.3 library / P8.4 synth）：mode=library|synth；
     lock 锁定任意栏（genre/culture/archetype 为名称 str，rule_packs 为名称
     str 或 list；键缺省/值为 None 视为未锁定，宽容处理见 meta.gacha）。"""
     mode: Literal["library", "synth"] = "library"
@@ -345,14 +345,16 @@ def characters():
     return engine.characters_view()
 
 
-# ---------- 抽卡开局（P8.3，独立开局页：题材×文化×原型×规则 随机组合） ----------
+# ---------- 抽卡开局（P8.3 library / P8.4 synth，独立开局页：题材×文化×原型×规则） ----------
 @app.post("/api/gacha/draw")
-def gacha_draw(req: GachaDrawReq):
-    """【P8.3】抽一张开局卡（library 库内随机 + lock 锁栏；纯 registry 读取）。
-    llm_call 恒传 None：mock 短路在注入点之前，本端点零 LLM 调用；
-    synth 模式当前短路降级 library 卡（P8.4 接 LLM 合成 + 校验 + 重试）。"""
+async def gacha_draw(req: GachaDrawReq):
+    """【P8.3/P8.4】抽一张开局卡。library 纯 registry 读取，零 LLM；
+    synth 注入 kernel.llm.call 走 LLM 合成 + 校验 + 重试 + 降级——
+    mock 短路在 meta.gacha 内部、LLM 调用之前（is_mock 判据），
+    mock 部署下恒降级 library 卡，本端点不做真实 LLM 调用。"""
     try:
-        return draw_card(engine.kernel, None, req.mode, req.lock)
+        return await draw_card_async(engine.kernel, engine.kernel.llm.call,
+                                     req.mode, req.lock)
     except StoryEngineError as e:
         raise HTTPException(status_code=500, detail=str(e))
 
