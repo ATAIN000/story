@@ -122,11 +122,27 @@ def _make_textual_apply(stack: dict):
     return _textual_apply
 
 
+def _make_lazy_genesis(stack: dict):
+    """P11.1 延迟解析创世工厂（backend bundle-timing 问题的解法）：
+    Kernel 必须先于 StoryEngine 构造，而题材 bundle 在 engine 内 —— 工厂
+    闭包在「被调用时」经 stack["engine"] 取当前 engine 的定型创世工厂。
+    EventStore 懒求值（空库首次 current_state 才调用，event_store.py:139），
+    且 engine 构造末尾已把 store 工厂重指为自身题材工厂，本闭包实际只覆盖
+    engine 建成前的理论窗口；两层双保险，任先生效都正确。engine 为 None
+    （理论窗口）时回退 mystery 静态法，与旧行为逐字一致。"""
+    def _factory():
+        engine = stack.get("engine")
+        if engine is None:
+            return StoryEngine._genesis_state()
+        return engine._genesis_factory()()
+    return _factory
+
+
 def _build_stack(project_dir: Path, genre_name: str | None = None,
                  culture_name: str | None = None) -> dict:
     """P10.1 项目栈工厂：kernel/engine/meta_gen/pipeline/router 一处构造。
 
-    传 initial_state_factory（静态方法可直接引用）：否则创世种子要靠
+    传 initial_state_factory（P11.1 起为延迟解析闭包）：否则创世种子要靠
     engine.reset() 重建 store 才能顺带注入（P9.x 原位清库后该掩蔽效应消失，
     必须显式传）。挂载点决策（P5.10 任务卡）：engine 侧无 router/pipeline
     实例，参照 meta_gen 同款模式在 backend 侧构造。router 的 regenerate_fn /
@@ -134,14 +150,15 @@ def _build_stack(project_dir: Path, genre_name: str | None = None,
     genre_name/culture_name（P10.2 评审修复，可选只增）：显式指定题材/文化
     建 engine（projects/open 恢复项目自身题材）；缺省 None 回落 env/内置默认，
     与 StoryEngine 构造口径一致，启动路径行为不变。"""
+    stack: dict = {}
     kernel = Kernel(project_dir, plugin_dir=ROOT / "story_engine" / "plugins",
-                    initial_state_factory=StoryEngine._genesis_state)
+                    initial_state_factory=_make_lazy_genesis(stack))
     engine = StoryEngine(kernel, genre_name=genre_name,
                          culture_name=culture_name)
     meta_gen = MetaGenerator(kernel)
     pipeline = TrainingPipeline(kernel, project_dir)
-    stack = {"kernel": kernel, "engine": engine, "meta_gen": meta_gen,
-             "pipeline": pipeline}
+    stack.update({"kernel": kernel, "engine": engine, "meta_gen": meta_gen,
+                  "pipeline": pipeline})
     stack["router"] = InterventionRouter(
         kernel, pipeline=pipeline, regenerate_fn=_make_regenerate_sync(stack),
         textual_apply_fn=_make_textual_apply(stack))

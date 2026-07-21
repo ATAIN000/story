@@ -29,6 +29,27 @@ params:
     - {id: E, name: "主题·律法与情",   arc_type: Serialized, archetype: Quest,   progress: 0.0, last_touched: 0}
 
   rule_packs: [fair-play]  # P7.4 L5：显式引用 world.rule 包（同 id 时 pack 覆盖内嵌）
+
+  # 【P11.1】cast 段：包青天阵容数据化（Actor 阵容插件化的 L1 来源）。
+  # 值与 mock_script SEED_CHARACTERS/SEED_MINDS/SEED_RELATIONS 现状逐字一致
+  # （tests/test_cast.py 断言 id 集/goals/关系一致，防漂移）。
+  # 注：活体 mystery 路径仍走 engine._genesis_state 全量种子（含 physical/
+  # beliefs/secrets/causal_links 等 cast 表达不了的部分，剧本路径零变化）；
+  # 本段供 bundle 创世工厂（_make_genesis_factory）及后续 Phase 消费。
+  cast:
+    - {id: 包拯,   role: "开封府尹", voice_hint: "沉毅克制，少言而中",
+       goals: ["查明玉佩案真相", "维护律法公正"],
+       relations: [{target: 展昭, type: "信任", intensity: 0.9},
+                   {target: 公孙策, type: "信任", intensity: 0.85}]}
+    - {id: 展昭,   role: "御前护卫", voice_hint: "利落干脆",
+       goals: ["护卫包拯", "查访线索"]}
+    - {id: 公孙策, role: "师爷",     voice_hint: "缜密斯文",
+       goals: ["辅佐断案"]}
+    - {id: 刘伯,   role: "王府管家", voice_hint: "恭谨藏怯",
+       goals: ["保住管家之位", "掩盖赌债"]}
+    - {id: 王员外, role: "苦主",     voice_hint: "焦灼哀恳",
+       goals: ["寻回玉佩"],
+       relations: [{target: 刘伯, type: "主仆", intensity: 0.6}]}
   # 世界规则（Z3 SMT 硬约束 — 赌注1验证通过）
   world_rules:
     - id: sanderson_1

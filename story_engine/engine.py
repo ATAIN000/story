@@ -13,6 +13,11 @@ Phase 5（v0.5）：真实 LLM 路径文本产出改 IR-first（决策6，
   IRBuilder → Fabula/Sjuzhet → Narrativizer（Realizer 1 次 LLM 替代原 1 次
   生成）；空稿/异常记 warning 并回退旧路径（增强不是门禁），
   返回体只增 narrative_ir 摘要（mock/剧本路径为 None）。
+Phase 11（P11.1）：Actor 阵容插件化 — 创世工厂按题材分派（_genesis_factory）：
+  mystery 保持 _genesis_state 全量 SEED（剧本演示世界零变化）；其余题材走
+  _make_genesis_factory(bundle)，阵容由 meta.cast.parse_cast 解析
+  （cast: 段 → prompt.characters → mock 种子兜底）；spawn 改读
+  state.characters/minds，任何题材不再出生包青天。
 
 关键架构约束（worldstate_paradox）：
 - 生成 prompt 不含 WorldState 秘密（doesnt_know/secret 不注入）
@@ -35,6 +40,7 @@ from uuid import uuid4
 from .kernel import Kernel
 from .kernel.actor import CharacterConfig
 from .creativity import ConceptualBlending
+from .meta.cast import parse_cast
 from .evaluator import (ChapterSpec, CriticParliament, IterationController,
                         LeaderArbiter, PresentationScorer, ProcessGate,
                         ReaderProxy)
@@ -83,6 +89,35 @@ def _mask_url(url: str) -> str:
         masked_host = host
     masked_path = ("/" + path[:3] + "***") if path else ""
     return f"{proto}://{masked_host}{masked_path}"
+
+
+def _make_genesis_factory(bundle: GenreBundle):
+    """P11.1：bundle 感知的创世工厂 — 返回 factory() -> WorldState。
+
+    阵容由 meta.cast.parse_cast(bundle.genre_params) 解析（L1 cast: 段 →
+    L2 prompt.characters → mock 种子兜底 + warning）；characters/minds/
+    relations 由 cast 组装（characters 条目含 role/voice，voice 取自
+    CastMember.voice_hint，供 spawn 与角色卡视图复用）。
+    narrative 段保持现值（act=1/chapter=0/tension=0.3/current_scene="开场"/
+    track_progress/last_story_time），causal_links 置空（非 mock 剧本
+    无预置因果链）；physical 不预置（非 mock 题材无种子 fluents）。
+    """
+    def _factory() -> WorldState:
+        cast = parse_cast(bundle.genre_params)
+        state = WorldState(tick=0)
+        for m in cast:
+            state.characters[m.id] = {"role": m.role, "voice": m.voice_hint}
+            state.minds[m.id] = CharacterMind(
+                character_id=m.id, goals=list(m.goals))
+            for r in m.relations:
+                state.relationships[f"{m.id}|{r['target']}"] = Relation(
+                    r["type"], r["intensity"], [])
+        state.narrative = NarrativeState(
+            act=1, chapter=0, tension=0.3, current_scene="开场",
+            track_progress={"A": 0, "B": 0, "C": 0, "D": 0, "E": 0},
+            causal_links=[], last_story_time="第1日·清晨")
+        return state
+    return _factory
 
 
 class _ChapterClosingKernelView:
@@ -141,7 +176,11 @@ class StoryEngine:
             llm_pool = llm_client or LLMPool()
             self.kernel = Kernel(
                 self.project_dir,
-                initial_state_factory=self._genesis_state,
+                # P11.1：延迟解析创世工厂 —— bundle 要在 Kernel 建成后才能
+                # 组装（依赖 kernel.registry），工厂被调用时（EventStore 懒
+                # 求值，空库首次 current_state）self.bundle 已就绪；
+                # 且下方 bundle 建成后会把 store 工厂重指为定型工厂（双保险）
+                initial_state_factory=lambda: self._genesis_factory()(),
                 llm_pool=llm_pool if hasattr(llm_pool, "call") else None,
                 plugin_dir=PLUGIN_DIR,
             )
@@ -163,6 +202,11 @@ class StoryEngine:
         self.bundle = GenreBundle(
             genre=genre_name, culture=culture_name,
             genre_params=genre_params, culture_params=self.culture.params)
+        # P11.1：创世工厂按题材定型的权威接线点（bundle 建成后立即可用）。
+        # EventStore 懒调用工厂（event_store.py 空库首次 current_state 才触发），
+        # 构造期重指即可保证任何后续创世走本引擎题材 —— 外部注入 Kernel 时
+        # （如 backend）其构造期拿到的占位工厂由此被本引擎题材工厂取代。
+        self.kernel.store._initial_state_factory = self._genesis_factory()
 
         # 子系统（与原版一致）
         self.validator = ConsistencyValidator(
@@ -256,8 +300,24 @@ class StoryEngine:
         return params
 
     # ============ 创世（seed 世界） ============
+    def _genesis_factory(self):
+        """P11.1：创世工厂选择（mystery 保真，其余题材阵容插件化）。
+
+        mystery 是 mock 剧本演示世界（SCRIPTED_DEMO 剧本路径的唯一内容），
+        其创世依赖全量 SEED 种子（physical/beliefs/secrets/causal_links 等
+        cast 段表达不了的部分）——保持 _genesis_state 静态法，行为逐字
+        零变化；其余题材走 bundle 感知的 cast 工厂（_make_genesis_factory），
+        阵容由题材插件 cast:/prompt.characters 解析，不再回落包青天。
+        """
+        if self.bundle.genre == "mystery":
+            return StoryEngine._genesis_state
+        return _make_genesis_factory(self.bundle)
+
     @staticmethod
     def _genesis_state() -> WorldState:
+        """mock 剧本演示世界（mystery）的创世静态法 —— 全量 SEED 保真。
+        P11.1 起仅 mystery 题材经 _genesis_factory 选用；新题材请走
+        _make_genesis_factory(bundle)（cast 插件化路径）。"""
         state = WorldState(tick=0)
         state.physical.update(mock_script.SEED_PHYSICAL)
         state.characters.update(mock_script.SEED_CHARACTERS)
@@ -932,23 +992,33 @@ class StoryEngine:
         return record
 
     async def _ensure_character_actors(self) -> None:
-        """Director spawn：5 个种子角色（幂等）"""
+        """Director spawn：按创世阵容建角色 Actor（幂等）。
+
+        P11.1：阵容数据源从 mock_script.SEED_* 切换到世界状态——genesis 已把
+        本题材阵容写入 state.characters/minds（mystery 走 _genesis_state 全量
+        种子，值与旧 SEED_* 逐字一致；其余题材走 cast 工厂），故 spawn 行为
+        对 mystery 零变化、新题材 spawn 自己的阵容。voice 取
+        characters[cid]["voice"]（cast voice_hint 的落点），goals 取
+        minds[cid].goals；幂等语义不变（已 spawn 的角色跳过）。
+        """
         if self._actors_ready and self.kernel.scheduler._character_actors:
             return
         if self._director_ref is None:
             self._director_ref = self.kernel.spawn_director(self.bundle)
-        for cid, meta in mock_script.SEED_CHARACTERS.items():
-            mind = mock_script.SEED_MINDS.get(cid, {})
+        state = self.kernel.query_world("current_state")
+        for cid, meta in state.characters.items():
             if cid in self.kernel.scheduler._character_actors:
                 continue
+            mind = state.minds.get(cid)
+            goals = list(mind.goals) if mind else []
             cfg = CharacterConfig(
                 character_id=cid,
                 archetype=meta.get("archetype", ""),
                 voice_profile={"voice": meta.get("voice", "")},
-                initial_goals=list(mind.get("goals", [])),
+                initial_goals=goals,
                 context_budget=8192,
             )
-            persona = {**meta, "goals": mind.get("goals", [])}
+            persona = {**meta, "goals": goals}
             self.kernel.spawn_character_actor(cfg, persona=persona)
         self._actors_ready = True
 
@@ -1531,10 +1601,11 @@ class StoryEngine:
         # 造成「chapters 清空但旧事件全保留」的半重置（用户抽卡开局实测踩中）。
         # 原位 DELETE 经 store 自有连接，不受文件锁影响，失败显式上抛）
         self.kernel.store.clear_all()
-        # 保证创世种子工厂指向本引擎实现：直接构造 Kernel 的路径
-        # （如 backend/main.py）默认是空 WorldState 工厂，旧实现靠重建 store
+        # 保证创世种子工厂指向本引擎题材工厂（P11.1：mystery 静态法 /
+        # 其余题材 cast 工厂，由 _genesis_factory 选定）：直接构造 Kernel
+        # 的路径（如 backend/main.py）默认是占位工厂，旧实现靠重建 store
         # 顺带修正，原位清库后必须显式对齐，否则种子角色/关系/目标丢失
-        self.kernel.store._initial_state_factory = self._genesis_state
+        self.kernel.store._initial_state_factory = self._genesis_factory()
         if self.kernel.memory_banks is not None:
             self.kernel.memory_banks.clear()
         self.kernel._retrieval_by_agent = {}
