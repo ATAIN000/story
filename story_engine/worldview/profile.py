@@ -1,4 +1,4 @@
-"""worldview profile — 世界观档案（L0-L3 选择 + 提示文本 + world_rules 翻译）
+"""worldview profile — 世界观档案（L0-L9 全 10 层选择 + 提示文本 + world_rules 翻译）
 
 职责：
   - 持有用户在各层选定的枚举值（``layers``：层 id → {param_key: value}）
@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from .layers import ALL_PARAMS, LAYER_BY_ID, option_label
+from .layers import ALL_PARAMS, LAYERS, LAYER_BY_ID, option_label
 
 
 # 5 事实词汇表（与 story_engine.validator.WORLD_FACT_TYPES 对齐）
@@ -56,7 +56,7 @@ class WorldviewProfile:
     def as_flat(self) -> dict[str, str]:
         """扁平化为 ``{param_key: value}``（跨层合并，后写覆盖——同键不应跨层）。"""
         flat: dict[str, str] = {}
-        for layer_id in ("L0", "L1", "L2", "L3"):
+        for layer_id in sorted(self.layers):
             for k, v in self.layers.get(layer_id, {}).items():
                 flat[k] = v
         return flat
@@ -71,8 +71,7 @@ class WorldviewProfile:
         每层格式：``[L0 存在论基础] 物理偏离度=核心物理定律被修改；形而上学=二元``。
         """
         lines: list[str] = []
-        for layer in (LAYER_BY_ID["L0"], LAYER_BY_ID["L1"],
-                      LAYER_BY_ID["L2"], LAYER_BY_ID["L3"]):
+        for layer in LAYERS:
             params = self.layers.get(layer["id"], {})
             if not params:
                 continue
@@ -120,7 +119,7 @@ class WorldviewProfile:
         # 2. narrator_is_killer（L8+ 范畴，本批 L0-L3 暂不覆盖；保留 narrative 占位）
         # 3. case_age_days / introduces_new_key_clue（悬疑专用，本批不覆盖）
 
-        # 其余 L0-L3 设定均无法落入 5 事实词汇表 → narrative
+        # 其余设定均无法落入 5 事实词汇表 → narrative
         narrative_keys = [k for k in flat if k != "power_existence"]
         if narrative_keys:
             desc_parts = [f"{k}={flat[k]}" for k in narrative_keys]
