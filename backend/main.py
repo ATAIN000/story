@@ -301,7 +301,7 @@ def validate_project_name(name) -> bool:
         return False
     if any(ord(c) < 32 or ord(c) == 127 for c in name):
         return False
-    if name.upper() in WINDOWS_RESERVED_NAMES:
+    if name.split(".")[0].upper() in WINDOWS_RESERVED_NAMES:  # Windows 按点前基名判保留（CON.txt 亦拒）
         return False
     return PROJECT_NAME_RE.fullmatch(name) is not None
 
