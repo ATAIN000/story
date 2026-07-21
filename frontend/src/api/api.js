@@ -15,7 +15,9 @@ async function req(path, options = {}) {
   if (!r.ok) {
     let detail = `${r.status}`
     try { detail = (await r.json()).detail || detail } catch { /* 非 JSON 错误体 */ }
-    throw new Error(detail)
+    const err = new Error(detail)
+    err.status = r.status   // P10.4：调用方按状态码分支（如 gacha confirm 409 项目重名）
+    throw err
   }
   return r.json()
 }
@@ -56,9 +58,17 @@ export const api = {
   metaConfig: (intent) => post('/api/meta/config', intent),
 
   /* --- 抽卡开局（P8.3-P8.5；confirm body = draw 返回的卡原样，含 synth 的 genre.yaml） --- */
+  /* P10.4：projectName 给了则平铺 project_name 键开新项目（重名 → 409，失败零副作用） */
   gachaDraw: (mode = 'library', lock = null) => post('/api/gacha/draw', { mode, lock }),
-  gachaConfirm: (card) => post('/api/gacha/confirm', card),
+  gachaConfirm: (card, projectName = null) =>
+    post('/api/gacha/confirm', projectName ? { ...card, project_name: projectName } : card),
   projectInit: (genre, culture) => post('/api/project/init', { genre, culture }),
+
+  /* --- 多项目（P10.4） --- */
+  projects: () => req('/api/projects'),
+  openProject: (name) => post('/api/projects/open', { name }),
+  /* 导出是浏览器直接下载（FileResponse zip），不走 req JSON 通道，只给 URL */
+  exportProjectUrl: (name) => `/api/projects/${encodeURIComponent(name)}/export`,
 
   /* --- 设置（P6.10 B9/B10） --- */
   settings: () => req('/api/settings'),

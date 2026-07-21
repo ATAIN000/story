@@ -1,5 +1,5 @@
 <script setup>
-// StoryOS App 骨架 —— nav（7 项）+ topbar + 状态机视图切换（不引 vue-router）。
+// StoryOS App 骨架 —— nav（9 项）+ topbar + 状态机视图切换（不引 vue-router）。
 // 布局/样式迁移自 story.html :41-73 / :432-464；视图占位 stub 由 P6.6-P6.10 填充。
 import { ref, computed, onMounted } from 'vue'
 import { api } from './api/api'
@@ -11,6 +11,7 @@ import { useFontSize } from './composables/useFontSize'
 import AppIcon from './components/AppIcon.vue'
 import { NAV_ICONS } from './components/icons'
 import ToastHost from './components/ToastHost.vue'
+import ProjectsView from './views/ProjectsView.vue'
 import WriteView from './views/WriteView.vue'
 import GachaView from './views/GachaView.vue'
 import DecisionCardView from './views/DecisionCardView.vue'
@@ -32,8 +33,10 @@ function bumpFont(dir) {
   toast(`正文字号 ${fsSize.value}px`)
 }
 
-const VIEWS = { write: WriteView, gacha: GachaView, card: DecisionCardView, chars: CharsView, world: WorldView, timeline: TimelineView, threads: ThreadsView, plugins: PluginsView, settings: SettingsView }
+const VIEWS = { projects: ProjectsView, write: WriteView, gacha: GachaView, card: DecisionCardView, chars: CharsView, world: WorldView, timeline: TimelineView, threads: ThreadsView, plugins: PluginsView, settings: SettingsView }
 const NAV = [
+  // P10.4 多项目：项目页置于最顶部独立段
+  { sec: '项目', items: [{ id: 'projects', name: '项目' }] },
   { sec: '创作', items: [{ id: 'write', name: '写作台' }, { id: 'card', name: '决策卡' }] },
   { sec: '故事资产', items: [
     { id: 'chars', name: '人物' },
@@ -71,7 +74,14 @@ function navCount(id) {
   return ''
 }
 
+/* 全站刷新：config + project 一起重拉（P10.4 切换项目后题材/显示名可能变化，
+   开局 confirm 新题材入库同理——单拉 project 会拿旧 displayNames 渲染） */
 async function refresh() {
+  try {
+    config.value = toConfigVM(await api.config())
+  } catch (e) {
+    toastError(`后端未连接：${e.message}`)
+  }
   try {
     project.value = toProjectVM(await api.project())
   } catch (e) {
@@ -84,14 +94,7 @@ function gotoView(id) {
   if (VIEWS[id]) view.value = id
 }
 
-onMounted(async () => {
-  try {
-    config.value = toConfigVM(await api.config())
-  } catch (e) {
-    toastError(`后端未连接：${e.message}`)
-  }
-  await refresh()
-})
+onMounted(refresh)
 </script>
 
 <template>

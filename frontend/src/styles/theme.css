@@ -436,3 +436,45 @@ button { font: inherit; cursor: pointer; border: none; background: none; color: 
 
 /* 写作台空态双 CTA 行（P8.6 抽卡开局入口） */
 .es-cta { display: flex; gap: 10px; }
+
+/* ==========================================================================
+   项目（P10.4）—— 项目卡片网格：名称/题材 title/文化/章数·tick/最后打开 +
+   current 高亮徽标 + 卡片操作（继续/导出）+ 顶部「开新项目」。变量全复用，
+   网格断点与 .gacha-grid 同档。
+   ========================================================================== */
+.projects { max-width: 1160px; margin: 0 auto; padding: 30px 34px 60px; }
+.projects-head { display: flex; align-items: baseline; gap: 12px; }
+.projects-head h2 { font: 700 22px var(--serif); }
+.projects-sub { font-size: 12px; color: var(--faint); }
+.projects-head .btn-main { margin-left: auto; }
+.proj-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 18px; }
+.proj-card { border: 1px solid var(--line); border-radius: 10px; background: var(--s2);
+  padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; }
+.proj-card.current { border-color: var(--primary); }
+.proj-top { display: flex; align-items: baseline; gap: 8px; }
+.proj-name { font: 700 17px var(--serif); word-break: break-all; }
+.proj-badge { font-size: 10px; padding: 1px 7px; border-radius: 4px; flex-shrink: 0;
+  border: 1px solid var(--primary); color: var(--primary); }
+.proj-genre { font-size: 13px; color: var(--ink); }
+.proj-id { font-family: Menlo, Consolas, monospace; font-size: 10px; color: var(--faint);
+  word-break: break-all; }
+.proj-meta { font-size: 11.5px; color: var(--ink2); }
+.proj-time { font-size: 10.5px; color: var(--faint); }
+.proj-act { margin-top: auto; padding-top: 8px; display: flex; gap: 8px; align-items: center; }
+.proj-act .btn-line { display: inline-flex; align-items: center; gap: 5px; text-decoration: none; }
+.projects-loading { margin: 60px 0; display: flex; align-items: center; justify-content: center;
+  gap: 10px; color: var(--faint); font-size: 13px; }
+@media (max-width: 1080px) { .proj-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 620px) { .proj-grid { grid-template-columns: 1fr; } }
+
+/* 开工方式弹层（P10.4：新项目名输入 + 两选一；复用 .gacha-dialog/.gd-* 壳） */
+.gd-opt { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 13px;
+  color: var(--ink); cursor: pointer; }
+.gd-opt input { accent-color: var(--primary); }
+.gd-name-row { margin: 6px 0 0 24px; }
+.gd-input { width: 100%; padding: 6px 10px; border: 1px solid var(--line2); border-radius: 6px;
+  background: var(--bg); color: var(--ink); font: 13px Menlo, Consolas, monospace; }
+.gd-input:focus { outline: none; border-color: var(--primary); }
+.gd-hint { margin-top: 4px; font-size: 10.5px; color: var(--faint); }
+.gd-hint.bad { color: var(--danger); }
+.gd-warn { margin: 6px 0 0 24px; font-size: 11.5px; color: var(--danger); line-height: 1.7; }

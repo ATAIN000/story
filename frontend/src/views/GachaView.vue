@@ -1,11 +1,13 @@
 <script setup>
 // 抽卡开局页（P8.6，阶段 1 简化卡面）：四栏卡（题材 × 文化 × 人物原型 × 世界规则）
 // + 换一批 / 单换一栏 / 让 AI 自由发挥 / 确认开工。spec: docs/superpowers/specs/2026-07-20-gacha-init-design.md §5。
+// P10.4：确认开工弹层两选 —— 作为新项目（项目名输入，默认 {genre}-{MMdd}，重名 409
+// 提示并停留）/ 当前项目继续（原 reset+init 路径）；synth 等待提示带已等待秒数。
 // 铁律执行：模板只消费 adapter VM（toGachaCardVM）；confirm payload 另持 draw
 // 原始返回（synth 卡的 genre.yaml 须原样回传后端复核落盘，VM 按约不消费它）。
 // 确认后跳写作台并触发第一章 plan：直接调 api.plan()（P6.6 最短真实路径）——
 // 后端落 pending_plan，WriteView watch project 拾起即进 planned 流。
-import { ref, computed, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { api } from '../api/api'
 import { toGachaCardVM, displayName } from '../api/adapters'
 import { useToast } from '../composables/useToast'
@@ -25,8 +27,12 @@ const dn = (id) => displayName(props.config, id)
 const rawCard = ref(null)              // draw 原始返回（confirm payload；不进模板）
 const card = computed(() => toGachaCardVM(rawCard.value))
 const drawing = ref(false)             // 任意抽卡进行中（锁全部按钮防重入）
-const synthLoading = ref(false)        // AI 自由发挥进行中（LLM 3-10s 预期）
-const confirmingReset = ref(false)     // 重置确认框显隐
+const synthLoading = ref(false)        // AI 自由发挥进行中
+const synthElapsed = ref(0)            // synth 已等待秒数（P10.4 等待提示）
+let synthTimer = null
+const startOpen = ref(false)           // 开工方式弹层显隐（P10.4：原重置确认框扩展）
+const startMode = ref('current')       // 'new' 作为新项目 | 'current' 当前项目继续
+const projectName = ref('')            // 新项目名（弹层输入）
 const confirmBusy = ref(false)         // confirm + plan 进行中
 
 const startBtn = ref(null)             // 「确认开工」（对话框关闭后焦点归还）
@@ -36,6 +42,18 @@ const cancelBtn = ref(null)
 const chapterCount = computed(() => (props.project?.chapters ?? []).length)
 const busy = computed(() => drawing.value || confirmBusy.value)
 
+/* P10.4 新项目名：与后端 GENRE_NAME_RE 同口径（字母/数字开头，后可含 -/_，≤64）。
+   建议值 {genre}-{MMdd}——genre 用卡 id 不用 displayName（中文 title 过不了白名单） */
+const NAME_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/
+const suggestedName = computed(() => {
+  const g = card.value?.genre.name || 'story'
+  const d = new Date()
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  return `${g}-${mm}${dd}`
+})
+const nameValid = computed(() => NAME_RE.test(projectName.value))
+
 const COLS = [
   { key: 'genre', label: '题材' },
   { key: 'culture', label: '文化' },
@@ -44,6 +62,7 @@ const COLS = [
 ]
 
 onMounted(() => { draw('library') })
+onBeforeUnmount(() => clearInterval(synthTimer))   // 中途跳走防 interval 泄漏
 
 /* lock = 其余栏当前 name（被换栏缺省即重抽）；锁名已不在库内时后端宽容回退
    随机（P8.3 口径：前端可能带着上一轮卡面名单重抽） */
@@ -62,6 +81,10 @@ async function draw(mode, lock = null) {
   if (drawing.value) return
   drawing.value = true
   synthLoading.value = mode === 'synth'
+  if (synthLoading.value) {            // P10.4 等待提示：已等待秒数计时
+    synthElapsed.value = 0
+    synthTimer = setInterval(() => { synthElapsed.value += 1 }, 1000)
+  }
   try {
     const d = await api.gachaDraw(mode, lock)
     rawCard.value = d
@@ -71,6 +94,8 @@ async function draw(mode, lock = null) {
   } finally {
     drawing.value = false
     synthLoading.value = false
+    clearInterval(synthTimer)
+    synthTimer = null
   }
 }
 
@@ -78,27 +103,28 @@ const redrawAll = () => draw('library')
 const redrawCol = (key) => draw('library', buildLock(key))
 const synthGenre = () => draw('synth', buildLock())
 
-/* ---- 确认开工：当前项目已有章节时先弹重置确认框（spec §3-5） ---- */
+/* ---- 确认开工（P10.4）：弹层两选 —— 作为新项目（输入项目名，默认 {genre}-{MMdd}）
+   或当前项目继续。原「有章节先弹重置确认」（spec §3-5）并入本框：选当前项目
+   且有章节时框内明示重置后果，确认即授权。 ---- */
 function requestConfirm() {
   if (!card.value || busy.value) return
-  if (chapterCount.value > 0) {
-    confirmingReset.value = true
-    nextTick(() => { cancelBtn.value?.focus() })   // 危险操作：默认焦点落在安全的「取消」
-  } else {
-    doConfirm()
-  }
+  startMode.value = 'current'
+  projectName.value = suggestedName.value
+  startOpen.value = true
+  nextTick(() => { cancelBtn.value?.focus() })   // 默认焦点落在安全的「取消」
 }
 
 function cancelConfirm() {
-  confirmingReset.value = false
+  if (confirmBusy.value) return
+  startOpen.value = false
   nextTick(() => { startBtn.value?.focus() })
 }
 
-/* 对话框键盘管理：Esc 取消；Tab 在框内按钮间循环（简易焦点圈） */
+/* 对话框键盘管理：Esc 取消；Tab 在框内控件（按钮+输入框）间循环（简易焦点圈） */
 function onDialogKeydown(e) {
   if (e.key === 'Escape') { e.preventDefault(); cancelConfirm(); return }
   if (e.key !== 'Tab' || !dialogEl.value) return
-  const items = [...dialogEl.value.querySelectorAll('button:not([disabled])')]
+  const items = [...dialogEl.value.querySelectorAll('button:not([disabled]), input:not([disabled])')]
   if (!items.length) return
   const first = items[0]
   const last = items[items.length - 1]
@@ -106,25 +132,36 @@ function onDialogKeydown(e) {
 }
 
 async function doConfirm() {
-  confirmingReset.value = false
   if (!rawCard.value || confirmBusy.value) return
+  const asNew = startMode.value === 'new'
+  const name = asNew ? projectName.value.trim() : null
+  if (asNew && !nameValid.value) return
   confirmBusy.value = true
   try {
-    const res = await api.gachaConfirm(rawCard.value)
+    const res = await api.gachaConfirm(rawCard.value, name)
+    startOpen.value = false
     /* 最终 genre 名以后端响应为准（synth 重名落盘可能带 -2 后缀，P8.5） */
     const finalGenre = res.genre ?? ''
     const culture = res.project?.culture ?? ''
-    toast(`已开工：${dn(finalGenre)} × ${dn(culture)}${res.persisted ? '（新题材已入库）' : ''}`)
+    const suffix = res.persisted ? '（新题材已入库）' : ''
+    toast(asNew
+      ? `新项目《${res.project?.name ?? name}》已开工：${dn(finalGenre)} × ${dn(culture)}${suffix}`
+      : `已开工：${dn(finalGenre)} × ${dn(culture)}${suffix}`)
     /* 第一章 plan：失败不阻塞跳转（写作台空态可重试同款 plan） */
     try {
       await api.plan()
     } catch (e) {
       toastError(`第 1 章方案生成失败：${e.message}（可到写作台重试）`)
     }
-    emit('refresh')          // 项目已 reset+init：重拉快照（meta/章节/pendingPlan）
+    emit('refresh')          // 项目已 reset+init（或整栈切到新项目）：重拉快照
     emit('navigate', 'write')
   } catch (e) {
-    toastError(`确认开工失败：${e.message}`)
+    /* P10.4：409 项目重名 → 提示并停留弹层改名重试；其余错误同样停留可重试 */
+    if (e.status === 409) {
+      toastError('项目名已存在，换一个')
+    } else {
+      toastError(`确认开工失败：${e.message}`)
+    }
   } finally {
     confirmBusy.value = false
   }
@@ -139,7 +176,7 @@ async function doConfirm() {
     </header>
 
     <div v-if="synthLoading" class="gacha-status" role="status">
-      <span class="gc-spin" aria-hidden="true"></span>AI 正在自由发挥，现场合成新题材（约需几秒）…
+      <span class="gc-spin" aria-hidden="true"></span>AI 正在生成题材包，通常 20-60 秒（已等待 {{ synthElapsed }} 秒）…
     </div>
 
     <div v-if="card" class="gacha-grid" role="region" aria-label="开局配置卡区" :aria-busy="drawing || undefined">
@@ -210,19 +247,40 @@ async function doConfirm() {
       </button>
     </footer>
 
-    <!-- 重置确认框（已有章节时；alertdialog + 焦点管理 + Esc 取消） -->
-    <div v-if="confirmingReset" class="gacha-overlay" @keydown="onDialogKeydown">
+    <!-- 开工方式弹层（P10.4；alertdialog + 焦点管理 + Esc 取消）：
+         作为新项目（项目名输入，默认 {genre}-{MMdd}）/ 当前项目继续（有章节时明示重置后果） -->
+    <div v-if="startOpen" class="gacha-overlay" @keydown="onDialogKeydown">
       <div ref="dialogEl" class="gacha-dialog" role="alertdialog" aria-modal="true"
            aria-labelledby="gacha-dlg-t" aria-describedby="gacha-dlg-d">
-        <div id="gacha-dlg-t" class="gd-title">开工将重置当前项目</div>
-        <p id="gacha-dlg-d" class="gd-desc">
-          当前项目已有 {{ chapterCount }} 章。按这组配置开工后，已有章节、世界状态与待批准方案都会被清空，且不可恢复。
+        <div id="gacha-dlg-t" class="gd-title">开工方式</div>
+        <p id="gacha-dlg-d" class="gd-desc">另开一个新项目，或在当前项目里继续。</p>
+
+        <label class="gd-opt">
+          <input type="radio" v-model="startMode" value="new" :disabled="confirmBusy">
+          <span>作为新项目开局</span>
+        </label>
+        <div v-if="startMode === 'new'" class="gd-name-row">
+          <input v-model.trim="projectName" class="gd-input" :disabled="confirmBusy" maxlength="64"
+                 aria-label="新项目名，仅限字母、数字、连字符和下划线" :placeholder="suggestedName">
+          <div class="gd-hint" :class="{ bad: projectName && !nameValid }">
+            将作为新项目目录名：仅限字母/数字/-/_，且以字母或数字开头
+          </div>
+        </div>
+
+        <label class="gd-opt">
+          <input type="radio" v-model="startMode" value="current" :disabled="confirmBusy">
+          <span>当前项目继续</span>
+        </label>
+        <p v-if="startMode === 'current' && chapterCount > 0" class="gd-warn">
+          当前项目已有 {{ chapterCount }} 章。开工后已有章节、世界状态与待批准方案都会被清空，且不可恢复。
         </p>
+
         <div class="gd-act">
-          <button ref="cancelBtn" class="btn-line" aria-label="取消，保留当前项目"
+          <button ref="cancelBtn" class="btn-line" :disabled="confirmBusy" aria-label="取消，不开工"
                   @click="cancelConfirm">取消</button>
-          <button class="btn-main" :disabled="confirmBusy" aria-label="确认重置项目并开工"
-                  @click="doConfirm">确认重置并开工</button>
+          <button class="btn-main" :disabled="confirmBusy || (startMode === 'new' && !nameValid)"
+                  :aria-label="startMode === 'new' ? `以新项目 ${projectName} 开工` : '在当前项目开工'"
+                  @click="doConfirm">{{ confirmBusy ? '开工中…' : '确认开工' }}</button>
         </div>
       </div>
     </div>

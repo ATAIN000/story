@@ -21,10 +21,12 @@ export const ICONS = {
   check: '<path d="M20 6L9 17l-5-5"/>',
   book: '<path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/>',
   sparkles: '<path d="M12 3l1.9 5.8L19.7 10.7l-5.8 1.9L12 18.4l-1.9-5.8L4.3 10.7l5.8-1.9L12 3z"/>',
+  download: '<path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>',
 }
 
-// 导航图标映射（story.html :562 NAV_ICONS；P8.6 增 gacha）
+// 导航图标映射（story.html :562 NAV_ICONS；P8.6 增 gacha，P10.4 增 projects）
 export const NAV_ICONS = {
+  projects: 'book',
   write: 'pen', card: 'sparkles', chars: 'users', world: 'map', timeline: 'clock',
   threads: 'bookmark', gacha: 'zap', plugins: 'puzzle', settings: 'sliders',
 }

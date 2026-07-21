@@ -244,6 +244,27 @@ export function displayName(cfg, id) {
   return map[id] || id
 }
 
+/* ===== 项目列表（GET /api/projects → VM，P10.4） =====
+ * 源：backend/main.py _list_projects：[{name, genre, culture, chapter_count,
+ * head_tick, last_opened_at, current}]。题材/文化中文 title 由视图经
+ * displayName(config, id) 解析（与 nav 脚注同一口径，adapter 不重复持有
+ * displayNames）；lastOpened 为派生展示串「MM-dd HH:mm」（源是本地 ISO
+ * 秒级串，直接截取不做时区换算）。 */
+export function toProjectsVM(list) {
+  if (!Array.isArray(list)) return []
+  return list.map(p => ({
+    name: p.name ?? '',
+    genre: p.genre ?? '',
+    culture: p.culture ?? '',
+    chapterCount: p.chapter_count ?? 0,
+    headTick: p.head_tick ?? 0,
+    lastOpenedAt: p.last_opened_at ?? '',
+    lastOpened: p.last_opened_at
+      ? String(p.last_opened_at).slice(5, 16).replace('T', ' ') : '',
+    current: !!p.current,
+  }))
+}
+
 /* ===== 生成回放（POST /api/project/generate 返回体 → VM，P6.6 步骤回放） =====
  * 源：engine._generate_chapter_llm_path / _generate_chapter_actor_path 的
  * record（与 chapters.json 落盘同形）。只取回放所需字段，只增不改。
