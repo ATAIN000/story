@@ -401,20 +401,33 @@ def _persist_genre_pack(pack: dict) -> str:
 def gacha_confirm(card: dict):
     """【P8.5】确认抽卡：synth 卡复核 + 落盘 + registry 重扫，然后统一走 init 切换。
 
-    synth 卡不信任前端携带的校验结论：confirm 时 rerun validate_genre_pack
-    复核，不过 → 422 且不落盘不切换；过了才落盘（重名自动后缀，原子写）并
-    registry.reload() 让新题材立即可用。library 卡跳过落盘（persisted=false）
-    直接 init。响应 = init 响应 + {persisted, genre(最终名)}。
+    synth 卡不信任前端携带的校验结论：confirm 时先复核 manifest 层
+    （name 非空字符串、extension_point 必为 story.genre —— 坏包落盘会让
+    registry 加载路径 KeyError，卡死本次 reload 及之后每次重启），再 rerun
+    validate_genre_pack 复核 params 子树；culture_bound 包另须卡文化命中
+    allowed_cultures（口径同 registry.validate_combo），否则落盘即注册、
+    init 却 422 的不一致态。任一项不过 → 422 且不落盘不切换；过了才落盘
+    （重名自动后缀，原子写）并 registry.reload() 让新题材立即可用。
+    library 卡跳过落盘（persisted=false）直接 init。
+    响应 = init 响应 + {persisted, genre(最终名)}。
     """
     g = card.get("genre") or {}
     persisted = False
     name = g.get("name")
+    culture = (card.get("culture") or {}).get("name") or "confucian_officialdom"
     if g.get("source") == "synth":
         pack = g.get("yaml")
-        if not isinstance(pack, dict) or not pack.get("name"):
+        if not isinstance(pack, dict) \
+                or not isinstance(pack.get("name"), str) \
+                or not pack["name"].strip():
             raise HTTPException(status_code=422,
-                                detail="合成卡缺 genre.yaml 或 name 键")
-        if not GENRE_NAME_RE.fullmatch(str(pack["name"])):
+                                detail="合成卡缺 genre.yaml 或 name 键（非空字符串）")
+        if pack.get("extension_point") != "story.genre":
+            raise HTTPException(
+                status_code=422,
+                detail=f"合成包 extension_point 须为 story.genre"
+                       f"（当前：{pack.get('extension_point')!r}）")
+        if not GENRE_NAME_RE.fullmatch(pack["name"]):
             raise HTTPException(
                 status_code=422,
                 detail=f"题材名非法：{pack['name']}（仅限字母/数字/-/_）")
@@ -422,12 +435,18 @@ def gacha_confirm(card: dict):
         if errs:
             raise HTTPException(status_code=422,
                                 detail=f"合成包未过校验：{'；'.join(errs)}")
+        allowed = pack.get("allowed_cultures") or ["*"]
+        if pack.get("culture_bound") and "*" not in allowed \
+                and culture not in allowed:
+            raise HTTPException(
+                status_code=422,
+                detail=f"题材 {pack['name']} 为 culture_bound，仅允许 "
+                       f"{allowed}，与卡文化 {culture} 不匹配")
         name = _persist_genre_pack(pack)
         engine.kernel.registry.reload()
         persisted = True
     if not name:
         raise HTTPException(status_code=422, detail="卡缺 genre.name")
-    culture = (card.get("culture") or {}).get("name") or "confucian_officialdom"
     return {**project_init({"genre": name, "culture": culture}),
             "persisted": persisted, "genre": name}
 

@@ -385,3 +385,44 @@ class TestGachaConfirmInit(unittest.TestCase):
             self.assertFalse((self.GENRES_DIR / f"{other}.tmp").exists())
         finally:
             self._restore(backend, *orig)
+
+    def test_confirm_bad_extension_point_422_not_persisted(self):
+        """终审修复1：synth 包缺/错 extension_point → 422，不落盘不切换
+        （否则坏包落盘后 registry 加载路径 KeyError，卡死 reload 与重启）。"""
+        from fastapi.testclient import TestClient
+        backend = self._backend()
+        orig = (backend.engine.genre.name, backend.engine.culture.name)
+        probe = self.GENRES_DIR / "test-synth.yaml"
+        c = TestClient(backend.app)
+        try:
+            for mutate in (lambda p: p.pop("extension_point"),
+                           lambda p: p.update(extension_point="story.culture")):
+                bad = yaml.safe_load(VALID_YAML)
+                mutate(bad)
+                r = c.post("/api/gacha/confirm", json=self._card(bad))
+                self.assertEqual(r.status_code, 422, r.text)
+                self.assertIn("extension_point", r.json()["detail"])
+                self.assertFalse(probe.exists())          # 不落盘
+                self.assertEqual(backend.engine.genre.name, orig[0])  # 不切换
+        finally:
+            self._restore(backend, *orig)
+
+    def test_confirm_culture_bound_mismatch_422_not_persisted(self):
+        """终审修复2：culture_bound 包与卡文化不匹配 → 422 且不落盘
+        （否则文件已注册、init 却 422，落盘与项目状态不一致）。"""
+        from fastapi.testclient import TestClient
+        backend = self._backend()
+        orig = (backend.engine.genre.name, backend.engine.culture.name)
+        probe = self.GENRES_DIR / "test-synth.yaml"
+        c = TestClient(backend.app)
+        try:
+            pack = yaml.safe_load(VALID_YAML)
+            pack["culture_bound"] = True
+            pack["allowed_cultures"] = ["nordic_saga"]  # 不含卡文化
+            r = c.post("/api/gacha/confirm", json=self._card(pack))
+            self.assertEqual(r.status_code, 422, r.text)
+            self.assertIn("culture_bound", r.json()["detail"])
+            self.assertFalse(probe.exists())              # 不落盘
+            self.assertEqual(backend.engine.genre.name, orig[0])  # 不切换
+        finally:
+            self._restore(backend, *orig)
