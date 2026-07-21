@@ -116,17 +116,22 @@ def _make_textual_apply(stack: dict):
     return _textual_apply
 
 
-def _build_stack(project_dir: Path) -> dict:
+def _build_stack(project_dir: Path, genre_name: str | None = None,
+                 culture_name: str | None = None) -> dict:
     """P10.1 项目栈工厂：kernel/engine/meta_gen/pipeline/router 一处构造。
 
     传 initial_state_factory（静态方法可直接引用）：否则创世种子要靠
     engine.reset() 重建 store 才能顺带注入（P9.x 原位清库后该掩蔽效应消失，
     必须显式传）。挂载点决策（P5.10 任务卡）：engine 侧无 router/pipeline
     实例，参照 meta_gen 同款模式在 backend 侧构造。router 的 regenerate_fn /
-    textual_apply_fn 均经 stack 延迟解析 engine（P10.2），切换/init 不留旧引用。"""
+    textual_apply_fn 均经 stack 延迟解析 engine（P10.2），切换/init 不留旧引用。
+    genre_name/culture_name（P10.2 评审修复，可选只增）：显式指定题材/文化
+    建 engine（projects/open 恢复项目自身题材）；缺省 None 回落 env/内置默认，
+    与 StoryEngine 构造口径一致，启动路径行为不变。"""
     kernel = Kernel(project_dir, plugin_dir=ROOT / "story_engine" / "plugins",
                     initial_state_factory=StoryEngine._genesis_state)
-    engine = StoryEngine(kernel)
+    engine = StoryEngine(kernel, genre_name=genre_name,
+                         culture_name=culture_name)
     meta_gen = MetaGenerator(kernel)
     pipeline = TrainingPipeline(kernel, project_dir)
     stack = {"kernel": kernel, "engine": engine, "meta_gen": meta_gen,
@@ -146,7 +151,8 @@ training_pipeline = _stack["pipeline"]
 intervention_router = _stack["router"]
 
 
-def _switch_to(project_dir: Path) -> dict:
+def _switch_to(project_dir: Path, genre_name: str | None = None,
+               culture_name: str | None = None) -> dict:
     """P10.2 项目切换核心：旧 kernel 尽力 close → _build_stack 整栈重建 →
     重绑全部模块级引用，不留旧栈引用。
 
@@ -155,7 +161,9 @@ def _switch_to(project_dir: Path) -> dict:
     重绑后全部端点自动用新栈；router 的 regenerate/textual 两闭包经
     _stack 延迟解析 engine，project_init 重绑 _stack["engine"] 后依旧相干。
     旧 kernel.close() 失败只 log 不阻断（尽力释放 SQLite 句柄，Windows 文件锁
-    场景下残留句柄不应卡死切换）。"""
+    场景下残留句柄不应卡死切换）。genre_name/culture_name（P10.2 评审修复，
+    可选只增）透传 _build_stack：open 恢复项目自身题材；缺省 None 回落
+    env/内置默认（gacha confirm 新建项目随后走 init 覆盖，行为不变）。"""
     global _stack, kernel, llm_client, engine, meta_gen
     global training_pipeline, intervention_router
     try:
@@ -163,7 +171,8 @@ def _switch_to(project_dir: Path) -> dict:
     except Exception:
         logger.warning("项目切换：旧 kernel close 失败（尽力继续）",
                        exc_info=True)
-    _stack = _build_stack(Path(project_dir))
+    _stack = _build_stack(Path(project_dir), genre_name=genre_name,
+                          culture_name=culture_name)
     kernel = _stack["kernel"]
     llm_client = kernel.llm
     engine = _stack["engine"]
@@ -375,14 +384,26 @@ def open_project(req: ProjectOpenReq):
     name 先过白名单（复用题材名正则，拒绝路径分隔符/穿越 → 一律 404，
     不区分「非法名」与「不存在」，不泄露目录结构）；story.db 缺失 → 404。
     切换后写 last_opened_at（原子合并写），返回 {ok, project: 快照 meta}。
-    genre/culture 不回写 project.json：open 按 _build_stack 默认（env/内置）
-    建栈，不回放项目原题材（P10.2 口径，恢复题材留给后续任务）。"""
+    genre/culture（P10.2 评审修复）：读项目自身 project.json 恢复其题材/文化
+    建新栈（缺 project.json 或缺键 → 回落 env/内置默认）——切回旧项目后继续
+    生成必须用它的题材，不是 env 默认。组合合法性切换前预校验（当前 registry
+    与新栈同源扫 plugins 目录，口径同 gacha confirm）：非法 → 422 且不切换，
+    当前项目原样保留。不复用 project_init：其语义含 reset 清世界，会抹掉被
+    恢复项目的全部数据。"""
     if not GENRE_NAME_RE.fullmatch(req.name):
         raise HTTPException(status_code=404, detail=f"项目不存在：{req.name}")
     project_dir = PROJECTS_ROOT / req.name
     if not (project_dir / "story.db").exists():
         raise HTTPException(status_code=404, detail=f"项目不存在：{req.name}")
-    _switch_to(project_dir)
+    meta = _read_project_meta(project_dir) or {}
+    genre = meta.get("genre") or os.environ.get("STORY_ENGINE_GENRE", "mystery")
+    culture = meta.get("culture") or os.environ.get(
+        "STORY_ENGINE_CULTURE", "confucian_officialdom")
+    try:
+        engine.kernel.registry.validate_combo(genre, culture)
+    except StoryEngineError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    _switch_to(project_dir, genre_name=genre, culture_name=culture)
     _write_project_meta(
         project_dir, name=req.name,
         last_opened_at=datetime.now().isoformat(timespec="seconds"))

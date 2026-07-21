@@ -9,8 +9,10 @@ P10.2 测试：POST /api/projects/open + gacha confirm project_name 扩展
    head_tick 从 sqlite heads 表只读取出。
 3. 坏目录不崩：无 story.db 的目录被跳过；坏 chapters.json/空 story.db →
    count=0/head_tick=0 且仍列出。
-4. 双项目切换：建 alpha（1 章）/beta（0 章）→ open alpha → 返回 meta 正确
-   + /api/project 数据是 alpha 的；open 不存在/非法名 → 404。
+4. 双项目切换：建 alpha（非默认题材 isekai-romance×jianghu-martial，1 章）
+   /beta（默认卡，0 章）→ open alpha → 返回 meta 正确 + 恢复 alpha 自身题材
+   （engine.genre/culture 同步）+ /api/project 数据是 alpha 的；
+   open 不存在/非法名 → 404。
 5. confirm 带 project_name：确认后目录含 story.db + project.json（genre/
    culture/created_at/last_opened_at）+ 当前已切换。
 6. confirm 重名 → 409、非法名 → 422；切换后 intervene/interventions 端点
@@ -168,26 +170,38 @@ class TestProjectOpenAndConfirmSwitch(unittest.TestCase):
         with tempfile.TemporaryDirectory() as root:
             backend.PROJECTS_ROOT = Path(root)
             try:
-                # alpha：确认建项目并生成 1 章；beta：0 章
+                # alpha：非默认题材/文化（isekai-romance×jianghu-martial，区别于
+                # env 默认 mystery×confucian_officialdom，open 恢复题材才可判别；
+                # 不选 romance：其 world_rules 引用 WORLD_FACT_TYPES 未声明的事实，
+                # 生成即 KeyError——既有缺陷，本任务不修）
+                # 确认建项目并生成 1 章；beta：默认卡，0 章
                 r = self.client.post("/api/gacha/confirm",
-                                     json=self._card("alpha"))
+                                     json=self._card("alpha",
+                                                     genre="isekai-romance",
+                                                     culture="jianghu-martial"))
                 self.assertEqual(r.status_code, 200, r.text)
                 r = self.client.post("/api/project/generate")
                 self.assertEqual(r.status_code, 200, r.text)
                 r = self.client.post("/api/gacha/confirm",
                                      json=self._card("beta"))
                 self.assertEqual(r.status_code, 200, r.text)
-                # 当前在 beta；open alpha → meta 正确 + 当前数据是 alpha 的
+                # 当前在 beta；open alpha → meta 正确 + 恢复 alpha 自身题材
+                # （非 env 默认）+ 当前数据是 alpha 的
                 r = self.client.post("/api/projects/open",
                                      json={"name": "alpha"})
                 self.assertEqual(r.status_code, 200, r.text)
                 body = r.json()
                 self.assertTrue(body["ok"])
                 self.assertEqual(body["project"]["project"], "alpha")
-                self.assertEqual(body["project"]["genre"], "mystery")
+                self.assertEqual(body["project"]["genre"], "isekai-romance")
+                self.assertEqual(body["project"]["culture"], "jianghu-martial")
                 self.assertEqual(body["project"]["chapter_count"], 1)
+                # engine 单例同步恢复（后续 generate 用 alpha 题材而非 env 默认）
+                self.assertEqual(backend.engine.genre.name, "isekai-romance")
+                self.assertEqual(backend.engine.culture.name, "jianghu-martial")
                 snap = self.client.get("/api/project").json()
                 self.assertEqual(snap["meta"]["project"], "alpha")
+                self.assertEqual(snap["meta"]["genre"], "isekai-romance")
                 self.assertEqual(len(snap["chapters"]), 1)
                 # open 不存在 → 404；路径穿越式非法名同样 404（不泄露目录结构）
                 r = self.client.post("/api/projects/open",
