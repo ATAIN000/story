@@ -153,6 +153,9 @@ tests/test_engine.py         赌注1/赌注4/核心循环回归测试
 | DELETE | /api/project/plan | 作废待批准方案 |
 | POST | /api/project/rollback | 回滚到指定 tick（`{"tick": 14}`） |
 | POST | /api/project/reset | 重置项目 |
+| POST | /api/gacha/draw | 抽卡开局：library 随机组合 / synth LLM 合成（lock 锁栏，mock 恒降级） |
+| POST | /api/gacha/confirm | 确认抽卡：synth 落盘 plugins/genres/ + registry 重扫 → init 切换 |
+| POST | /api/project/init | 开局切换：reset + 按 genre/culture 重建单例（进程内覆盖不写 env） |
 | POST | /api/intervene | 作者介入统一入口（textual/structural/character/intent/evaluation） |
 | GET | /api/interventions | 介入历史（author_intervention 事件流） |
 | POST | /api/hitl/respond | 应答 pending 的 HITL 请求 |
@@ -175,6 +178,18 @@ tests/test_engine.py         赌注1/赌注4/核心循环回归测试
 - **介入即事件**：所有作者操作进事件流（可回放、可审计），不直接改状态
 
 后端补量端点见 `docs/接口规范_part2.md` §9.4（P6.1–P6.10）。
+
+## 抽卡开局（Gacha）
+
+独立开局页：随机抽一组「题材 × 文化 × 人物原型 × 世界规则」开局配置，不喜欢就换，喜欢就开工。
+
+- **入口**：左侧 nav「开局」段（置于系统段上方）；写作台零章空态也有「抽卡开局」CTA
+- **两模式**：
+  - **库内组合（library）**：registry 现有题材（29 个）× 文化 × 人物原型/世界规则包随机组合，零 LLM；「换一批」整套重抽，「换这张」单换一栏（其余栏锁定）
+  - **AI 自由发挥（synth）**：LLM 以 mystery.yaml 为模板锚现场合成新题材包，H7 检查集机器校验，失败带反馈重试 1 次，仍失败自动降级为库内组合（卡面 note 说明）；mock 模式恒走库内卡（零 LLM 调用）
+- **确认即入库 + 切换**：确认开工后，AI 合成的题材复核落盘 `plugins/genres/`（重名自动 -2 后缀、原子写）并 `registry.reload()` 立即可选；随后 reset 清库 + 同一 Kernel 上按新 genre/culture 重建引擎（进程内覆盖，不改 env/.env，重启回落），直接进第一章 plan。已有章节时先弹重置确认框（可取消）
+
+端点契约：`POST /api/gacha/draw`、`POST /api/gacha/confirm`、`POST /api/project/init`，见 `docs/接口规范_part2.md` §9.5。
 
 
 ## 已知边界（下一步路线）
