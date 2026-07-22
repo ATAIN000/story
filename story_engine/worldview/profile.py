@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from .layers import ALL_PARAMS, LAYERS, LAYER_BY_ID, option_label
+from .layers import ALL_PARAMS, LAYERS, LANGUAGE_LAYERS, LAYER_BY_ID, option_label
 
 
 # 5 事实词汇表（与 story_engine.validator.WORLD_FACT_TYPES 对齐）
@@ -69,9 +69,10 @@ class WorldviewProfile:
 
         每层一行（如「物理偏离=major：灵气是第五基本力」）；整层无值的跳过。
         每层格式：``[L0 存在论基础] 物理偏离度=核心物理定律被修改；形而上学=二元``。
+        同时输出语言层（LANG1-LANG5），格式同上。
         """
         lines: list[str] = []
-        for layer in LAYERS:
+        for layer in LAYERS + LANGUAGE_LAYERS:
             params = self.layers.get(layer["id"], {})
             if not params:
                 continue

@@ -8,7 +8,7 @@
 from __future__ import annotations
 
 from story_engine.worldview import (
-    ALL_PARAMS, LAYERS, PREDICATES, WorldviewProfile, evaluate,
+    ALL_PARAMS, LAYERS, LANGUAGE_LAYERS, PREDICATES, WorldviewProfile, evaluate,
 )
 
 
@@ -65,8 +65,11 @@ def test_layers_data_integrity():
     # 10 层齐全（L0-L9）
     assert [l["id"] for l in LAYERS] == [
         "L0", "L1", "L2", "L3", "L4", "L5", "L6", "L7", "L8", "L9"]
+    # 语言 5 层齐全（LANG1-LANG5）
+    assert [l["id"] for l in LANGUAGE_LAYERS] == [
+        "LANG1", "LANG2", "LANG3", "LANG4", "LANG5"]
     # 每参数至少 4 个枚举值，每值含 value/label
-    for layer in LAYERS:
+    for layer in LAYERS + LANGUAGE_LAYERS:
         for p in layer["params"]:
             assert len(p["options"]) >= 4, f"{p['key']} 选项过少"
             for o in p["options"]:
@@ -85,10 +88,16 @@ def test_layers_data_integrity():
     assert "nature_hidden" in [o["value"] for o in ALL_PARAMS["hidden_truths"]["options"]]
     assert "transcendent" in [o["value"] for o in ALL_PARAMS["conflict_resolution"]["options"]]
     assert "cosmic" in [o["value"] for o in ALL_PARAMS["conflict_types"]["options"]]
-    # 10 层参数总数：59（L0-L7）+ 12（L8-L9）= 71
-    assert len(ALL_PARAMS) == 71
-    # 谓词条数符合预期（批1 ≥40，批2 L4-L7 追加 >40，批3 L8-L9 追加 >55）
-    assert len(PREDICATES) > 55
+    # LANG1-LANG5 关键枚举值抽检（素材原文）
+    assert "performative" in [o["value"] for o in ALL_PARAMS["language_power"]["options"]]
+    assert "power_marked" in [o["value"] for o in ALL_PARAMS["classifier_system"]["options"]]
+    assert "unreliable_by_design" in [o["value"] for o in ALL_PARAMS["narrative_reliability"]["options"]]
+    assert "prophecy_first" in [o["value"] for o in ALL_PARAMS["temporal_narrative"]["options"]]
+    assert "ineffable_negation" in [o["value"] for o in ALL_PARAMS["preferred_rhetoric"]["options"]]
+    # 参数总数：71（L0-L9 世界观）+ 15（LANG1-LANG5 语言）= 86
+    assert len(ALL_PARAMS) == 86
+    # 谓词条数符合预期（批1-3 ≥55，批4 语言交叉追加 >70）
+    assert len(PREDICATES) > 70
 
 
 # ---------- P12.2 端点测试（3 核心） ----------

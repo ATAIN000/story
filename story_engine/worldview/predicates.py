@@ -1,8 +1,8 @@
-"""worldview predicates — 跨层一致性谓词（L0-L9 相关）
+"""worldview predicates — 跨层一致性谓词（L0-L9 相关 + 语言×世界观交叉）
 
-素材唯一来源：docs/世界观架构_参数全表.md
-  - 各参数的「谓词」段（显式标记）
-  - 连锁标记 ``→`` / ``↔``（蕴含/互斥）
+素材唯一来源：
+  - docs/世界观架构_参数全表.md（L0-L9 各参数的「连锁影响」段 + 谓词段）
+  - docs/story_language_完整维度分析.md（语言×世界观交叉矩阵，行 290-304）
 
 谓词格式（机器可读）：
 
@@ -608,6 +608,121 @@ PREDICATES: list[dict] = [
         "then": {"resource_paradigm": {"disallow": ["none"]}},
         "message": "稀缺资源争夺冲突：须存在稀缺资源（非无特殊稀缺资源）",
         "source": "P9.1 resource 连锁 / 行 885",
+    },
+
+    # ====================================================================
+    # 语言×世界观跨层谓词（批4）
+    # 素材：docs/story_language_完整维度分析.md
+    #   - L1 语言本体论表「对接世界观层」列（行 39-48）
+    #   - 7层语言架构 vs 10层世界架构交叉矩阵（行 290-304）
+    #   - 各语言参数的连锁标记
+    # 仅录入可机器执行的约束；用 disallow（保守收窄）避免破坏既有预设。
+    # ====================================================================
+
+    # ---- LANG1 → L0：language_power → causality / information_laws ----
+    {
+        "when": {"language_power": "performative"},
+        "then": {"causality": {"disallow": ["chaotic"]}},
+        "message": "言出法随（performative）要求因果律有序（不能是无因果）",
+        "source": "L1 performative 连锁 / 行 44；交叉矩阵 L0×L1 行 294",
+    },
+    {
+        "when": {"language_power": "creative"},
+        "then": {"causality": {"disallow": ["chaotic", "probabilistic"]}},
+        "message": "创世圣言（creative）要求因果律为意志/叙事驱动",
+        "source": "L1 creative 连锁 / 行 48；交叉矩阵 L0×L1 行 294",
+    },
+    {
+        "when": {"language_power": "true_name"},
+        "then": {"information_laws": {"disallow": ["conserved"]}},
+        "message": "真名有力量（true_name）要求信息非守恒（真名=权力）",
+        "source": "L1 true_name 连锁 / 行 43；交叉矩阵 L0×L1 行 294",
+    },
+    {
+        "when": {"language_power": "infectious"},
+        "then": {"information_laws": {"disallow": ["conserved"]}},
+        "message": "感染性语言（infectious）要求信息可被改变/感染",
+        "source": "L1 infectious 连锁 / 行 47；交叉矩阵 L0×L1 行 294",
+    },
+    {
+        "when": {"language_power": "evasive"},
+        "then": {"information_laws": {"disallow": ["conserved"]}},
+        "message": "不可靠/扭曲语言（evasive）要求信息可被操纵",
+        "source": "L1 evasive 连锁 / 行 42",
+    },
+
+    # ---- LANG1 → L6：language_power=sacred → taboo_system ----
+    {
+        "when": {"language_power": "sacred"},
+        "then": {"taboo_system": {"disallow": ["none"]}},
+        "message": "神圣语言（sacred）要求存在禁忌体系（渎神=灾难）",
+        "source": "L1 sacred 连锁 / 行 45；交叉矩阵 L1×L1 行 295",
+    },
+
+    # ---- LANG2 → L5：classifier_system → stratification_basis ----
+    {
+        "when": {"classifier_system": "power_marked"},
+        "then": {"stratification_basis": {"disallow": ["wealth", "age", "faith", "gender"]}},
+        "message": "按力量等级区分称呼（power_marked）要求社会阶层基于力量/血统/天赋",
+        "source": "L2 2.1 power_marked 连锁 / 行 76；交叉矩阵 L3×L2 行 297",
+    },
+    {
+        "when": {"classifier_system": "caste_marked"},
+        "then": {"stratification_basis": {"disallow": ["wealth", "power", "merit", "gender", "age"]}},
+        "message": "按种姓区分称呼（caste_marked）要求社会阶层基于出身/种族",
+        "source": "L2 2.1 caste_marked 连锁 / 行 78；交叉矩阵 L5×L2 行 299",
+    },
+
+    # ---- LANG2 → L4：classifier_system=species_based → species_diversity ----
+    {
+        "when": {"classifier_system": "species_based"},
+        "then": {"species_diversity": {"disallow": ["single"]}},
+        "message": "按物种区分代词（species_based）要求存在多个物种",
+        "source": "L2 2.1 species_based 连锁 / 行 75；交叉矩阵 L4×L2 行 298",
+    },
+
+    # ---- LANG2 → L6：classifier_system=gender_marked → gender_family_structure ----
+    {
+        "when": {"classifier_system": "gender_marked"},
+        "then": {"gender_family_structure": {"disallow": ["egalitarian", "fluid", "family_none"]}},
+        "message": "按性别区分称呼（gender_marked）要求社会存在性别分化",
+        "source": "L2 2.1 gender_marked 连锁 / 行 77",
+    },
+
+    # ---- LANG4 → L8：narrative_reliability → truth_structure ----
+    {
+        "when": {"narrative_reliability": "unreliable_by_design"},
+        "then": {"truth_structure": {"disallow": ["single"]}},
+        "message": "设计性不可靠叙述者要求真相结构非单一（交叉矩阵 L8×L4 行 302）",
+        "source": "L4 4.3 unreliable_by_design / 行 188；交叉矩阵 L8×L4 行 302",
+    },
+    {
+        "when": {"narrative_reliability": "deceptive"},
+        "then": {"truth_structure": {"disallow": ["single"]}},
+        "message": "欺骗性叙述者要求真相结构非单一（叙述者在骗人）",
+        "source": "L4 4.3 deceptive / 行 186；交叉矩阵 L8×L4 行 302",
+    },
+    {
+        "when": {"narrative_reliability": "naive"},
+        "then": {"information_asymmetry": {"disallow": ["none", "egalitarian"]}},
+        "message": "天真叙述者要求存在信息不对称（读者比叙述者聪明）",
+        "source": "L4 4.3 naive / 行 187；交叉矩阵 L8×L4 行 302",
+    },
+
+    # ---- LANG4 → L1：temporal_narrative=prophecy_first → destiny_mechanism ----
+    {
+        "when": {"temporal_narrative": "prophecy_first"},
+        "then": {"destiny_mechanism": {"disallow": ["none"]}},
+        "message": "预言先行叙事要求存在命运机制",
+        "source": "L4 4.4 prophecy_first 连锁 / 行 199；交叉矩阵 L1×L1 行 295",
+    },
+
+    # ---- LANG4 → L0：narrative_person=collective_first → consciousness_nature ----
+    {
+        "when": {"narrative_person": "collective_first"},
+        "then": {"consciousness_nature": {"require": ["collective"]}},
+        "message": "集体第一人称叙事要求意识本质为集体意识",
+        "source": "L4 4.1 collective_first / 行 166",
     },
 ]
 

@@ -5,8 +5,13 @@
 
 覆盖 L0 存在论 / L1 宇宙论 / L2 物理环境 / L3 力量体系 / L4 物种与生物 /
 L5 社会文明结构 / L6 文化表达 / L7 历史纵深 / L8 认知论设计 / L9 冲突架构，
-共 71 个参数。
+共 71 个世界观参数。
 每个参数含枚举值（value）+ 中文标签（label）+ 提示（hint）+ 连锁影响（chain）。
+
+LANGUAGE_LAYERS（LANG1-LANG5）覆盖语言 7 层中的前 5 层（本体论/词汇图/语域/
+视角/修辞），共 15 个参数。
+L6 质感参数 / L7 跨语言对齐 已由 TextureParams / SubtextInterlingua 实现，
+故不在此重复。
 """
 from __future__ import annotations
 
@@ -1785,9 +1790,420 @@ _L9 = {
 
 LAYERS = [_L0, _L1, _L2, _L3, _L4, _L5, _L6, _L7, _L8, _L9]
 
-ALL_PARAMS = {p["key"]: p for layer in LAYERS for p in layer["params"]}
+# ============================================================================
+# 语言 7 层数据化（LANG1-LANG5）
+# 素材唯一来源：docs/story_language_完整维度分析.md（逐条录入，不臆造）。
+# 注意：L6 质感参数 / L7 跨语言对齐 已在引擎中实现为 TextureParams / SubtextInterlingua，
+#       故不在此重复——向导只覆盖 LANG1-LANG5（本体论/词汇图/语域/视角/修辞）。
+# ============================================================================
 
-LAYER_BY_ID = {layer["id"]: layer for layer in LAYERS}
+# ----------------------------------------------------------------------------
+# LANG1 · 语言本体论 (Language Ontology)
+# 素材：L1 section, 行 34-60
+# ----------------------------------------------------------------------------
+_LANG1 = {
+    "id": "LANG1",
+    "name": "语言本体论",
+    "desc": "语言在这个世界里是「什么」？语言有没有力量？最根本的层——与 L0 存在论直接交叉。",
+    "params": [
+        {
+            "key": "language_power",
+            "label": "语言力量",
+            "options": [
+                {"value": "mundane", "label": "日常工具",
+                 "hint": "语言只是沟通工具，说话=说话",
+                 "chain": "→ L0 information=conserved"},
+                {"value": "evasive", "label": "不可靠/扭曲",
+                 "hint": "说出来的都是扭曲/谎言/误导",
+                 "chain": "→ L0 information=creatable/manipulable"},
+                {"value": "true_name", "label": "真名有力量",
+                 "hint": "知道真名=控制对方；角色隐藏真名/用假名",
+                 "chain": "→ L0 information=supernatural"},
+                {"value": "performative", "label": "言出法随",
+                 "hint": "说出=实现（言灵），每句话都是「施法」，说话有物理后果",
+                 "chain": "→ L0 causality=intentional"},
+                {"value": "sacred", "label": "神圣语言",
+                 "hint": "某些词不可说；禁忌词/渎神=灾难",
+                 "chain": "→ L6 taboo=religious"},
+                {"value": "infectious", "label": "感染性语言",
+                 "hint": "听到某些话会改变你（模因/克苏鲁知识——读了会疯）",
+                 "chain": "→ L0 information=infectious"},
+                {"value": "creative", "label": "创世圣言",
+                 "hint": "说出的事物会存在；命名=创造存在",
+                 "chain": "→ L0 causality=narrative"},
+            ],
+        },
+    ],
+}
+
+# ----------------------------------------------------------------------------
+# LANG2 · 词汇世界图 (Lexical Worldview)
+# 素材：L2 section, 行 64-106（Sapir-Whorf 假说：语言塑造思维）
+# ----------------------------------------------------------------------------
+_LANG2 = {
+    "id": "LANG2",
+    "name": "词汇世界图",
+    "desc": "这个世界的人怎么给世界「分类」？他们的词表揭示什么认知框架？"
+            "一个世界的词汇表揭示了它的人民怎么理解世界。",
+    "params": [
+        {
+            "key": "classifier_system",
+            "label": "分类词系统",
+            "options": [
+                {"value": "none", "label": "无分类词",
+                 "hint": "个人主义/平等社会（英语基本无量词）",
+                 "chain": ""},
+                {"value": "hierarchical", "label": "等级分类词",
+                 "hint": "中文「位/名/员/条」——位=尊重，条=轻蔑",
+                 "chain": "→ L5 阶层社会"},
+                {"value": "species_based", "label": "按物种区分代词",
+                 "hint": "人/非人/地位不同用不同词",
+                 "chain": "→ L4 多物种世界"},
+                {"value": "power_marked", "label": "按力量等级区分",
+                 "hint": "修真：「前辈/道友/晚辈」——境界决定称呼",
+                 "chain": "→ L3 力量决定社会"},
+                {"value": "gender_marked", "label": "按性别区分",
+                 "hint": "法语/阿拉伯语的性别变位",
+                 "chain": "→ L6 性别结构"},
+                {"value": "caste_marked", "label": "按种姓区分",
+                 "hint": "不同种姓用不同词汇",
+                 "chain": "→ L5 种姓社会"},
+                {"value": "species_power_composite", "label": "物种+力量复合",
+                 "hint": "兽人叫人类「粉皮」，人类叫兽人「绿皮」",
+                 "chain": "→ 复杂世界观"},
+            ],
+        },
+        {
+            "key": "slang_system",
+            "label": "俚语/行话体系",
+            "options": [
+                {"value": "none", "label": "无显著俚语体系",
+                 "hint": "标准语言为主", "chain": ""},
+                {"value": "trade_jargon", "label": "行业切口",
+                 "hint": "特定群体内部沟通",
+                 "chain": "→ L5 职业/门派分化"},
+                {"value": "underworld_slang", "label": "江湖黑话",
+                 "hint": "地下社会沟通",
+                 "chain": "→ L5 有地下社会/犯罪"},
+                {"value": "religious_terms", "label": "宗教术语",
+                 "hint": "神圣/禁忌表达渗透日常",
+                 "chain": "→ L6 宗教渗透日常"},
+                {"value": "military_code", "label": "军事代号",
+                 "hint": "战时保密",
+                 "chain": "→ L5 军事化社会"},
+                {"value": "cultivation_terms", "label": "修炼术语",
+                 "hint": "修真者专属（走火入魔/突破/闭关/传功）",
+                 "chain": "→ L3 力量体系日常化"},
+                {"value": "digital_code", "label": "数字暗语",
+                 "hint": "赛博/技术世界",
+                 "chain": "→ L5 技术官僚制"},
+            ],
+        },
+        {
+            "key": "conceptual_gap",
+            "label": "概念空白度",
+            "options": [
+                {"value": "none", "label": "无明显概念空白",
+                 "hint": "世界观概念体系完整", "chain": ""},
+                {"value": "minor", "label": "轻度空白",
+                 "hint": "缺少个别概念（如修真世界没有「概率」——一切是「命」）",
+                 "chain": "→ 词汇缺口=认知盲区"},
+                {"value": "major", "label": "重度空白",
+                 "hint": "缺少核心概念（如赛博朋克没有「隐私」——只有「加密等级」）",
+                 "chain": "→ 角色的认知边界受限"},
+                {"value": "profound", "label": "根本性空白",
+                 "hint": "缺少根本概念（如克苏鲁没有「安全感」——只有「暂时的无知」）",
+                 "chain": "→ 角色无法理解某些事物"},
+            ],
+        },
+    ],
+}
+
+# ----------------------------------------------------------------------------
+# LANG3 · 语域权力学 (Register Power Dynamics)
+# 素材：L3 section, 行 109-148 + 实例配置 行 310-343
+# ----------------------------------------------------------------------------
+_LANG3 = {
+    "id": "LANG3",
+    "name": "语域权力学",
+    "desc": "谁能怎么说？说话方式怎么映射社会权力？语域违规是最有戏剧性的语言时刻。",
+    "params": [
+        {
+            "key": "register_hierarchy_depth",
+            "label": "敬语层级深度",
+            "options": [
+                {"value": "none", "label": "无等级敬语",
+                 "hint": "平等社会，无称呼等级",
+                 "chain": "→ L5 社会扁平"},
+                {"value": "shallow", "label": "浅层（2-3 级）",
+                 "hint": "基本的上/下/平级区分",
+                 "chain": "→ L5 社会层级较少"},
+                {"value": "moderate", "label": "中等（4-5 级）",
+                 "hint": "如企业级：CEO/高管/员工/无身份者",
+                 "chain": "→ L5 明确阶层分化"},
+                {"value": "deep", "label": "深层（6+ 级）",
+                 "hint": "如修真：凡人/炼气/筑基/金丹/元婴/化神…",
+                 "chain": "→ L5 等级森严 → 违规=高戏剧性"},
+            ],
+        },
+        {
+            "key": "violation_drama",
+            "label": "语域违规戏剧性",
+            "options": [
+                {"value": "none", "label": "无违规概念",
+                 "hint": "无等级 → 无违规",
+                 "chain": ""},
+                {"value": "low", "label": "低",
+                 "hint": "违规仅是失礼，不引发严重后果",
+                 "chain": ""},
+                {"value": "medium", "label": "中",
+                 "hint": "违规引发社会后果（被排斥/降级）",
+                 "chain": ""},
+                {"value": "high", "label": "高",
+                 "hint": "违规=冒犯/叛逆/亵渎，可能致命",
+                 "chain": "→ 等级森严 → 语域冲突=戏剧高潮"},
+            ],
+        },
+        {
+            "key": "self_deprecation",
+            "label": "自贬用语",
+            "options": [
+                {"value": "none", "label": "无自贬用语",
+                 "hint": "平等社会",
+                 "chain": ""},
+                {"value": "light", "label": "轻度（谦称）",
+                 "hint": "在下/不才/小弟",
+                 "chain": "→ 社会有基本等级"},
+                {"value": "moderate", "label": "中度（辈分自降）",
+                 "hint": "晚辈/小辈/弟子",
+                 "chain": "→ L5 师徒/门派制"},
+                {"value": "deep", "label": "深度（卑称）",
+                 "hint": "草民/奴才/贱妾/小人",
+                 "chain": "→ L5 等级森严 → 自贬=生存策略"},
+            ],
+        },
+        {
+            "key": "forbidden_address",
+            "label": "称呼禁忌",
+            "options": [
+                {"value": "none", "label": "无称呼禁忌",
+                 "hint": "任何人可被直呼其名",
+                 "chain": ""},
+                {"value": "names_only", "label": "禁直呼上位者名",
+                 "hint": "前辈/长辈的名字不可直呼",
+                 "chain": "→ L5 等级社会"},
+                {"value": "sacred_only", "label": "神圣之名不可直呼",
+                 "hint": "神/圣者的名不可直呼",
+                 "chain": "→ L1 divine_nature=actor"},
+                {"value": "extensive", "label": "多重称呼禁忌",
+                 "hint": "多种身份/地位均有称呼禁忌",
+                 "chain": "→ L5 + L6 交叉 → 误称=严重冒犯"},
+            ],
+        },
+    ],
+}
+
+# ----------------------------------------------------------------------------
+# LANG4 · 叙事视角学 (Narrative Perspective)
+# 素材：L4 section, 行 152-199
+# ----------------------------------------------------------------------------
+_LANG4 = {
+    "id": "LANG4",
+    "name": "叙事视角学",
+    "desc": "故事从什么「角度」被讲述？这决定了读者的认知路径。",
+    "params": [
+        {
+            "key": "narrative_person",
+            "label": "叙事人称",
+            "options": [
+                {"value": "first_person", "label": "第一人称",
+                 "hint": "读者=角色，完全沉浸",
+                 "chain": "→ 主角视角的世界观发现"},
+                {"value": "second_person", "label": "第二人称",
+                 "hint": "读者被「变成」角色",
+                 "chain": "→ 系统流/LitRPG（「你获得了…」）"},
+                {"value": "third_limited", "label": "第三人称限知",
+                 "hint": "跟随特定角色但不是角色",
+                 "chain": "→ 多角色叙事（冰与火）"},
+                {"value": "third_omniscient", "label": "第三人称全知",
+                 "hint": "读者比角色知道更多",
+                 "chain": "→ 史诗/宏大叙事（魔戒/三体）"},
+                {"value": "multi_pov", "label": "多视角切换",
+                 "hint": "每个角色看到不同真相",
+                 "chain": "→ 不可靠叙事（罗生门）"},
+                {"value": "collective_first", "label": "集体第一人称",
+                 "hint": "「我们」——群体视角",
+                 "chain": "→ 蜂巢社会/集体意识"},
+                {"value": "impersonal", "label": "非人称",
+                 "hint": "无叙述者（纯事件流）",
+                 "chain": "→ 客观/冷叙事"},
+            ],
+        },
+        {
+            "key": "perspective_distance",
+            "label": "视角距离",
+            "options": [
+                {"value": "extreme_close", "label": "极近（意识流）",
+                 "hint": "内心独白/意识流",
+                 "chain": "→ 高潮/崩溃/顿悟"},
+                {"value": "close", "label": "近",
+                 "hint": "跟随角色感受",
+                 "chain": "→ 大部分叙事"},
+                {"value": "medium", "label": "中",
+                 "hint": "观察角色但有叙述者",
+                 "chain": "→ 转场/说明"},
+                {"value": "distant", "label": "远",
+                 "hint": "旁观者视角",
+                 "chain": "→ 宏大场面/历史叙事"},
+                {"value": "god_view", "label": "全知俯瞰",
+                 "hint": "创世/宇宙级叙事",
+                 "chain": ""},
+            ],
+        },
+        {
+            "key": "narrative_reliability",
+            "label": "叙述可靠性",
+            "options": [
+                {"value": "reliable", "label": "可靠",
+                 "hint": "叙述者说的都是真的",
+                 "chain": "→ 信任叙述者"},
+                {"value": "fallible", "label": "易错",
+                 "hint": "叙述者会犯错/记错",
+                 "chain": "→ 有时候被骗"},
+                {"value": "biased", "label": "有偏见",
+                 "hint": "叙述者有偏见",
+                 "chain": "→ 需要自己判断"},
+                {"value": "deceptive", "label": "欺骗性",
+                 "hint": "叙述者在故意骗你",
+                 "chain": "→ 不信任任何描述"},
+                {"value": "naive", "label": "天真",
+                 "hint": "叙述者不懂自己在看什么",
+                 "chain": "→ 读者比叙述者聪明"},
+                {"value": "unreliable_by_design", "label": "设计性不可靠",
+                 "hint": "叙述者精神状态有问题",
+                 "chain": "→ 分不清现实和幻觉"},
+            ],
+        },
+        {
+            "key": "temporal_narrative",
+            "label": "时间叙述模式",
+            "options": [
+                {"value": "chronological", "label": "顺叙",
+                 "hint": "标准时间顺序",
+                 "chain": "→ 标准时间观"},
+                {"value": "flashback", "label": "倒叙/闪回",
+                 "hint": "回忆重要/过去定义现在",
+                 "chain": ""},
+                {"value": "non_linear", "label": "非线性",
+                 "hint": "时间线交错",
+                 "chain": "→ L0 time_structure=non-linear"},
+                {"value": "simultaneous", "label": "同时叙述",
+                 "hint": "多条线同时叙述",
+                 "chain": "→ 多维叙事"},
+                {"value": "epistolary", "label": "书信/日记体",
+                 "hint": "书信/日记/文件",
+                 "chain": "→ 考据感/真实感"},
+                {"value": "prophecy_first", "label": "预言先行",
+                 "hint": "先给预言再展开",
+                 "chain": "→ L1 destiny=prophecy"},
+            ],
+        },
+    ],
+}
+
+# ----------------------------------------------------------------------------
+# LANG5 · 修辞世界观 (Rhetorical Worldview)
+# 素材：L5 section, 行 203-245
+# ----------------------------------------------------------------------------
+_LANG5 = {
+    "id": "LANG5",
+    "name": "修辞世界观",
+    "desc": "角色/叙述者用什么比喻？比喻揭示他们怎么理解世界。"
+            "比喻不是装饰——比喻是世界观的指纹。",
+    "params": [
+        {
+            "key": "metaphor_source_domain",
+            "label": "隐喻源域",
+            "options": [
+                {"value": "cosmic_natural", "label": "天地/阴阳/五行",
+                 "hint": "「心如止水」/「灵力如潮涌」",
+                 "chain": "→ 修真世界观"},
+                {"value": "martial_arts", "label": "兵器/招式/江湖",
+                 "hint": "「刀锋般的目光」/「万丈深渊般的沉默」",
+                 "chain": "→ 武侠世界观"},
+                {"value": "digital_tech", "label": "数据/电路/病毒",
+                 "hint": "「记忆像被格式化」/「感情是后台进程」",
+                 "chain": "→ 赛博朋克"},
+                {"value": "maritime", "label": "船/浪/风暴/深海",
+                 "hint": "「命运如潮汐」/「绝望像深海的水压」",
+                 "chain": "→ 海洋文明"},
+                {"value": "desert", "label": "沙/水/绿洲",
+                 "hint": "「时间像沙漏」/「希望是干涸河床上的水迹」",
+                 "chain": "→ 沙漠文明"},
+                {"value": "scientific", "label": "维度/光速/宇宙",
+                 "hint": "「文明像黑暗中的火柴」/「时间是最狠的武器」",
+                 "chain": "→ 硬科幻"},
+                {"value": "eldritch", "label": "深海/触手/古老",
+                 "hint": "「恐惧像深海的水压」/「真相像触手般缠绕」",
+                 "chain": "→ 克苏鲁"},
+                {"value": "modern_consumer", "label": "手机/网络/消费",
+                 "hint": "「人生像开盲盒」/「情感是系统 bug」",
+                 "chain": "→ 现代都市"},
+            ],
+        },
+        {
+            "key": "forbidden_metaphor_domain",
+            "label": "比喻禁忌",
+            "options": [
+                {"value": "none", "label": "无比喻禁忌",
+                 "hint": "所有比喻源域可用",
+                 "chain": ""},
+                {"value": "technology", "label": "不可用科技比喻",
+                 "hint": "古代世界：电/程序/网络/手机尚未出现",
+                 "chain": "→ 古代/修真世界观"},
+                {"value": "nature_pastoral", "label": "不可用自然/田园比喻",
+                 "hint": "赛博朋克：自然几乎不存在",
+                 "chain": "→ 赛博朋克"},
+                {"value": "future_hope", "label": "不可用未来/希望比喻",
+                 "hint": "末日废土：这些概念已消亡",
+                 "chain": "→ 末日/废土"},
+                {"value": "warmth_safety", "label": "不可用温暖/安全比喻",
+                 "hint": "黑暗森林下不存在",
+                 "chain": "→ 三体后期"},
+            ],
+        },
+        {
+            "key": "preferred_rhetoric",
+            "label": "偏好修辞手法",
+            "options": [
+                {"value": "parallelism_exaggeration", "label": "对仗/排比/夸张",
+                 "hint": "江湖文化好面子",
+                 "chain": "→ 武侠"},
+                {"value": "mono_no_aware", "label": "物哀/余韵/留白",
+                 "hint": "审美追求「不说完」",
+                 "chain": "→ 日本文学"},
+                {"value": "precision_analogy", "label": "精确/类比/数据化",
+                 "hint": "科学认知框架",
+                 "chain": "→ 硬科幻"},
+                {"value": "ineffable_negation", "label": "不可名状/否定式描述",
+                 "hint": "恐惧=无法描述",
+                 "chain": "→ 克苏鲁"},
+                {"value": "surreal_paradox", "label": "超现实比喻/悖论",
+                 "hint": "魔幻=日常",
+                 "chain": "→ 拉美魔幻现实主义"},
+                {"value": "minimal_stark", "label": "极简/冷峻/自然意象",
+                 "hint": "文化性格内敛",
+                 "chain": "→ 北欧文学"},
+            ],
+        },
+    ],
+}
+
+LANGUAGE_LAYERS = [_LANG1, _LANG2, _LANG3, _LANG4, _LANG5]
+
+ALL_PARAMS = {p["key"]: p for layer in LAYERS + LANGUAGE_LAYERS for p in layer["params"]}
+
+LAYER_BY_ID = {layer["id"]: layer for layer in LAYERS + LANGUAGE_LAYERS}
 
 
 def param_values(key: str) -> list[str]:

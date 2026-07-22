@@ -7,13 +7,15 @@ Phase 12.1 实现：
 
 素材唯一来源：docs/世界观架构_参数全表.md（逐条录入，不臆造）。
 """
-from .layers import LAYERS, ALL_PARAMS, LAYER_BY_ID, param_values, option_label
+from .layers import (LAYERS, LANGUAGE_LAYERS, ALL_PARAMS, LAYER_BY_ID,
+                     param_values, option_label)
 from .predicates import PREDICATES, evaluate
 from .profile import WorldviewProfile
 from .presets import PRESETS, PRESET_BY_KEY, preset_summaries
 
 __all__ = [
-    "LAYERS", "ALL_PARAMS", "LAYER_BY_ID", "param_values", "option_label",
+    "LAYERS", "LANGUAGE_LAYERS", "ALL_PARAMS", "LAYER_BY_ID",
+    "param_values", "option_label",
     "PREDICATES", "evaluate",
     "WorldviewProfile",
     "PRESETS", "PRESET_BY_KEY", "preset_summaries",
