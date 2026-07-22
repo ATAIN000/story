@@ -1,0 +1,154 @@
+"""tests/test_macro.py — P17.1 + P17.2 核心测试（≤6 用例）
+
+P17.1: compute_acts 映射 / MacroPlan round-trip / 全 7 模板合法
+P17.2: mock 兜底产出合法 MacroPlan / prompt 含世界观+人物上下文 / 解析失败→兜底
+"""
+from __future__ import annotations
+
+import asyncio
+from types import SimpleNamespace
+
+from story_engine.macro import (
+    TEMPLATES, MacroPlan, compute_acts, generate_macro_plan,
+    macro_plan_to_dict,
+)
+from story_engine.types import GenreBundle
+
+
+def run(coro):
+    return asyncio.run(coro)
+
+
+# ============================================================
+# P17.1: 数据层 + 模板
+# ============================================================
+
+def test_compute_acts_maps_beats_correctly():
+    """save_the_cat_15 × 60 集：midpoint 在 ep 30、首 beat ep=1、末幕 end=60"""
+    struct = compute_acts("save_the_cat_15", 60)
+    assert struct.template == "save_the_cat_15"
+    assert len(struct.acts) == 4
+
+    # 首幕首 beat
+    first_beat = struct.acts[0].beats[0]
+    assert first_beat.name == "opening_image"
+    assert int(first_beat.ep) == 1
+
+    # midpoint ≈ ep 30（50% × 60）
+    act2a = struct.acts[1]  # act_2a_rising
+    midpoint = [b for b in act2a.beats if b.name == "midpoint"][0]
+    assert int(midpoint.ep) == 30
+
+    # 末幕 end 恒等于 total_episodes
+    assert struct.acts[-1].episode_range[1] == 60
+
+
+def test_macro_plan_round_trip():
+    """MacroPlan dataclass → dict → 检查全部六大组件字段在"""
+    plan = MacroPlan()
+    plan.blueprint.logline = "测试故事"
+    plan.blueprint.thematic_argument.lie = "谎言"
+    plan.blueprint.thematic_argument.truth = "真相"
+    plan.episode_outlines  # default empty list
+
+    d = macro_plan_to_dict(plan)
+    assert d["blueprint"]["logline"] == "测试故事"
+    assert d["blueprint"]["thematic_argument"]["lie"] == "谎言"
+    assert "act_structure" in d
+    assert "episode_outlines" in d
+    assert "arc_schedule" in d
+    assert "foreshadow_blueprint" in d
+    assert "pacing_curve" in d
+    assert "revision_log" in d
+
+
+def test_all_seven_templates_produce_valid_structures():
+    """全部 7 模板 × 不同总集数 → act/beats 非空、episode_range 连续、beat 在 act 范围内"""
+    for name in TEMPLATES:
+        struct = compute_acts(name, 24)
+        assert struct.template == name
+        assert len(struct.acts) >= 2, f"{name} acts 为空"
+        for act in struct.acts:
+            assert len(act.beats) >= 1, f"{name} {act.id} beats 为空"
+            s, e = act.episode_range
+            assert 1 <= s <= e <= 24
+            for beat in act.beats:
+                ep = int(beat.ep)
+                assert s <= ep <= e, f"{name} beat {beat.name} ep={ep} 超出 [{s},{e}]"
+
+
+# ============================================================
+# P17.2: 生成器
+# ============================================================
+
+def _mock_kernel(is_mock: bool = True):
+    """构造伪 kernel：is_mock 控制 LLM 路由"""
+    llm = SimpleNamespace(is_mock=is_mock)
+    return SimpleNamespace(llm=llm)
+
+
+def _bundle():
+    return GenreBundle(
+        genre="mystery", culture="confucian_officialdom", target_length=10,
+        genre_params={"title": "悬疑", "resolution_pattern": "推理破案",
+                      "main_track": "A"},
+    )
+
+
+def _cast():
+    return [{"name": "陆明", "role": "主角", "persona": {
+        "arc_lie": "信任等于软弱", "arc_truth": "连接才是力量",
+        "arc_want": "破案", "arc_need": "学会信任", "arc_type": "positive_change"}}]
+
+
+def test_mock_fallback_produces_valid_plan():
+    """mock 模式（kernel.llm.is_mock=True）→ 规则化骨架，含 10 集大纲 + 1 角色 + 2 伏笔"""
+    kernel = _mock_kernel(is_mock=True)
+    plan = run(generate_macro_plan(kernel, _bundle(), None, _cast(),
+                                   "save_the_cat_15"))
+    assert isinstance(plan, MacroPlan)
+    assert plan.blueprint.total_episodes == 10
+    assert len(plan.episode_outlines) == 10
+    assert len(plan.arc_schedule.characters) == 1
+    assert plan.arc_schedule.characters[0].name == "陆明"
+    assert len(plan.foreshadow_blueprint.threads) == 2
+    assert len(plan.act_structure.acts) == 4
+
+
+class _RecordingLLM:
+    """非 mock 伪 LLM：记录 prompt，返回指定 text"""
+    def __init__(self, text: str):
+        self._text = text
+        self.prompt = ""
+
+    async def __call__(self, prompt, **kw):
+        self.prompt = prompt
+        return SimpleNamespace(text=self._text)
+
+
+def test_prompt_contains_worldview_and_cast_context():
+    """非 mock 模式：LLM prompt 含题材、人物弧光、模板 beat 信息"""
+    llm_call = _RecordingLLM("invalid: not yaml")
+    kernel = SimpleNamespace(
+        llm=SimpleNamespace(is_mock=False), llm_call=llm_call)
+    run(generate_macro_plan(kernel, _bundle(), None, _cast(),
+                            "save_the_cat_15"))
+    prompt = llm_call.prompt
+    assert "mystery" in prompt
+    assert "陆明" in prompt
+    assert "信任等于软弱" in prompt  # arc_lie
+    assert "save_the_cat_15" in prompt
+    assert "midpoint" in prompt
+
+
+def test_parse_failure_falls_back_to_skeleton():
+    """非 mock 模式但 LLM 产出非法 YAML → 回退规则化骨架"""
+    llm_call = _RecordingLLM("这完全不是 YAML [[[")
+    kernel = SimpleNamespace(
+        llm=SimpleNamespace(is_mock=False), llm_call=llm_call)
+    plan = run(generate_macro_plan(kernel, _bundle(), None, _cast(),
+                                   "three_act_classic"))
+    assert isinstance(plan, MacroPlan)
+    # 兜底骨架一定有 10 集大纲（total_episodes 来自 bundle）
+    assert len(plan.episode_outlines) == 10
+    assert len(plan.act_structure.acts) == 3  # three_act_classic
