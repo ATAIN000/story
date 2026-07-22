@@ -193,13 +193,9 @@ def _genre_list(kernel) -> dict:
 
 
 def _culture_title_for(manifest, dm: dict) -> str:
-    """题材卡文化徽标：取 allowed_cultures 首条（通配回默认），映射显示名。"""
-    allowed = manifest.allowed_cultures or ["*"]
-    if "*" in allowed or not allowed:
-        cid = "confucian_officialdom"
-    else:
-        cid = allowed[0]
-    return dm.get(cid, cid)
+    """题材卡文化徽标：语言文化已在世界观向导中选，这里不再显示固定文化——
+    P14 后文化不在题材阶段定（向导里选）。题材卡只显示题材气质，不显示文化。"""
+    return ""
 
 
 def _cast_summary(params: dict) -> list[str]:
