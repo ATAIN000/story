@@ -1,0 +1,42 @@
+[
+  {
+    "id": "主角",
+    "role": "主角",
+    "persona": {
+      "narrative_function": "hero",
+      "pearson_primary": "warrior",
+      "pearson_secondary": "none",
+      "schmidt_goddess": "athena",
+      "schmidt_polarity": "positive",
+      "enneagram_type": "8",
+      "enneagram_wing": "none",
+      "mckee_contradiction_text": "渴望保护他人却恐惧暴露自身脆弱",
+      "arc_type": "positive_change",
+      "arc_lie_text": "力量决定一切，弱者不配拥有自由",
+      "arc_want_text": "变得更强，掌控自己的命运",
+      "arc_need_text": "真正的力量来自与他人的联结",
+      "arc_truth_text": "强大不是孤独，而是守护所爱之人",
+      "tropes": "none"
+    }
+  },
+  {
+    "id": "重要配角",
+    "role": "配角",
+    "persona": {
+      "narrative_function": "ally",
+      "pearson_primary": "caregiver",
+      "pearson_secondary": "none",
+      "schmidt_goddess": "none",
+      "schmidt_polarity": "positive",
+      "enneagram_type": "2",
+      "enneagram_wing": "none",
+      "mckee_contradiction_text": "外表坚强内心渴望被理解",
+      "arc_type": "flat_positive",
+      "arc_lie_text": "正义总会胜利",
+      "arc_want_text": "守护身边重要的人",
+      "arc_need_text": "坚持信念本身就是意义",
+      "arc_truth_text": "真正的英雄改变世界而非改变自己",
+      "tropes": "none"
+    }
+  }
+]

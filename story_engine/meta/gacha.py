@@ -228,16 +228,31 @@ def _simplify_card(card: dict) -> dict:
 
 # ---------- P13：文化推导（confirm 从题材自带取，不再从 card.culture 读） ----------
 
-def derive_culture(allowed_cultures: list | None) -> str:
-    """P14：文化默认 confucian_officialdom（题材含该文化或通配时取它）；
-    否则取 allowed_cultures 首条。开局不阻塞——用户可后续在设置页改。
+def derive_culture(allowed_cultures: list | None, genre_name: str | None = None) -> str:
+    """从题材 allowed_cultures + genre_name 推导最匹配的文化。
 
-    文化维度已融入语言 7 层向导，不再在开局页单独选文化包。但引擎构造
-    GenreBundle 仍需 culture_name，故用默认值兜底。"""
+    P18 修复：不再恒回 confucian_officialdom（导致所有题材都是公案风格）。
+    策略：非通配取首条；通配时按 genre_name 关键词匹配推荐文化。
+    开局不阻塞——用户可后续在设置页改。"""
+    # 题材→推荐文化映射（按题材气质对齐）
+    GENRE_CULTURE_HINT = {
+        # 东方/古风题材 → 儒家官场
+        "mystery": "confucian_officialdom", "wuxia": "confucian_officialdom",
+        "romance": "confucian_officialdom", "wuxia-steampunk": "confucian_officialdom",
+        "political-cultivation": "confucian_officialdom", "tomb-exploration": "confucian_officialdom",
+        "historical-isekai": "confucian_officialdom", "historical-system": "confucian_officialdom",
+        "folk-cthulhu": "confucian_officialdom", "xianxia-cthulhu": "confucian_officialdom",
+        "supernatural-management": "confucian_officialdom", "sequence-pathway": "confucian_officialdom",
+        # 其余 → anglo-american（现代/科幻/西幻/穿越类）
+    }
     allowed = allowed_cultures or ["*"]
-    if "*" in allowed or "confucian_officialdom" in allowed:
-        return "confucian_officialdom"
-    return allowed[0] if allowed else "confucian_officialdom"
+    if "*" not in allowed:
+        return allowed[0] if allowed else "confucian_officialdom"
+    # 通配：按题材推荐
+    if genre_name and genre_name in GENRE_CULTURE_HINT:
+        return GENRE_CULTURE_HINT[genre_name]
+    non_star = [c for c in allowed if c != "*"]
+    return non_star[0] if non_star else "anglo-american"
 
 
 # ---------- 内部：synth 四栏上下文（仅供 _synth_prompt，不暴露前端） ----------

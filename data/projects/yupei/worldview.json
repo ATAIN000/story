@@ -1,0 +1,122 @@
+{
+  "layers": {
+    "L0": {
+      "physics_deviation": "minor",
+      "metaphysics": "materialist",
+      "time_structure": "linear",
+      "space_structure": "networked",
+      "causality": "deterministic",
+      "consciousness_nature": "substrate_independent",
+      "information_laws": "destroyable",
+      "entropy_law": "standard"
+    },
+    "L1": {
+      "cosmo_scope": "regional",
+      "cosmo_mutability": "immutable",
+      "divine_nature": "absent",
+      "cosmo_cognition": "partially_known",
+      "origin_type": "evolution",
+      "eschatology": "entropy_death",
+      "plane_structure": "single",
+      "destiny_mechanism": "threads"
+    },
+    "L2": {
+      "terrain_paradigm": "earthlike",
+      "gravity_atmosphere": "toxic",
+      "resource_paradigm": "information",
+      "magical_geography": "none",
+      "environmental_hazards": "environmental_decay",
+      "celestial_bodies": "standard",
+      "infrastructure_level": "cyberpunk"
+    },
+    "L3": {
+      "power_existence": "common",
+      "power_source": "mixed",
+      "acquisition_method": "mutation",
+      "cost_structure": "addiction",
+      "progression_model": "skill_tree",
+      "system_transparency": "hard",
+      "power_interaction": "stackable",
+      "power_regulation": "government_regulated"
+    },
+    "L4": {
+      "species_diversity": "few",
+      "species_origin": "engineered",
+      "species_hierarchy": "segregated",
+      "mortality_model": "mortal",
+      "transformation_type": "upgradeable",
+      "biological_basis": "genetic",
+      "cross_species_rules": "rare"
+    },
+    "L5": {
+      "political_system": "corporatocracy",
+      "economic_system": "capitalist",
+      "stratification_basis": "wealth",
+      "knowledge_distribution": "monopolized",
+      "legal_system": "contractual",
+      "military_organization": "corporate_army",
+      "power_society_relation": "regulated"
+    },
+    "L6": {
+      "language_paradigm": "diverse",
+      "religion_type": "cult",
+      "core_values": "power",
+      "taboo_system": "social",
+      "death_customs": "negotiable",
+      "education_system": "self_taught",
+      "gender_family_structure": "fluid",
+      "aesthetic_ideal": "technological"
+    },
+    "L7": {
+      "timeline_depth": "shallow",
+      "history_accuracy": "revised",
+      "civilization_cycle": "declining",
+      "lost_civilizations": "recently_fallen",
+      "artifact_significance": "functional",
+      "historical_relevance": "background"
+    },
+    "L8": {
+      "truth_structure": "manufactured",
+      "information_asymmetry": "class_divided",
+      "hidden_truths": "nature_hidden",
+      "forbidden_knowledge": "destabilizing",
+      "knowledge_reliability": "manipulated",
+      "discovery_potential": "dangerous",
+      "memory_system": "tradeable"
+    },
+    "L9": {
+      "conflict_types": "class",
+      "conflict_intensity": "high",
+      "conflict_scale": "national",
+      "conflict_resolution": "violence",
+      "tension_source": "power_gap"
+    },
+    "LANG1": {
+      "language_power": "mundane"
+    },
+    "LANG2": {
+      "classifier_system": "species_based",
+      "slang_system": "trade_jargon",
+      "conceptual_gap": "minor"
+    },
+    "LANG3": {
+      "register_hierarchy_depth": "shallow",
+      "violation_drama": "none",
+      "self_deprecation": "none",
+      "forbidden_address": "none"
+    },
+    "LANG4": {
+      "narrative_person": "first_person",
+      "perspective_distance": "distant",
+      "narrative_reliability": "reliable",
+      "temporal_narrative": "chronological"
+    },
+    "LANG5": {
+      "metaphor_source_domain": "scientific",
+      "forbidden_metaphor_domain": "none",
+      "preferred_rhetoric": "precision_analogy"
+    }
+  },
+  "preset": "cyberpunk",
+  "created_at": "2026-07-22T23:39:20"
+}

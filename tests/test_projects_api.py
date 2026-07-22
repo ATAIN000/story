@@ -271,11 +271,11 @@ class TestProjectOpenAndConfirmSwitch(unittest.TestCase):
                 self.assertTrue(body["ok"])
                 self.assertEqual(body["project"]["project"], "alpha")
                 self.assertEqual(body["project"]["genre"], "isekai-romance")
-                self.assertEqual(body["project"]["culture"], "confucian_officialdom")
+                self.assertEqual(body["project"]["culture"], "anglo-american")  # P18: isekai-romance 非东方→anglo
                 self.assertEqual(body["project"]["chapter_count"], 1)
                 # engine 单例同步恢复（后续 generate 用 alpha 题材而非 env 默认）
                 self.assertEqual(backend.engine.genre.name, "isekai-romance")
-                self.assertEqual(backend.engine.culture.name, "confucian_officialdom")
+                self.assertEqual(backend.engine.culture.name, "anglo-american")  # P18
                 snap = self.client.get("/api/project").json()
                 self.assertEqual(snap["meta"]["project"], "alpha")
                 self.assertEqual(snap["meta"]["genre"], "isekai-romance")

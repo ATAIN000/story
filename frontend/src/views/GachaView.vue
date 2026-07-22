@@ -35,7 +35,7 @@ const synthLoading = ref(false)
 const synthElapsed = ref(0)
 let synthTimer = null
 const startOpen = ref(false)
-const startMode = ref('current')
+const startMode = ref('new')  // P18: 抽卡开局始终创建新项目（一项目一目录设计）
 const projectName = ref('')
 const confirmBusy = ref(false)
 /* synth 模式产出的精简卡（source=synth 时存 genre yaml） */
@@ -641,7 +641,7 @@ function requestConfirm() {
       }
       return
     }
-    startMode.value = 'current'
+    startMode.value = 'new'  // P18: 始终新项目
     projectName.value = suggestedName.value
     startOpen.value = true
     nextTick(() => { cancelBtn.value?.focus() })
@@ -666,9 +666,8 @@ function onDialogKeydown(e) {
 
 async function doConfirm() {
   if (!confirmPayload.value || confirmBusy.value) return
-  const asNew = startMode.value === 'new'
-  const name = asNew ? projectName.value.trim() : null
-  if (asNew && !nameValid.value) return
+  const name = projectName.value.trim()
+  if (!nameValid.value) return
   if (Object.keys(wvProfile.value).length > 0) {
     try {
       const raw = await api.worldviewEvaluate(wvProfile.value)
@@ -697,9 +696,7 @@ async function doConfirm() {
     const finalGenre = res.genre ?? ''
     const culture = res.project?.culture ?? ''
     const suffix = res.persisted ? '（新题材已入库）' : ''
-    toast(asNew
-      ? `新项目《${res.project?.name ?? name}》已开工：${dn(finalGenre)} × ${dn(culture)}${suffix}`
-      : `已开工：${dn(finalGenre)} × ${dn(culture)}${suffix}`)
+    toast(`新项目《${res.project?.name ?? name}》已开工：${dn(finalGenre)} × ${dn(culture)}${suffix}`)
     try {
       await api.plan()
     } catch (e) {
@@ -1358,34 +1355,23 @@ async function doConfirm() {
     <div v-if="startOpen" class="gacha-overlay" @keydown="onDialogKeydown">
       <div ref="dialogEl" class="gacha-dialog" role="alertdialog" aria-modal="true"
            aria-labelledby="gacha-dlg-t" aria-describedby="gacha-dlg-d">
-        <div id="gacha-dlg-t" class="gd-title">开工方式</div>
-        <p id="gacha-dlg-d" class="gd-desc">另开一个新项目，或在当前项目里继续。</p>
+        <div id="gacha-dlg-t" class="gd-title">确认开工</div>
+        <p id="gacha-dlg-d" class="gd-desc">将创建一个新项目，包含当前选定的题材、世界观和宏观计划。</p>
 
-        <label class="gd-opt">
-          <input type="radio" v-model="startMode" value="new" :disabled="confirmBusy">
-          <span>作为新项目开局</span>
-        </label>
-        <div v-if="startMode === 'new'" class="gd-name-row">
+        <div class="gd-name-row">
+          <label class="gd-opt"><span>项目名称</span></label>
           <input v-model.trim="projectName" class="gd-input" :disabled="confirmBusy" maxlength="40"
                  aria-label="新项目名，可用中文、字母、数字、空格、连字符和下划线" :placeholder="suggestedName">
           <div class="gd-hint" :class="{ bad: projectName && !nameValid }">
-            将作为新项目目录名：可用中文/字母/数字/空格/-/_，≤40 字符，不能以空格或点开头结尾
+            可用中文/字母/数字/空格/-/_，≤40 字符，不能以空格或点开头结尾
           </div>
         </div>
-
-        <label class="gd-opt">
-          <input type="radio" v-model="startMode" value="current" :disabled="confirmBusy">
-          <span>当前项目继续</span>
-        </label>
-        <p v-if="startMode === 'current' && chapterCount > 0" class="gd-warn">
-          当前项目已有 {{ chapterCount }} 章。开工后已有章节、世界状态与待批准方案都会被清空，且不可恢复。
-        </p>
 
         <div class="gd-act">
           <button ref="cancelBtn" class="btn-line" :disabled="confirmBusy" aria-label="取消，不开工"
                   @click="cancelConfirm">取消</button>
-          <button class="btn-main" :disabled="confirmBusy || (startMode === 'new' && !nameValid)"
-                  :aria-label="startMode === 'new' ? `以新项目 ${projectName} 开工` : '在当前项目开工'"
+          <button class="btn-main" :disabled="confirmBusy || !nameValid"
+                  :aria-label="`以新项目 ${projectName} 开工`"
                   @click="doConfirm">{{ confirmBusy ? '开工中…' : '确认开工' }}</button>
         </div>
       </div>

@@ -1,0 +1,414 @@
+{
+  "blueprint": {
+    "logline": "一个孤独是唯一的出路的主角，在mystery的世界中学会连接才是真正的力量",
+    "thematic_argument": {
+      "lie": "孤独是唯一的出路",
+      "truth": "连接才是真正的力量",
+      "url": "孤独是唯一的出路才是对的"
+    },
+    "central_conflict": {
+      "protagonist_want": "达成目标",
+      "protagonist_need": "理解他人的价值",
+      "antagonist_want": "阻止达成目标",
+      "stakes": "如果失败，连接才是真正的力量将永远无法实现"
+    },
+    "story_type": "growth",
+    "total_episodes": 12,
+    "target_pace": "fast_escalation"
+  },
+  "act_structure": {
+    "template": "dtg_50_30",
+    "acts": [
+      {
+        "id": "act_1_golden_open",
+        "name": "黄金开局",
+        "episode_range": [
+          1,
+          1
+        ],
+        "function": "快速建立冲突，爽感拉满",
+        "beats": [
+          {
+            "name": "hook",
+            "ep": "1",
+            "desc": "黄金钩子——开场即冲突"
+          },
+          {
+            "name": "inciting_incident",
+            "ep": "1",
+            "desc": "触发事件——身份揭露/逆袭起点"
+          },
+          {
+            "name": "first_victory",
+            "ep": "1",
+            "desc": "首次打脸——小高潮"
+          }
+        ]
+      },
+      {
+        "id": "act_2_escalation",
+        "name": "爽感密集",
+        "episode_range": [
+          1,
+          6
+        ],
+        "function": "密集爽点+矛盾升级",
+        "beats": [
+          {
+            "name": "power_up",
+            "ep": "2",
+            "desc": "实力提升/获得关键资源"
+          },
+          {
+            "name": "face_slap_1",
+            "ep": "3",
+            "desc": "大型打脸——敌人溃败"
+          },
+          {
+            "name": "face_slap_2",
+            "ep": "4",
+            "desc": "连环打脸——地位逆转"
+          },
+          {
+            "name": "midpoint_escalation",
+            "ep": "5",
+            "desc": "矛盾升级——更强对手出现"
+          },
+          {
+            "name": "all_is_lost",
+            "ep": "6",
+            "desc": "全线崩溃——假败"
+          }
+        ]
+      },
+      {
+        "id": "act_3_climax",
+        "name": "收线高潮",
+        "episode_range": [
+          6,
+          12
+        ],
+        "function": "真相揭露+终极对决",
+        "beats": [
+          {
+            "name": "truth_reveal",
+            "ep": "8",
+            "desc": "真相揭露——身世/阴谋大白"
+          },
+          {
+            "name": "final_showdown",
+            "ep": "11",
+            "desc": "终极对决——复仇/正名/逆袭完成"
+          }
+        ]
+      }
+    ]
+  },
+  "episode_outlines": [
+    {
+      "episode": 1,
+      "synopsis": "第1集：黄金钩子——开场即冲突",
+      "purpose": "hook",
+      "key_events": [
+        "黄金钩子——开场即冲突"
+      ],
+      "ends_with_hook": "留下悬念，引向第2集",
+      "character_arc_focus": "主角",
+      "flexibility": "medium"
+    },
+    {
+      "episode": 2,
+      "synopsis": "第2集：实力提升/获得关键资源",
+      "purpose": "power_up",
+      "key_events": [
+        "实力提升/获得关键资源"
+      ],
+      "ends_with_hook": "留下悬念，引向第3集",
+      "character_arc_focus": "主角",
+      "flexibility": "medium"
+    },
+    {
+      "episode": 3,
+      "synopsis": "第3集：大型打脸——敌人溃败",
+      "purpose": "face_slap_1",
+      "key_events": [
+        "大型打脸——敌人溃败"
+      ],
+      "ends_with_hook": "留下悬念，引向第4集",
+      "character_arc_focus": "主角",
+      "flexibility": "medium"
+    },
+    {
+      "episode": 4,
+      "synopsis": "第4集：连环打脸——地位逆转",
+      "purpose": "face_slap_2",
+      "key_events": [
+        "连环打脸——地位逆转"
+      ],
+      "ends_with_hook": "留下悬念，引向第5集",
+      "character_arc_focus": "主角",
+      "flexibility": "medium"
+    },
+    {
+      "episode": 5,
+      "synopsis": "第5集：矛盾升级——更强对手出现",
+      "purpose": "midpoint_escalation",
+      "key_events": [
+        "矛盾升级——更强对手出现"
+      ],
+      "ends_with_hook": "留下悬念，引向第6集",
+      "character_arc_focus": "主角",
+      "flexibility": "medium"
+    },
+    {
+      "episode": 6,
+      "synopsis": "第6集：全线崩溃——假败",
+      "purpose": "all_is_lost",
+      "key_events": [
+        "全线崩溃——假败"
+      ],
+      "ends_with_hook": "留下悬念，引向第7集",
+      "character_arc_focus": "主角",
+      "flexibility": "medium"
+    },
+    {
+      "episode": 7,
+      "synopsis": "第7集：真相揭露——身世/阴谋大白",
+      "purpose": "truth_reveal",
+      "key_events": [
+        "真相揭露——身世/阴谋大白"
+      ],
+      "ends_with_hook": "留下悬念，引向第8集",
+      "character_arc_focus": "主角",
+      "flexibility": "medium"
+    },
+    {
+      "episode": 8,
+      "synopsis": "第8集：真相揭露——身世/阴谋大白",
+      "purpose": "truth_reveal",
+      "key_events": [
+        "真相揭露——身世/阴谋大白"
+      ],
+      "ends_with_hook": "留下悬念，引向第9集",
+      "character_arc_focus": "主角",
+      "flexibility": "medium"
+    },
+    {
+      "episode": 9,
+      "synopsis": "第9集：真相揭露——身世/阴谋大白",
+      "purpose": "truth_reveal",
+      "key_events": [
+        "真相揭露——身世/阴谋大白"
+      ],
+      "ends_with_hook": "留下悬念，引向第10集",
+      "character_arc_focus": "主角",
+      "flexibility": "medium"
+    },
+    {
+      "episode": 10,
+      "synopsis": "第10集：终极对决——复仇/正名/逆袭完成",
+      "purpose": "final_showdown",
+      "key_events": [
+        "终极对决——复仇/正名/逆袭完成"
+      ],
+      "ends_with_hook": "留下悬念，引向第11集",
+      "character_arc_focus": "主角",
+      "flexibility": "medium"
+    },
+    {
+      "episode": 11,
+      "synopsis": "第11集：终极对决——复仇/正名/逆袭完成",
+      "purpose": "final_showdown",
+      "key_events": [
+        "终极对决——复仇/正名/逆袭完成"
+      ],
+      "ends_with_hook": "留下悬念，引向第12集",
+      "character_arc_focus": "主角",
+      "flexibility": "medium"
+    },
+    {
+      "episode": 12,
+      "synopsis": "第12集：终极对决——复仇/正名/逆袭完成",
+      "purpose": "final_showdown",
+      "key_events": [
+        "终极对决——复仇/正名/逆袭完成"
+      ],
+      "ends_with_hook": "故事完结",
+      "character_arc_focus": "主角",
+      "flexibility": "medium"
+    }
+  ],
+  "arc_schedule": {
+    "characters": [
+      {
+        "name": "角色",
+        "archetype_arc": "positive_change",
+        "lie": "",
+        "truth": "",
+        "milestones": [
+          {
+            "episode_range": "1-2",
+            "phase": "setup",
+            "state": "初始状态",
+            "event": "",
+            "behavior": "拒绝改变"
+          },
+          {
+            "episode_range": "3-6",
+            "phase": "crack",
+            "state": "第一次动摇",
+            "event": "关键事件冲击",
+            "behavior": "开始犹豫"
+          },
+          {
+            "episode_range": "7-9",
+            "phase": "relapse",
+            "state": "被强化Lie",
+            "event": "遭遇挫折",
+            "behavior": "退回旧模式"
+          },
+          {
+            "episode_range": "10-12",
+            "phase": "truth_embrace",
+            "state": "觉醒",
+            "event": "理解真相",
+            "behavior": "彻底转变"
+          }
+        ]
+      },
+      {
+        "name": "角色",
+        "archetype_arc": "flat_positive",
+        "lie": "",
+        "truth": "",
+        "milestones": [
+          {
+            "episode_range": "1-2",
+            "phase": "setup",
+            "state": "初始状态",
+            "event": "",
+            "behavior": "拒绝改变"
+          },
+          {
+            "episode_range": "3-6",
+            "phase": "crack",
+            "state": "第一次动摇",
+            "event": "关键事件冲击",
+            "behavior": "开始犹豫"
+          },
+          {
+            "episode_range": "7-9",
+            "phase": "relapse",
+            "state": "被强化Lie",
+            "event": "遭遇挫折",
+            "behavior": "退回旧模式"
+          },
+          {
+            "episode_range": "10-12",
+            "phase": "truth_embrace",
+            "state": "觉醒",
+            "event": "理解真相",
+            "behavior": "彻底转变"
+          }
+        ]
+      }
+    ]
+  },
+  "foreshadow_blueprint": {
+    "threads": [
+      {
+        "id": "FS_001",
+        "name": "主线悬念",
+        "type": "main_mystery",
+        "plant_episodes": [
+          1,
+          4
+        ],
+        "harvest_episode": 9,
+        "salience_ladder": [
+          {
+            "ep": 1,
+            "level": 0.2,
+            "form": "初次暗示"
+          },
+          {
+            "ep": 4,
+            "level": 0.5,
+            "form": "线索浮现"
+          },
+          {
+            "ep": 9,
+            "level": 1,
+            "form": "真相揭露"
+          }
+        ],
+        "spacing_rule": "max_5_eps",
+        "status": "planned"
+      },
+      {
+        "id": "FS_002",
+        "name": "角色秘密",
+        "type": "character_secret",
+        "plant_episodes": [
+          3
+        ],
+        "harvest_episode": 9,
+        "salience_ladder": [
+          {
+            "ep": 3,
+            "level": 0.3,
+            "form": "一个细节"
+          },
+          {
+            "ep": 9,
+            "level": 1,
+            "form": "秘密揭露"
+          }
+        ],
+        "spacing_rule": "max_8_eps",
+        "status": "planned"
+      }
+    ]
+  },
+  "pacing_curve": {
+    "curve_type": "wave_escalation",
+    "key_tension_points": [
+      {
+        "episode": 1,
+        "tension": 0.5,
+        "reason": "黄金开局开始"
+      },
+      {
+        "episode": 1,
+        "tension": 0.8,
+        "reason": "黄金开局结束"
+      },
+      {
+        "episode": 1,
+        "tension": 0.5,
+        "reason": "爽感密集开始"
+      },
+      {
+        "episode": 6,
+        "tension": 0.8,
+        "reason": "爽感密集结束"
+      },
+      {
+        "episode": 6,
+        "tension": 0.5,
+        "reason": "收线高潮开始"
+      },
+      {
+        "episode": 12,
+        "tension": 0.3,
+        "reason": "结局——归于平静"
+      }
+    ],
+    "genre_pace_profile": {
+      "type": "mystery",
+      "micro_rhythm": "3-5集一小高潮",
+      "buffer_rule": "高强度冲突后必须有缓冲"
+    }
+  },
+  "revision_log": []
+}

@@ -321,7 +321,7 @@ class TestGachaConfirmInit(unittest.TestCase):
             self.assertTrue(body["persisted"])
             self.assertEqual(body["genre"], "test-synth")
             self.assertEqual(body["project"]["genre"], "test-synth")
-            self.assertEqual(body["project"]["culture"], "confucian_officialdom")
+            self.assertEqual(body["project"]["culture"], "anglo-american")  # P18: test-synth 非东方题材→anglo
             self.assertTrue(probe.exists())
             # engine 单例已切换；init 为进程内覆盖，env 不被改写
             self.assertEqual(backend.engine.genre.name, "test-synth")

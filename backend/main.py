@@ -1078,9 +1078,7 @@ def gacha_confirm(card: dict):
             raise HTTPException(status_code=422,
                                 detail=f"合成包未过校验：{'；'.join(errs)}")
         allowed = pack.get("allowed_cultures") or ["*"]
-        culture = derive_culture(allowed)
-        # P14：文化默认 confucian_officialdom（题材含该文化或通配时取它）；
-        # 验证推导结果在 registry 已注册
+        culture = derive_culture(allowed, genre_name=pack["name"])
         # （allowed_cultures 引用不存在的文化 → 422 不落盘，口径同 init）
         if "*" not in allowed:
             reg_cultures = engine.kernel.registry.list_plugins(
@@ -1097,9 +1095,9 @@ def gacha_confirm(card: dict):
         # P14：文化默认 confucian_officialdom（不再从 card.culture 读取）
         try:
             m = engine.kernel.registry.get_manifest("story.genre", name)
-            culture = derive_culture(m.allowed_cultures)
+            culture = derive_culture(m.allowed_cultures, genre_name=name)
         except Exception:
-            culture = "confucian_officialdom"
+            culture = "anglo-american"
     if not name:
         raise HTTPException(status_code=422, detail="卡缺 genre.name")
     if project_name is not None:
