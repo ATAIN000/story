@@ -10,6 +10,7 @@ import { useGeneration } from './composables/useGeneration'
 import { useFontSize } from './composables/useFontSize'
 import AppIcon from './components/AppIcon.vue'
 import { NAV_ICONS } from './components/icons'
+import MacroView from './views/MacroView.vue'
 import ToastHost from './components/ToastHost.vue'
 import ProjectsView from './views/ProjectsView.vue'
 import WriteView from './views/WriteView.vue'
@@ -33,19 +34,22 @@ function bumpFont(dir) {
   toast(`正文字号 ${fsSize.value}px`)
 }
 
-const VIEWS = { projects: ProjectsView, write: WriteView, gacha: GachaView, card: DecisionCardView, chars: CharsView, world: WorldView, timeline: TimelineView, threads: ThreadsView, plugins: PluginsView, settings: SettingsView }
+const VIEWS = { projects: ProjectsView, write: WriteView, gacha: GachaView, macro: MacroView, card: DecisionCardView, chars: CharsView, world: WorldView, timeline: TimelineView, threads: ThreadsView, plugins: PluginsView, settings: SettingsView }
 const NAV = [
-  // P10.4 多项目：项目页置于最顶部独立段
+  // P10.4 多项目：项目页置于最顶部独立段（含开局入口）
   { sec: '项目', items: [{ id: 'projects', name: '项目' }] },
-  { sec: '创作', items: [{ id: 'write', name: '写作台' }, { id: 'card', name: '决策卡' }] },
+  // 创作段：写作台 / 规划图（宏观计划随时查阅）/ 决策卡
+  { sec: '创作', items: [
+    { id: 'write', name: '写作台' },
+    { id: 'macro', name: '规划图' },
+    { id: 'card', name: '决策卡' },
+  ] },
   { sec: '故事资产', items: [
     { id: 'chars', name: '人物' },
     { id: 'world', name: '世界观' },
     { id: 'timeline', name: '时间线' },
     { id: 'threads', name: '伏笔账' },
   ] },
-  // P8.6 抽卡开局页：独立段置于「系统」段上方（plan Task 6 口径）
-  { sec: '开局', items: [{ id: 'gacha', name: '抽卡开局' }] },
   { sec: '系统', items: [
     { id: 'plugins', name: '插件' },
     { id: 'settings', name: '设置' },

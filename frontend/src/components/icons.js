@@ -28,6 +28,6 @@ export const ICONS = {
 // 导航图标映射（story.html :562 NAV_ICONS；P8.6 增 gacha，P10.4 增 projects）
 export const NAV_ICONS = {
   projects: 'book',
-  write: 'pen', card: 'sparkles', chars: 'users', world: 'map', timeline: 'clock',
+  write: 'pen', macro: 'map', card: 'sparkles', chars: 'users', world: 'globe', timeline: 'clock',
   threads: 'bookmark', gacha: 'zap', plugins: 'puzzle', settings: 'sliders',
 }
