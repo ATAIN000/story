@@ -1,0 +1,425 @@
+{
+  "blueprint": {
+    "logline": "在漂浮地块构成的蒸汽大都会中，坚守肉身极限的没落拳师为保护武馆旧序，向代表绝对资本的机械师发起挑战，最终在武馆覆灭的废墟中悟出结合热力学与内功的“新武学”，斩断了旧时代悲壮落幕的宿命。",
+    "thematic_argument": {
+      "lie": "血肉之躯的纯粹武学是唯一的正道，机械与蒸汽是剥夺人性的异端。",
+      "truth": "武学的真谛在于对能量（热力学）的极致运用，肉身与机械的融合才是进化的终局。",
+      "url": "theme://steampunk_wuxia/adaptation_over_stagnation"
+    },
+    "central_conflict": {
+      "protagonist_want": "击败机械改造人，保全恩师留下的最后一座传统武馆。",
+      "protagonist_need": "放下对肉体纯粹性的偏执，理解能量守恒与热力学的本质，完成武学与蒸汽科技的融合。",
+      "antagonist_want": "彻底垄断高纯度源石矿脉，用全机械化的廉价量产武力取代不可控的传统武者，建立绝对资本秩序。",
+      "stakes": "主角的生死、武馆的存亡，以及整个漂浮大陆是走向僵化的机械统治，还是迎来充满变量的新武学纪元。"
+    },
+    "story_type": "动作/赛博朋克前传（蒸汽武侠）/ 悲壮史诗转胜利",
+    "total_episodes": 12,
+    "target_pace": "极速开局（Ep1打满爆点）- 密集爽感（Ep2-6）- 跌宕收线（Ep7-12）"
+  },
+  "act_structure": {
+    "template": "dtg_50_30",
+    "acts": [
+      {
+        "id": "act_1_golden_open",
+        "name": "黄金开局",
+        "episode_range": [
+          1,
+          1
+        ],
+        "function": "快速建立冲突，爽感拉满",
+        "beats": [
+          {
+            "name": "hook",
+            "ep": "1",
+            "desc": "黄金钩子——开场即冲突"
+          },
+          {
+            "name": "inciting_incident",
+            "ep": "1",
+            "desc": "触发事件——身份揭露/逆袭起点"
+          },
+          {
+            "name": "first_victory",
+            "ep": "1",
+            "desc": "首次打脸——小高潮"
+          }
+        ]
+      },
+      {
+        "id": "act_2_escalation",
+        "name": "爽感密集",
+        "episode_range": [
+          1,
+          6
+        ],
+        "function": "密集爽点+矛盾升级",
+        "beats": [
+          {
+            "name": "power_up",
+            "ep": "2",
+            "desc": "实力提升/获得关键资源"
+          },
+          {
+            "name": "face_slap_1",
+            "ep": "3",
+            "desc": "大型打脸——敌人溃败"
+          },
+          {
+            "name": "face_slap_2",
+            "ep": "4",
+            "desc": "连环打脸——地位逆转"
+          },
+          {
+            "name": "midpoint_escalation",
+            "ep": "5",
+            "desc": "矛盾升级——更强对手出现"
+          },
+          {
+            "name": "all_is_lost",
+            "ep": "6",
+            "desc": "全线崩溃——假败"
+          }
+        ]
+      },
+      {
+        "id": "act_3_climax",
+        "name": "收线高潮",
+        "episode_range": [
+          6,
+          12
+        ],
+        "function": "真相揭露+终极对决",
+        "beats": [
+          {
+            "name": "truth_reveal",
+            "ep": "8",
+            "desc": "真相揭露——身世/阴谋大白"
+          },
+          {
+            "name": "final_showdown",
+            "ep": "11",
+            "desc": "终极对决——复仇/正名/逆袭完成"
+          }
+        ]
+      }
+    ]
+  },
+  "episode_outlines": [
+    {
+      "episode": 1,
+      "synopsis": "漂浮城下层区的传统武馆面临财阀‘重工社’的暴力强拆。拳师陆锋在绝境中挺身而出。”",
+      "purpose": "极速建立世界观、挑起核心冲突并给出强烈的开局爽点。",
+      "key_events": [
+        "hook: 陆锋用纯粹的肉身招式，一拳击溃一台正在肆虐的早期型蒸汽打手，展现硬核物理战力。",
+        "inciting_incident: 重工社机械师阎十派出高级蒸汽义体人，强行没收武馆的地契与能源核心。",
+        "first_victory: 陆锋拼死爆发，拆解了高级义体人，暂时保住了武馆，却引来了重工社高层的全面绞杀令。"
+      ],
+      "ends_with_hook": "恩师留下的‘源石发动机’核心被激活，映射出一串极其复杂的机构图纸，陆锋决定将其植入体内。",
+      "character_arc_focus": "陆锋（坚守纯粹武学的信念与战意）",
+      "flexibility": "medium"
+    },
+    {
+      "episode": 2,
+      "synopsis": "面对重工社的连番追杀，陆锋利用恩师图纸进行极度痛苦的身体改造。",
+      "purpose": "展现主角代价与成长，推动力量体系升级。",
+      "key_events": [
+        "power_up: 陆锋忍受反噬，将微型蒸汽泵接入脊柱经脉，突破原本的肉体极限，解锁‘沸血模式’。"
+      ],
+      "ends_with_hook": "阎十放出消息，悬赏陆锋的人头，整个下层区的赏金猎人开始蠢蠢欲动。",
+      "character_arc_focus": "陆锋（在痛苦中接受非纯粹力量的伏笔）",
+      "flexibility": "medium"
+    },
+    {
+      "episode": 3,
+      "synopsis": "三名顶尖蒸汽赏金猎人杀入武馆，陆锋首次主动使用新力量迎战。",
+      "purpose": "通过战斗展示力量提升，提供密集爽感。",
+      "key_events": [
+        "face_slap_1: 赏金猎人傲慢地以为陆锋还是只用拳头的莽夫，被陆锋背部喷出的高压蒸汽连同铁甲一起贯穿，狼狈落败。"
+      ],
+      "ends_with_hook": "陆锋虽然获胜，但武馆的机械维修师燕十警告他：他的肉身正在被高热反噬，寿命仅剩三个月。",
+      "character_arc_focus": "燕十（出场，展现其作为机械师的底线与对主角的担忧）",
+      "flexibility": "medium"
+    },
+    {
+      "episode": 4,
+      "synopsis": "重工社改变策略，断绝下层区资源，逼迫居民交出陆锋。陆锋选择主动出击捣毁能源枢纽。",
+      "purpose": "进一步扩大冲突规模，强化情感共鸣。",
+      "key_events": [
+        "face_slap_2: 阎十在枢纽建立铜墙铁壁的防御，结果被陆锋以肉身结合蒸汽爆破直接轰碎闸门，当众粉碎了重工社‘不可战胜’的虚假宣传。"
+      ],
+      "ends_with_hook": "枢纽深处，一台拥有自我意识的‘巨型阵仪机甲’被唤醒，阎十冷酷地注视着陆锋。",
+      "character_arc_focus": "陆锋（成为下层区的精神图腾）",
+      "flexibility": "medium"
+    },
+    {
+      "episode": 5,
+      "synopsis": "陆锋与阵仪机甲死战，发现传统武学与现有蒸汽科技都已达到极限。",
+      "purpose": "故事中点大升级，迫使主角跳出原有框架。",
+      "key_events": [
+        "midpoint_escalation: 阵仪机甲能够吸收陆锋的蒸汽内功，战况急转直下。陆锋意识到单纯的‘物理叠加’已无法战胜极致的机械。"
+      ],
+      "ends_with_hook": "为了保全燕十和无辜平民，陆锋甘愿被机甲重创生擒。",
+      "character_arc_focus": "陆锋（信念首次产生动摇）",
+      "flexibility": "medium"
+    },
+    {
+      "episode": 6,
+      "synopsis": "武馆被重工社彻底推平，陆锋被囚禁于矿坑深处充当人体电池。",
+      "purpose": "灵魂黑夜与全盘皆输，将气氛压至最低谷。",
+      "key_events": [
+        "all_is_lost: 恩师遗留的武馆招牌在蒸汽推土机下化为铁饼；燕十冒死营救却被擒拿；陆锋的经脉被彻底锁死。"
+      ],
+      "ends_with_hook": "绝望的矿坑中，陆锋的血液滴落在源石上，忽然听见了大地深处热力学法则的‘心跳声’。",
+      "character_arc_focus": "陆锋（在彻底失去中孕育顿悟）",
+      "flexibility": "medium"
+    },
+    {
+      "episode": 7,
+      "synopsis": "燕十在狱中联络残存武者发动暴动，为陆锋争取时间。",
+      "purpose": "过渡集，恢复主线动力，展现旧秩序的韧性。",
+      "key_events": [
+        "旧派武者用血肉之躯阻挡蒸汽镇压部队，上演旧时代的悲壮挽歌。"
+      ],
+      "ends_with_hook": "陆锋在深坑中闭目，周身的锁链开始因极度的高温而发红、熔化。",
+      "character_arc_focus": "燕十（为朋友两肋插刀，信念坚定）",
+      "flexibility": "medium"
+    },
+    {
+      "episode": 8,
+      "synopsis": "陆锋彻底顿悟，明悟了隐藏在世界底层的知识。",
+      "purpose": "核心真相揭示，完成人物内在弧光。",
+      "key_events": [
+        "truth_reveal: 陆锋领悟到‘武学并非招式，也非机械’，而是顺应热力学第二定律的能量流转。他不再对抗高温与蒸汽，而是将其内化，达到‘人机合一’的新武学境界。"
+      ],
+      "ends_with_hook": "陆锋徒手融化钛金牢笼，如同新神般破土而出，直冲重工社总部的漂浮岛屿。",
+      "character_arc_focus": "陆锋（摒弃谎言，拥抱融合的真理）",
+      "flexibility": "medium"
+    },
+    {
+      "episode": 9,
+      "synopsis": "陆锋杀回上层区，势如破竹，与阎十的终极蒸汽杀手正面对决。",
+      "purpose": "展示新武学的压倒性威力，铺垫最终战。",
+      "key_events": [
+        "阎十启用了最高级别的‘量产神机’，依然无法解析陆锋的武学逻辑，被以柔克刚的蒸汽内劲尽数摧毁。"
+      ],
+      "ends_with_hook": "阎十退无可退，按下了总部的超临界爆炸按钮。",
+      "character_arc_focus": "陆锋（重塑对武学的认知）",
+      "flexibility": "medium"
+    },
+    {
+      "episode": 10,
+      "synopsis": "重工社企图引爆源石矩阵，让整个下层区坠毁。",
+      "purpose": "拔高危机感，将私人恩怨上升至阶级存亡。",
+      "key_events": [
+        "燕十带领地下反抗军攻入控制室；陆锋则只身飞向即将爆炸的巨型蒸汽塔。"
+      ],
+      "ends_with_hook": "狂暴的能量漩涡中，陆锋与代表资本与旧机械秩序的最终形态展开了死斗。",
+      "character_arc_focus": "燕十（展现极高的牺牲精神）",
+      "flexibility": "medium"
+    },
+    {
+      "episode": 11,
+      "synopsis": "决定世界命运的一战。陆锋以肉身承载热力学法则，对决极致装甲。",
+      "purpose": "全剧最高潮，彻底解决核心冲突。",
+      "key_events": [
+        "final_showdown: 阎十认为血肉必败于永恒的金属，陆锋却证明‘凡人皆有熵增’，以自身为导引，将装甲的庞大能量瞬间抽干。阎十在绝对的力量前崩溃。"
+      ],
+      "ends_with_hook": "危机未解，爆炸即将发生。陆锋决定用新武学封印爆炸，画面定格在他回头的一笑。",
+      "character_arc_focus": "陆锋（实现个人与时代的救赎）",
+      "flexibility": "medium"
+    },
+    {
+      "episode": 12,
+      "synopsis": "陆锋以自身化炉，熔断熔毁重工社核心，重塑大陆秩序。",
+      "purpose": "余波与结局，兑现‘新旧融合的新武学诞生’或‘旧时代的悲壮落幕’。",
+      "key_events": [
+        "爆炸停止。陆锋的肉身并未消亡，而是与源石矩阵达成了某种共生，成为新时代的第一位‘蒸汽武神’。下层区获得独立，武馆旧址升起了一座融合蒸汽与武魂的新学院。"
+      ],
+      "ends_with_hook": "落幕画面：燕十在学院中教导孩童，而学院屋顶，一个熟悉的巨大蒸汽黑影正默默注视着这片土地。",
+      "character_arc_focus": "全员（新时代的开启）",
+      "flexibility": "medium"
+    }
+  ],
+  "arc_schedule": {
+    "characters": [
+      {
+        "name": "陆锋",
+        "archetype_arc": "positive_change",
+        "lie": "只有血肉纯粹的武学才是正道，机械皆是邪魔外道。",
+        "truth": "万物皆为能量流转，肉身与蒸汽机械的融合方为武学真谛。",
+        "milestones": [
+          {
+            "episode_range": "1-1",
+            "phase": "坚守与抗拒",
+            "state": "盲目坚信传统，排斥机械，以肉体硬抗钢铁。",
+            "event": "为保武馆，以纯粹血肉击退初期蒸汽打手。",
+            "behavior": "对外物极度排斥，行事刚烈不知变通。"
+          },
+          {
+            "episode_range": "1-5",
+            "phase": "被迫接受与力量反噬",
+            "state": "遭受挫折后强行融合外力，充满矛盾与痛苦。",
+            "event": "植入蒸汽泵，击败赏金猎人，但反噬重伤。",
+            "behavior": "以暴制暴，内心对机械力量既依赖又鄙夷。"
+          },
+          {
+            "episode_range": "6-8",
+            "phase": "全盘崩溃与真理觉醒",
+            "state": "失去一切后摒弃执念，认知底层逻辑。",
+            "event": "武馆被毁，在牢狱中顿悟热力学武学真谛。",
+            "behavior": "从狂躁转为平静，展现出对物理法则的深刻洞察。"
+          },
+          {
+            "episode_range": "9-12",
+            "phase": "重塑自我与新秩序",
+            "state": "实现新旧融合，成为新时代的引路人。",
+            "event": "击败阎十，化解大陆坠毁危机。",
+            "behavior": "从容、悲悯，超越了胜负欲，追求秩序的平衡。"
+          }
+        ]
+      },
+      {
+        "name": "燕十",
+        "archetype_arc": "flat_positive",
+        "lie": "只有纯粹的蒸汽机械理论能拯救下层区，旧武学是落后的糟粕。",
+        "truth": "（不变）科技应服务于人的尊严与自由。",
+        "milestones": [
+          {
+            "episode_range": "1-4",
+            "phase": "理性的旁观者",
+            "state": "作为武馆背景板，冷眼看待主角的‘野蛮’战法。",
+            "event": "被陆锋的血性打动，开始为其维护蒸汽设备。",
+            "behavior": "毒舌、务实，但关键时刻总会伸出援手。"
+          },
+          {
+            "episode_range": "5-8",
+            "phase": "忠诚的同行者",
+            "state": "价值观完全展现，在危机中坚守底线。",
+            "event": "冒死潜入重工社救援陆锋，联络反抗军。",
+            "behavior": "勇敢、冷静，用技术为反抗军提供保障。"
+          },
+          {
+            "episode_range": "9-12",
+            "phase": "新世界的建设者",
+            "state": "将科技与新武学结合，践行自己的真理。",
+            "event": "协助攻占控制室，战后建立新学院。",
+            "behavior": "成为新学院的首席机械导师，传承融合的火种。"
+          }
+        ]
+      }
+    ]
+  },
+  "foreshadow_blueprint": {
+    "threads": [
+      {
+        "id": "F1_PulseStone",
+        "name": "恩师的源石图纸",
+        "type": "Key_Item",
+        "plant_episodes": [
+          1,
+          2
+        ],
+        "harvest_episode": 8,
+        "salience_ladder": [
+          {
+            "ep": 1,
+            "level": "explicit",
+            "form": "源石核心投射出的神秘蒸汽管路图。"
+          },
+          {
+            "ep": 2,
+            "level": "action",
+            "form": "陆锋按照图纸改造身体，引发剧痛。"
+          }
+        ],
+        "spacing_rule": "连续铺垫后，在绝境中回收。",
+        "status": "已规划"
+      },
+      {
+        "id": "F2_Hearsay",
+        "name": "热力学的呼吸",
+        "type": "Lore_Hint",
+        "plant_episodes": [
+          3,
+          5
+        ],
+        "harvest_episode": 8,
+        "salience_ladder": [
+          {
+            "ep": 3,
+            "level": "subtle",
+            "form": "燕十警告陆锋高热正在破坏经脉，陆锋感到体内有‘不安分的风’。"
+          },
+          {
+            "ep": 5,
+            "level": "moderate",
+            "form": "阵仪机甲吸收能量的逻辑，让陆锋隐约察觉到规律。"
+          }
+        ],
+        "spacing_rule": "以感官描写递进，直至顿悟。",
+        "status": "已规划"
+      },
+      {
+        "id": "F3_Yan_Background",
+        "name": "燕十的出身",
+        "type": "Character_Backstory",
+        "plant_episodes": [
+          2,
+          7
+        ],
+        "harvest_episode": 10,
+        "salience_ladder": [
+          {
+            "ep": 2,
+            "level": "vague",
+            "form": "燕十极其了解重工社的安保系统。"
+          },
+          {
+            "ep": 7,
+            "level": "explicit",
+            "form": "燕十自述曾被重工社驱逐，因为反对量产人形兵器。"
+          }
+        ],
+        "spacing_rule": "逐步解密，为第10集的突入做战术支撑。",
+        "status": "已规划"
+      }
+    ]
+  },
+  "pacing_curve": {
+    "curve_type": "Aggressive_Valleys_and_Peaks",
+    "key_tension_points": [
+      {
+        "episode": 1,
+        "tension": 85,
+        "reason": "开局即高潮，迅速交代矛盾，展示拳拳到肉的动作戏。"
+      },
+      {
+        "episode": 4,
+        "tension": 90,
+        "reason": "突围战打脸，情绪达到第一阶段顶峰。"
+      },
+      {
+        "episode": 5,
+        "tension": 95,
+        "reason": "阵仪机甲战，首次面临降维打击，绝望感蔓延。"
+      },
+      {
+        "episode": 6,
+        "tension": 100,
+        "reason": "全盘皆输（All is lost），武馆被毁，主角入狱，物理层面的最大低谷。"
+      },
+      {
+        "episode": 8,
+        "tension": 70,
+        "reason": "真理揭示，低谷反弹，情绪转为震撼与期待。"
+      },
+      {
+        "episode": 11,
+        "tension": 100,
+        "reason": "最终决战，最高风险与最高回报的集中爆发点。"
+      }
+    ],
+    "genre_pace_profile": "极速开局（1集）- 密集爽点与战力飙升（2-5集）- 灵魂黑夜（6-7集）- 顿悟与绝地反击（8-10集）- 极限高潮与余波（11-12集）"
+  },
+  "revision_log": []
+}

@@ -130,19 +130,38 @@ def _build_prompt(bundle, worldview_profile, cast_profile,
     """构建 LLM 提示词：题材 + 世界观 + 人物 + 模板 → 要求输出完整宏观计划 YAML
 
     P18.2: conflict_warnings（③.5 冲突标记）注入为约束段。
+    P18 修复: 注入题材全量上下文（prompt 段/tracks/cast/禁忌）+ 世界观叙事引导 +
+              人物完整信息（名/原型/性格/弧光/人设标签），让 LLM 产出不再模糊。
     """
-    # 题材参数摘要
     genre_params = getattr(bundle, "genre_params", {}) or {}
     genre_name = getattr(bundle, "genre", "unknown")
-    genre_summary = _dict_summary(genre_params, ["title", "resolution_pattern",
-                                                  "pacing_curve", "main_track"])
 
-    # 世界观摘要
+    # 题材全量上下文
+    prompt_cfg = genre_params.get("prompt") or {}
+    tracks = genre_params.get("tracks") or []
+    cast_yaml = genre_params.get("cast") or []
+    taboo = genre_params.get("taboo_list") or []
+    emotion_arcs = genre_params.get("emotion_arcs") or []
+    conflict_types = genre_params.get("conflict_types") or []
+
+    tracks_text = "; ".join(f"{t.get('id','?')}={t.get('name','?')}" for t in tracks) if tracks else "（未定义）"
+    cast_yaml_text = ""
+    if cast_yaml:
+        cast_yaml_text = "\n".join(
+            f"  - {c.get('id','?')}（{c.get('role','?')}）: goals={c.get('goals',[])}; voice={c.get('voice_hint','')}"
+            for c in cast_yaml if isinstance(c, dict))
+    prompt_text = ""
+    if prompt_cfg:
+        prompt_text = f"角色={prompt_cfg.get('role','')}; 设定={prompt_cfg.get('setting','')[:100]}; 人物={prompt_cfg.get('characters','')[:100]}; 风格={prompt_cfg.get('style','')}"
+    taboo_text = "；".join(taboo) if taboo else "（无特殊禁忌）"
+    conflict_text = "; ".join(f"{c.get('type','')}({c.get('weight','')})" for c in conflict_types) if conflict_types else ""
+
+    # 世界观叙事引导（不只是枚举值，还给出创作方向提示）
     wv_text = ""
     if worldview_profile and hasattr(worldview_profile, "to_prompt_text"):
         wv_text = worldview_profile.to_prompt_text()
 
-    # 人物摘要
+    # 人物完整信息
     cast_text = _cast_summary(cast_profile)
 
     # 模板 beat 结构
@@ -163,30 +182,57 @@ def _build_prompt(bundle, worldview_profile, cast_profile,
                 "\n【⚠️ 跨层冲突约束（来自③.5检测，生成时必须遵守）】\n"
                 + "\n".join(lines) + "\n")
 
-    return f"""你是专业的故事编剧和叙事架构师。请根据以下输入，生成一份完整的宏观叙事计划。
+    return f"""你是一位经验丰富的故事编剧和叙事架构师。请基于以下详细设定，为这部{total_episodes}集的{genre_params.get('title', genre_name)}故事设计完整的宏观叙事计划。
 
-【题材】{genre_name}
-【题材参数】{genre_summary}
-【总集数】{total_episodes}
-【幕结构模板】{template_name}（beat 位置已按总集数映射）
+这是一个{prompt_text or '类型故事'}。
+故事设定：{prompt_cfg.get('setting', '（见世界观）')}
+核心人物：{prompt_cfg.get('characters', '（见人物阵容）')}
+风格要求：{prompt_cfg.get('style', '（自由发挥）')}
+硬性禁忌：{taboo_text}
+情感弧：{", ".join(emotion_arcs) or '（自由发挥）'}
+冲突结构：{conflict_text or '（见世界观L9）'}
 
-【世界观设定】
+【叙事轨道（故事的多线结构）】
+{tracks_text}
+
+【题材自带人物阵容】
+{cast_yaml_text or '（见下方人物阵容）'}
+
+【世界观设定（创作必须遵守的设定框架）】
 {wv_text or '（未提供世界观，请自行推导基础设定）'}
 
-【人物阵容】
-{cast_text or '（未提供人物，请自行推导主角和配角）'}
+【人物阵容（用户自定义的原型与弧光）】
+{cast_text or '（未提供自定义人物，请基于题材阵容推导主角和配角，赋予完整的弧光定义）'}
 
-【幕结构 beat 位置（必须遵循）】
+【幕结构 beat 位置（剧情节奏骨架，必须遵循）】
 {beat_text}
 {conflict_block}
 【输出要求】
 输出完整 YAML，包含以下六个顶层键（均不可省略）：
-1. story_blueprint: logline, thematic_argument(lie/truth/url), central_conflict(protagonist_want/protagonist_need/antagonist_want/stakes), story_type, total_episodes={total_episodes}, target_pace
-2. act_structure: template="{template_name}", acts(每幕含 id/name/episode_range/function/beats)
-3. episode_outlines: 列表，每条含 episode(1-{total_episodes})/synopsis/purpose/key_events/ends_with_hook/character_arc_focus
-4. arc_schedule: characters 列表，每个含 name/archetype_arc/lie/truth/milestones(episode_range/phase/state/event/behavior)
-5. foreshadow_blueprint: threads 列表，每个含 id/name/type/plant_episodes/harvest_episode/salience_ladder(ep/level/form)/spacing_rule/status
-6. pacing_curve: curve_type, key_tension_points(episode/tension/reason), genre_pace_profile
+
+1. story_blueprint:
+   - logline: 一句话概括全书核心冲突（必须有具体的人物名和处境，不能泛泛）
+   - thematic_argument: lie（开场错误信念）/ truth（故事要证明的真相）/ url（反方论点）
+   - central_conflict: protagonist_want（表面想要）/ protagonist_need（真实需要）/ antagonist_want（对手想要）/ stakes（失败的后果）
+   - story_type: 故事类型
+   - total_episodes: {total_episodes}
+   - target_pace: 节奏定调
+
+2. act_structure: template="{template_name}", acts（每幕含 id/name/episode_range/function/beats，beats 的 name 和 desc 必须具体化到本故事的人物和处境）
+
+3. episode_outlines: {total_episodes} 条，每条含 episode/synopsis（2-3 句具体梗概，提到人物名和事件）/purpose（对应 beat 名）/key_events（3-5 个本章必须发生的具体事件）/ends_with_hook（章末钩子）/character_arc_focus（本章角色弧光焦点）
+
+4. arc_schedule: characters 列表，每个含 name/archetype_arc/lie/truth/milestones（每个里程碑必须含 episode_range/phase/state/event（触发事件）/behavior（角色在此阶段的外显行为））
+
+5. foreshadow_blueprint: threads 列表（3-5 条），每个含 id/name/type/plant_episodes/harvest_episode/salience_ladder（每层含 ep/level/form，form 要具体描述伏笔的呈现方式）/spacing_rule/status
+
+6. pacing_curve: curve_type, key_tension_points（每集一条，含 episode/tension(0-1)/reason（为什么这集是这个张力值））, genre_pace_profile
+
+关键要求：
+- 所有人物名必须使用上面提供的人物名（题材阵容或自定义阵容），不要用「主角」「配角」等泛称
+- 每条梗概、beat 描述、弧光里程碑都必须提到具体人物名和具体事件
+- logline 必须包含人物名+处境+核心抉择，不能是「一个X在Y世界中Z」的模板句
+- foreshadow 的 form 字段必须描述具体的伏笔呈现方式（如「一封未拆的信」而非「线索」
 
 只输出 YAML，不要解释、前言后语或 markdown 代码围栏。
 """
