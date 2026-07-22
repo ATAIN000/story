@@ -164,8 +164,8 @@ tests/test_engine.py         赌注1/赌注4/核心循环回归测试
 | DELETE | /api/project/plan | 作废待批准方案 |
 | POST | /api/project/rollback | 回滚到指定 tick（`{"tick": 14}`） |
 | POST | /api/project/reset | 重置项目 |
-| POST | /api/gacha/draw | 抽卡开局：library 随机组合 / synth LLM 合成（lock 锁栏，mock 恒降级） |
-| POST | /api/gacha/confirm | 确认抽卡：synth 落盘 plugins/genres/ + registry 重扫 → init 切换；可选 project_name 开新项目（409 重名） |
+| POST | /api/gacha/draw | 抽卡开局：library 返回题材列表 / synth LLM 合成（mock 恒降级） |
+| POST | /api/gacha/confirm | 确认抽卡：card={genre:{name,source,yaml?}} + 可选 worldview/project_name；synth 落盘 + init 切换 |
 | POST | /api/project/init | 开局切换：reset + 按 genre/culture 重建单例（进程内覆盖不写 env） |
 | GET | /api/projects | 项目列表（扫描 data/projects/*，含 current 字段；老项目补写 project.json） |
 | POST | /api/projects/open | 续旧切换：恢复项目自身 genre/culture 整栈重建（404 不存在 / 422 组合非法） |
@@ -195,11 +195,14 @@ tests/test_engine.py         赌注1/赌注4/核心循环回归测试
 
 ## 抽卡开局（Gacha）
 
-独立开局页：随机抽一组「题材 × 文化 × 人物原型 × 世界规则」开局配置，不喜欢就换，喜欢就开工。
+独立开局页：选题材 → 选世界观骨架 → 十层向导微调 → 开工。
 
 - **入口**：左侧 nav「开局」段（置于系统段上方）；写作台零章空态也有「抽卡开局」CTA
 - **两模式**：
-  - **库内组合（library）**：registry 现有题材（29 个）× 文化 × 人物原型/世界规则包随机组合，零 LLM；「换一批」整套重抽，「换这张」单换一栏（其余栏锁定）
+  - **题材选择（library）**：全量 registry 题材列表（29 个）以卡片网格展示，
+    每张卡显示题材名/气质一句话/自带文化徽标/自带阵容摘要，点击选中即可；零 LLM。
+    文化从题材的 `allowed_cultures` 自带（无需手动选），世界规则由世界观向导产出
+    （取代旧的随机抽包栏）
   - **AI 自由发挥（synth）**：LLM 以 mystery.yaml 为模板锚现场合成新题材包，H7 检查集机器校验，失败带反馈重试 1 次，仍失败自动降级为库内组合（卡面 note 说明）；mock 模式恒走库内卡（零 LLM 调用）
 - **确认即入库 + 切换**：确认开工后，AI 合成的题材复核落盘 `plugins/genres/`（重名自动 -2 后缀、原子写）并 `registry.reload()` 立即可选；随后 reset 清库 + 同一 Kernel 上按新 genre/culture 重建引擎（进程内覆盖，不改 env/.env，重启回落），直接进第一章 plan。已有章节时先弹重置确认框（可取消）。确认成功后前端**整页刷新**落写作台（P11.2：刷新后 SPA 重拉配置与项目快照，状态天然对齐；失败路径不刷新，停留弹层可重试）
 
@@ -211,7 +214,8 @@ tests/test_engine.py         赌注1/赌注4/核心循环回归测试
 注入生成管线。架构定义 10 层 71 参数（存在论/宇宙学/物理环境/力量体系/物种生态/
 社会结构/文化与信仰/历史与时间线/认知与真相/存在级冲突），所有取值均为合法枚举。
 
-- **三段式向导**（抽卡页内 stage 状态机）：①题材四栏（P8.6 原貌）→ ②骨架选择
+- **三段式向导**（抽卡页内 stage 状态机）：①题材选择（单栏卡片网格，
+  P13 简化自旧四栏）→ ②骨架选择
   （十卡 + 随机 + 空白自定义）→ ③十层分步向导（左进度轨 + 右参数卡片）
 - **十骨架**：现实本格 / 修真问道 / 武侠江湖 / 克苏鲁神话 / 赛博朋克 / 西幻史诗 /
   山海志怪 / 无限流 / 末日废土 / 都市灵异——每骨架预填全部 71 参数，选中即预填进

@@ -441,11 +441,14 @@ export function toMetaConfigVM(cfg) {
  * confirm 领土，视图另持原始卡作 confirm payload）；rule_packs 缺省 []；
  * note 恒 string|null（synth 降级/mock 短路说明，视图 toast）；空 archetype
  * （库内无原型包）→ name ''，视图兜底文案。 */
+/* P13：CARD 精简为 {mode, genre:{name,source,desc,yaml?}, note}。
+ * 前端按题材列表 draw 返回 {mode,genres:[{name,title,desc,culture_title,
+ * cast_summary}]} 单独处理；synth 返回精简卡用此 adapter。
+ * genre.yaml 不消费（synth 落盘复核是后端 confirm 领土，视图另持原始卡作
+ * confirm payload）；note 恒 string|null（synth 降级/mock 短路说明，视图 toast）。 */
 export function toGachaCardVM(card) {
   if (!card) return null
   const genre = card.genre ?? {}
-  const culture = card.culture ?? {}
-  const arch = card.archetype ?? {}
   return {
     mode: card.mode ?? 'library',
     genre: {
@@ -453,20 +456,25 @@ export function toGachaCardVM(card) {
       source: genre.source ?? 'library',   // library | synth（徽标文案由视图映射）
       desc: genre.desc ?? '',
     },
-    culture: {
-      name: culture.name ?? '',
-      desc: culture.desc ?? '',
-    },
-    archetype: {
-      name: arch.name ?? '',
-      desc: arch.desc ?? '',
-      voiceHint: arch.voice_hint ?? '',
-    },
-    rulePacks: (card.rule_packs ?? []).map(p => ({
-      name: p.name ?? '',
-      desc: p.desc ?? '',
-    })),
     note: card.note ?? null,
+  }
+}
+
+/* P13：题材列表 draw 返回 → 前端题材选择网格 VM。
+ * 输入 {mode, genres:[{name,title,desc,culture_title,cast_summary}], note}
+ * → 透传（字段已全量；视图直接渲染卡片网格）。 */
+export function toGenreListVM(raw) {
+  if (!raw) return null
+  return {
+    mode: raw.mode ?? 'library',
+    genres: (raw.genres ?? []).map(g => ({
+      name: g.name ?? '',
+      title: g.title ?? g.name ?? '',
+      desc: g.desc ?? '',
+      cultureTitle: g.culture_title ?? '',
+      castSummary: g.cast_summary ?? [],
+    })),
+    note: raw.note ?? null,
   }
 }
 

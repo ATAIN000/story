@@ -74,31 +74,20 @@ class TestGachaDraw(unittest.TestCase):
         from story_engine.kernel import Kernel
         return Kernel(tmpdir, plugin_dir=self.PLUGIN_DIR, **kw)
 
-    def test_draw_library_fields_complete_and_lock(self):
+    def test_draw_library_returns_genre_list(self):
         import tempfile
         from story_engine.meta.gacha import draw_card
         with tempfile.TemporaryDirectory() as d:
             k = self._kernel(d)
             try:
-                card = draw_card(k, None, "library", None)
-                for key in ("mode", "genre", "culture", "archetype", "rule_packs", "note"):
-                    self.assertIn(key, card)
-                self.assertEqual(card["mode"], "library")
-                self.assertEqual(card["genre"]["source"], "library")
-                for key in ("name", "desc", "voice_hint"):
-                    self.assertIn(key, card["archetype"])
-                self.assertTrue(card["rule_packs"])
-                # lock 全四栏：锁定后重抽各栏不变
-                lock = {"genre": card["genre"]["name"],
-                        "culture": card["culture"]["name"],
-                        "archetype": card["archetype"]["name"],
-                        "rule_packs": [p["name"] for p in card["rule_packs"]]}
-                locked = draw_card(k, None, "library", lock)
-                self.assertEqual(locked["genre"]["name"], card["genre"]["name"])
-                self.assertEqual(locked["culture"]["name"], card["culture"]["name"])
-                self.assertEqual(locked["archetype"]["name"], card["archetype"]["name"])
-                self.assertEqual(sorted(p["name"] for p in locked["rule_packs"]),
-                                 sorted(p["name"] for p in card["rule_packs"]))
+                result = draw_card(k, None, "library", None)
+                self.assertEqual(result["mode"], "library")
+                self.assertIn("genres", result)
+                self.assertTrue(result["genres"])
+                # 每条题材卡结构完整
+                for item in result["genres"]:
+                    for key in ("name", "title", "desc", "culture_title", "cast_summary"):
+                        self.assertIn(key, item)
             finally:
                 k.close()
 
@@ -113,18 +102,20 @@ class TestGachaDraw(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as d:
             # 显式 mock pool（不依赖环境变量）：synth 模式 + 注入 fake，
-            # mock 短路在注入点之前 → 恒降级 library 卡，零 LLM 调用（硬约束）
+            # mock 短路在注入点之前 → 恒降级精简卡，零 LLM 调用（硬约束）
             k = self._kernel(d, llm_pool=LLMPool(mode="mock"))
             try:
                 card = draw_card(k, fake, "synth", None)
                 self.assertEqual(calls, [])
-                self.assertEqual(card["mode"], "library")
-                self.assertTrue(card["note"])
+                self.assertTrue(card["note"])       # 降级说明
+                self.assertNotIn("culture", card)   # P13：精简卡无 culture 栏
+                self.assertNotIn("archetype", card)
+                self.assertNotIn("rule_packs", card)
             finally:
                 k.close()
 
     def test_draw_endpoint_mock_draw_never_calls_llm(self):
-        # 端点 synth 模式 + mock 池：恒降级 library 卡（硬约束：零 LLM 调用）。
+        # 端点 synth 模式 + mock 池：恒降级精简卡（硬约束：零 LLM 调用）。
         # 测试进程内 backend 单例按 .env 真实配置为非 mock（见 conftest），
         # 故临时把 pool.mode 拨回 mock 验证短路，finally 还原。
         from fastapi.testclient import TestClient
@@ -139,27 +130,26 @@ class TestGachaDraw(unittest.TestCase):
             r = c.post("/api/gacha/draw", json={"mode": "synth"})
             self.assertEqual(r.status_code, 200, r.text)
             card = r.json()
-            self.assertEqual(card["genre"]["source"], "library")
+            self.assertNotIn("culture", card)   # P13：精简卡
             self.assertTrue(card["note"])
         finally:
             pool.mode = saved_mode
 
-    def test_draw_endpoint_returns_card(self):
+    def test_draw_endpoint_returns_genre_list(self):
         from fastapi.testclient import TestClient
         from conftest import import_backend_main
         backend = import_backend_main()
         c = TestClient(backend.app)
         r = c.post("/api/gacha/draw", json={"mode": "library"})
         self.assertEqual(r.status_code, 200, r.text)
-        card = r.json()
-        for key in ("genre", "culture", "archetype", "rule_packs"):
-            self.assertIn(key, card)
-        self.assertEqual(card["genre"]["source"], "library")
-        # 端点锁栏：锁定 genre 后重抽不变
-        r2 = c.post("/api/gacha/draw",
-                    json={"mode": "library", "lock": {"genre": card["genre"]["name"]}})
-        self.assertEqual(r2.status_code, 200, r2.text)
-        self.assertEqual(r2.json()["genre"]["name"], card["genre"]["name"])
+        body = r.json()
+        self.assertEqual(body["mode"], "library")
+        self.assertIn("genres", body)
+        self.assertTrue(body["genres"])
+        # 每条题材卡结构完整
+        for item in body["genres"]:
+            for key in ("name", "title", "desc", "culture_title", "cast_summary"):
+                self.assertIn(key, item)
 
 
 # P8.4：可通过校验的合成包（VALID_YAML，供 synth 用例复用）
@@ -271,8 +261,10 @@ class TestGachaSynth(unittest.TestCase):
                 self.assertEqual(card["mode"], "library")          # 降级仍是合法卡
                 self.assertEqual(card["genre"]["source"], "library")
                 self.assertIn("AI 合成失败", card["note"])
-                for key in ("culture", "archetype", "rule_packs"):
-                    self.assertIn(key, card)
+                # P13：精简卡无 culture/archetype/rule_packs
+                self.assertNotIn("culture", card)
+                self.assertNotIn("archetype", card)
+                self.assertNotIn("rule_packs", card)
             finally:
                 k.close()
 
@@ -309,8 +301,7 @@ class TestGachaConfirmInit(unittest.TestCase):
                 "genre": {"name": name, "source": source, "desc": "d",
                           "yaml": yaml_pack} if source == "synth" else
                          {"name": name, "source": source, "desc": "d"},
-                "culture": {"name": culture},
-                "archetype": {"name": ""}, "rule_packs": [], "note": None}
+                "note": None}
 
     def test_confirm_synth_persists_and_init_switches(self):
         from fastapi.testclient import TestClient
@@ -408,8 +399,8 @@ class TestGachaConfirmInit(unittest.TestCase):
             self._restore(backend, *orig)
 
     def test_confirm_culture_bound_mismatch_422_not_persisted(self):
-        """终审修复2：culture_bound 包与卡文化不匹配 → 422 且不落盘
-        （否则文件已注册、init 却 422，落盘与项目状态不一致）。"""
+        """P13：allowed_cultures 引用不存在的文化 → 422 且不落盘
+        （否则文件已注册、init 却崩，落盘与项目状态不一致）。"""
         from fastapi.testclient import TestClient
         backend = self._backend()
         orig = (backend.engine.genre.name, backend.engine.culture.name)
@@ -418,10 +409,10 @@ class TestGachaConfirmInit(unittest.TestCase):
         try:
             pack = yaml.safe_load(VALID_YAML)
             pack["culture_bound"] = True
-            pack["allowed_cultures"] = ["nordic_saga"]  # 不含卡文化
+            pack["allowed_cultures"] = ["nordic_saga"]  # 不存在的文化
             r = c.post("/api/gacha/confirm", json=self._card(pack))
             self.assertEqual(r.status_code, 422, r.text)
-            self.assertIn("culture_bound", r.json()["detail"])
+            self.assertIn("已注册文化", r.json()["detail"])
             self.assertFalse(probe.exists())              # 不落盘
             self.assertEqual(backend.engine.genre.name, orig[0])  # 不切换
         finally:

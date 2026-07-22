@@ -247,15 +247,15 @@ class TestProjectOpenAndConfirmSwitch(unittest.TestCase):
         with tempfile.TemporaryDirectory() as root:
             backend.PROJECTS_ROOT = Path(root)
             try:
-                # alpha：非默认题材/文化（isekai-romance×jianghu-martial，区别于
-                # env 默认 mystery×confucian_officialdom，open 恢复题材才可判别；
+                # alpha：非默认题材（isekai-romance，区别于 env 默认 mystery；
+                # P13：文化从题材 allowed_cultures 推导——isekai-romance 通配，
+                # 推导为 confucian_officialdom。open 恢复题材才可判别；
                 # 不选 romance：其 world_rules 引用 WORLD_FACT_TYPES 未声明的事实，
                 # 生成即 KeyError——既有缺陷，本任务不修）
                 # 确认建项目并生成 1 章；beta：默认卡，0 章
                 r = self.client.post("/api/gacha/confirm",
                                      json=self._card("alpha",
-                                                     genre="isekai-romance",
-                                                     culture="jianghu-martial"))
+                                                     genre="isekai-romance"))
                 self.assertEqual(r.status_code, 200, r.text)
                 r = self.client.post("/api/project/generate")
                 self.assertEqual(r.status_code, 200, r.text)
@@ -271,11 +271,11 @@ class TestProjectOpenAndConfirmSwitch(unittest.TestCase):
                 self.assertTrue(body["ok"])
                 self.assertEqual(body["project"]["project"], "alpha")
                 self.assertEqual(body["project"]["genre"], "isekai-romance")
-                self.assertEqual(body["project"]["culture"], "jianghu-martial")
+                self.assertEqual(body["project"]["culture"], "confucian_officialdom")
                 self.assertEqual(body["project"]["chapter_count"], 1)
                 # engine 单例同步恢复（后续 generate 用 alpha 题材而非 env 默认）
                 self.assertEqual(backend.engine.genre.name, "isekai-romance")
-                self.assertEqual(backend.engine.culture.name, "jianghu-martial")
+                self.assertEqual(backend.engine.culture.name, "confucian_officialdom")
                 snap = self.client.get("/api/project").json()
                 self.assertEqual(snap["meta"]["project"], "alpha")
                 self.assertEqual(snap["meta"]["genre"], "isekai-romance")

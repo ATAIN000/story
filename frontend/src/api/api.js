@@ -57,9 +57,10 @@ export const api = {
   /* --- Meta-Generator（题材配置，FE-4 用） --- */
   metaConfig: (intent) => post('/api/meta/config', intent),
 
-  /* --- 抽卡开局（P8.3-P8.5；confirm body = draw 返回的卡原样，含 synth 的 genre.yaml） --- */
-  /* P10.4：projectName 给了则平铺 project_name 键开新项目（重名 → 409，失败零副作用） */
-  gachaDraw: (mode = 'library', lock = null) => post('/api/gacha/draw', { mode, lock }),
+  /* --- 抽卡开局（P13 简化：library 返回题材列表，synth 走 LLM 合成） ---
+     confirm body = {mode, genre:{name,source,yaml?}, note}，worldview 可选；
+     projectName 给了则平铺 project_name 键开新项目（重名 → 409，失败零副作用） */
+  gachaDraw: (mode = 'library') => post('/api/gacha/draw', { mode }),
   gachaConfirm: (card, projectName = null) =>
     post('/api/gacha/confirm', projectName ? { ...card, project_name: projectName } : card),
   projectInit: (genre, culture) => post('/api/project/init', { genre, culture }),

@@ -62,7 +62,7 @@ from story_engine.hitl import (  # noqa: E402
 from story_engine.kernel import Kernel, LLMPool  # noqa: E402
 from story_engine.llm import LLMError  # noqa: E402
 from story_engine.meta import MetaGenerator, UserIntent  # noqa: E402
-from story_engine.meta.gacha import draw_card_async  # noqa: E402
+from story_engine.meta.gacha import draw_card_async, derive_culture  # noqa: E402
 from story_engine.meta.genre_validator import validate_genre_pack  # noqa: E402
 from story_engine.types import StoryEngineError  # noqa: E402
 from story_engine.worldview import (  # noqa: E402
@@ -261,11 +261,9 @@ class SettingsReq(BaseModel):
 
 
 class GachaDrawReq(BaseModel):
-    """抽卡 body（P8.3 library / P8.4 synth）：mode=library|synth；
-    lock 锁定任意栏（genre/culture/archetype 为名称 str，rule_packs 为名称
-    str 或 list；键缺省/值为 None 视为未锁定，宽容处理见 meta.gacha）。"""
+    """抽卡 body（P13 简化）：mode=library 返回题材列表（单栏点选）；
+    mode=synth 走 LLM 合成。lock 不再需要（单栏无锁）。"""
     mode: Literal["library", "synth"] = "library"
-    lock: dict[str, Any] | None = None
 
 
 class TestLlmReq(BaseModel):
@@ -872,13 +870,13 @@ def worldview_evaluate_endpoint(req: WorldviewEvaluateReq):
 # ---------- 抽卡开局（P8.3 library / P8.4 synth，独立开局页：题材×文化×原型×规则） ----------
 @app.post("/api/gacha/draw")
 async def gacha_draw(req: GachaDrawReq):
-    """【P8.3/P8.4】抽一张开局卡。library 纯 registry 读取，零 LLM；
+    """【P13 简化】library 模式返回全量题材列表（单栏点选，零 LLM）；
     synth 注入 kernel.llm.call 走 LLM 合成 + 校验 + 重试 + 降级——
     mock 短路在 meta.gacha 内部、LLM 调用之前（is_mock 判据），
-    mock 部署下恒降级 library 卡，本端点不做真实 LLM 调用。"""
+    mock 部署下恒降级精简卡，本端点不做真实 LLM 调用。"""
     try:
         return await draw_card_async(engine.kernel, engine.kernel.llm.call,
-                                     req.mode, req.lock)
+                                     req.mode)
     except StoryEngineError as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -989,7 +987,6 @@ def gacha_confirm(card: dict):
     g = card.get("genre") or {}
     persisted = False
     name = g.get("name")
-    culture = (card.get("culture") or {}).get("name") or "confucian_officialdom"
     if g.get("source") == "synth":
         pack = g.get("yaml")
         if not isinstance(pack, dict) \
@@ -1011,15 +1008,27 @@ def gacha_confirm(card: dict):
             raise HTTPException(status_code=422,
                                 detail=f"合成包未过校验：{'；'.join(errs)}")
         allowed = pack.get("allowed_cultures") or ["*"]
-        if pack.get("culture_bound") and "*" not in allowed \
-                and culture not in allowed:
-            raise HTTPException(
-                status_code=422,
-                detail=f"题材 {pack['name']} 为 culture_bound，仅允许 "
-                       f"{allowed}，与卡文化 {culture} 不匹配")
+        culture = derive_culture(allowed)
+        # P13：文化从 allowed_cultures 推导；验证推导结果在 registry 已注册
+        # （allowed_cultures 引用不存在的文化 → 422 不落盘，口径同 init）
+        if "*" not in allowed:
+            reg_cultures = engine.kernel.registry.list_plugins(
+                "story.culture")["story.culture"]
+            if culture not in reg_cultures:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"题材 {pack['name']} 的 allowed_cultures "
+                           f"{allowed} 中无已注册文化（首条 {culture} 不在 registry）")
         name = _persist_genre_pack(pack)
         engine.kernel.registry.reload()
         persisted = True
+    else:
+        # P13：文化从题材 allowed_cultures 自带（不再从 card.culture 读取）
+        try:
+            m = engine.kernel.registry.get_manifest("story.genre", name)
+            culture = derive_culture(m.allowed_cultures)
+        except Exception:
+            culture = "confucian_officialdom"
     if not name:
         raise HTTPException(status_code=422, detail="卡缺 genre.name")
     if project_name is not None:

@@ -1,12 +1,18 @@
-"""抽卡开局（Gacha）：库内随机组合 / LLM 合成题材
+"""抽卡开局（Gacha）：题材列表 / LLM 合成题材
 
-library 模式（P8.3）：从 registry 现有题材/文化/角色原型/世界规则包中
-随机组合一张开局卡，支持 lock 锁定栏位（前端「单换一栏」依赖），纯同步零 LLM。
+【P13 简化】library 模式返回**题材列表**（全量 registry 题材 + 气质/文化/阵容摘要），
+前端单栏点选；synth 模式不变（LLM 合成 genre 包）。CARD 结构简化为
+{mode, genre:{name,source,desc,yaml?}, note}——删除 culture/archetype/rule_packs 三栏
+（世界观向导已取代世界规则栏，文化从题材 allowed_cultures 自带，阵容从 cast 自带）。
+
 synth 模式（P8.4）：draw_card_async 在非 mock 时调 _synth_genre——LLM 现场
 合成 genre 包（mystery.yaml 全文作模板锚），validate_genre_pack 校验，
 失败带错误反馈重试 1 次，仍失败/调用异常则降级保留 library 卡并写 note。
 mock 短路在注入点之前：llm_call 为 None 或 kernel.llm.is_mock 时恒降级
 library 卡（硬约束：mock 模式零 LLM 调用），两处判据冗余并存，任一生效即短路。
+
+synth 内部仍用 _draw_library_card 构建四栏上下文（供 _synth_prompt 使用），
+但返回前经 _simplify_card 精简为 {mode, genre, note}。
 """
 from __future__ import annotations
 
@@ -23,24 +29,20 @@ from .genre_validator import (
 
 def draw_card(kernel, llm_call=None, mode: str = "library",
               lock: dict | None = None) -> dict:
-    """抽一张开局卡（纯同步，零 LLM；synth 合成走 draw_card_async）。
+    """抽卡入口（纯同步，零 LLM；synth 合成走 draw_card_async）。
 
-    - mode="library"：全部栏位从 registry 库内随机；lock 可锁定任意栏——
-      {"genre"/"culture"/"archetype": 名称str, "rule_packs": 名称str或名称list}，
-      键缺省或值为 None 视为未锁定；锁定名不在库内时回退随机（宽容：
-      前端可能带着上一轮卡面名单重抽，库内已被 reload 改变）。
-    - mode="synth"：本同步路径只负责 mock 短路降级——llm_call 为 None 或
-      kernel.llm.is_mock 时恒返回 library 卡 + note（硬约束：mock 零 LLM 调用）；
-      非 mock 的合成流程必须用 async 入口 draw_card_async。
+    - mode="library"（P13）：返回题材列表（全量 registry 题材，含 title/desc/
+      culture_title/cast_summary），前端单栏点选。lock 不再需要（单栏无锁）。
+    - mode="synth"：mock 短路降级——llm_call 为 None 或 kernel.llm.is_mock 时
+      恒返回精简卡 + note（硬约束：mock 零 LLM 调用）；非 mock 走 async 入口。
     """
-    card = _draw_library(kernel, lock or {})
     if mode == "library":
-        return card
+        return _genre_list(kernel)
     if mode == "synth":
-        # mock 短路（llm_call None / is_mock 冗余双判据，任一生效即降级）；
-        # 非 mock 走这里说明调用方绕过了 draw_card_async，同样按降级处理
-        card["note"] = "当前为 mock 模式，AI 自由发挥不可用，已换成库内组合"
-        return card
+        card = _draw_library_card(kernel, lock or {})
+        result = _simplify_card(card)
+        result["note"] = "当前为 mock 模式，AI 自由发挥不可用，已换成库内组合"
+        return result
     raise StoryEngineError(f"未知抽卡模式：{mode}")
 
 
@@ -51,9 +53,12 @@ async def draw_card_async(kernel, llm_call=None, mode: str = "library",
     mock 短路在 LLM 调用之前：llm_call 为 None 或 kernel.llm.is_mock 时
     落回同步 draw_card 的降级分支（零 LLM 调用）；library 模式直接同步返回。
     """
+    if mode == "library":
+        return _genre_list(kernel)
     if mode == "synth" and llm_call is not None and not kernel.llm.is_mock:
-        card = _draw_library(kernel, lock or {})
-        return await _synth_genre(card, llm_call)
+        card = _draw_library_card(kernel, lock or {})
+        synthed = await _synth_genre(card, llm_call)
+        return _simplify_card(synthed)
     return draw_card(kernel, llm_call, mode, lock)
 
 
@@ -158,7 +163,89 @@ def _template_anchor() -> str:
         return "#（模板文件缺失）"
 
 
-def _draw_library(kernel, lock: dict) -> dict:
+# ---------- P13：题材列表（library 模式返回前端点选网格） ----------
+
+def _genre_list(kernel) -> dict:
+    """library 模式：遍历全量 registry 题材 → 列表（title/desc/culture_title/
+    cast_summary），前端单栏点选。不再随机抽文化/原型/规则栏。"""
+    reg = kernel.registry
+    genres = reg.list_plugins("story.genre")["story.genre"]
+    if not genres:
+        raise StoryEngineError("registry 无可用题材包（plugins 未加载）")
+    dm = reg.display_map()
+    items = []
+    for name in sorted(genres):
+        try:
+            m = reg.get_manifest("story.genre", name)
+        except Exception:
+            continue
+        params = m.params
+        title = params.get("title") or name
+        desc = (params.get("resolution_pattern")
+                or str(params.get("pacing_curve", ""))[:40]
+                or name)
+        culture_title = _culture_title_for(m, dm)
+        cast_summary = _cast_summary(params)
+        items.append({"name": name, "title": title, "desc": desc,
+                      "culture_title": culture_title,
+                      "cast_summary": cast_summary})
+    return {"mode": "library", "genres": items, "note": None}
+
+
+def _culture_title_for(manifest, dm: dict) -> str:
+    """题材卡文化徽标：取 allowed_cultures 首条（通配回默认），映射显示名。"""
+    allowed = manifest.allowed_cultures or ["*"]
+    if "*" in allowed or not allowed:
+        cid = "confucian_officialdom"
+    else:
+        cid = allowed[0]
+    return dm.get(cid, cid)
+
+
+def _cast_summary(params: dict) -> list[str]:
+    """题材卡阵容摘要：L1 cast: 段 id 列表（≤8），或 L2 prompt.characters 原文片段。"""
+    cast = params.get("cast")
+    if isinstance(cast, list):
+        names = [str(c.get("id") or "").strip()
+                 for c in cast if isinstance(c, dict)]
+        names = [n for n in names if n]
+        if names:
+            return names[:8]
+    prompt = params.get("prompt") or {}
+    chars = prompt.get("characters")
+    if isinstance(chars, str) and chars.strip():
+        return [chars.strip()[:60]]
+    return []
+
+
+# ---------- P13：CARD 精简 ----------
+
+def _simplify_card(card: dict) -> dict:
+    """内部四栏卡 → 精简 CARD {mode, genre:{name,source,desc,yaml?}, note}。
+    删除 culture/archetype/rule_packs（P13 去重：文化自带、规则由世界观向导产出）。"""
+    return {
+        "mode": card.get("mode", "library"),
+        "genre": card.get("genre") or {},
+        "note": card.get("note"),
+    }
+
+
+# ---------- P13：文化推导（confirm 从题材自带取，不再从 card.culture 读） ----------
+
+def derive_culture(allowed_cultures: list | None) -> str:
+    """从题材的 allowed_cultures 推导文化 id：通配或缺省 → 默认 confucian_officialdom；
+    否则取首条。confirm 端点用此取代 card.culture.name 读取。"""
+    allowed = allowed_cultures or ["*"]
+    if "*" in allowed or not allowed:
+        return "confucian_officialdom"
+    return allowed[0]
+
+
+# ---------- 内部：synth 四栏上下文（仅供 _synth_prompt，不暴露前端） ----------
+
+def _draw_library_card(kernel, lock: dict) -> dict:
+    """内部：构建四栏卡供 synth 提示词上下文。P13 前是 library 模式的返回体，
+    现仅 synth 内部消费——前端不再看到 culture/archetype/rule_packs 栏。"""
     reg = kernel.registry
     genres = reg.list_plugins("story.genre")["story.genre"]
     cultures = reg.list_plugins("story.culture")["story.culture"]

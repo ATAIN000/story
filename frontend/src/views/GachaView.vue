@@ -1,20 +1,17 @@
 <script setup>
-/* 抽卡开局页（P8.6/P10.4/P12.5）：三段式世界观向导
- *   段 1 题材四栏（P8.6 原貌保留）→ 段 2 骨架选择（10 卡+随机+空白）
- *   → 段 3 十层向导（左进度轨 + 右参数卡片 + 级联 evaluate）→ 确认开工
+/* 抽卡开局页（P13 简化：题材 + 世界观两段式）
+ *   段 1 题材选择（单栏卡片网格，全量 registry 题材列表）→ 段 2 骨架选择
+ *   （10 卡+随机+空白）→ 段 3 十层向导 → 确认开工
  *
- * 段 1 主题逻辑（draw/lock/synth/确认弹层）逐字保留：P8.3 抽卡、P8.4 synth
- * 题材、P10.4 项目名弹层两选、P11.2 整页刷新。P12.5 仅在外层加壳：
- *   - stage 状态机（'theme' | 'skeleton' | 'wizard'）
- *   - 段 2 骨架卡选中 → 预填 wvProfile → 进段 3
- *   - 段 3 每次改选 → debounce POST /api/worldview/evaluate → 收窄 chip + 标红违例
- *   - 确认开工：先全量 evaluate（violations 必须空）→ confirm 带 worldview
+ * P13 变更：删除四栏（题材×文化×原型×规则），文化从题材 allowed_cultures
+ * 自带（后端 confirm 推导），世界规则由世界观向导产出取代随机抽包栏。
+ * synth 模式（让 AI 自由发挥）保留不变。
  *
  * a11y：层/卡 aria-label、chips role="group"、键盘可达、对话框焦点圈保留。
  */
 import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { api } from '../api/api'
-import { toGachaCardVM, displayName, toWorldviewSchemaVM, toEvaluateVM } from '../api/adapters'
+import { toGachaCardVM, toGenreListVM, displayName, toWorldviewSchemaVM, toEvaluateVM } from '../api/adapters'
 import { presetToLayers } from '../api/worldviewPresets'
 import { useToast } from '../composables/useToast'
 import AppIcon from '../components/AppIcon.vue'
@@ -28,10 +25,11 @@ defineEmits(['refresh', 'navigate'])
 const { toast, toastError } = useToast()
 const dn = (id) => displayName(props.config, id)
 
-/* ===== 段 1：题材四栏（P8.6 原貌，逐字保留） ===== */
-const rawCard = ref(null)
-const card = computed(() => toGachaCardVM(rawCard.value))
-const drawing = ref(false)
+/* ===== 段 1：题材选择（P13 简化） ===== */
+const genreList = ref(null)                // toGenreListVM 输出
+const genres = computed(() => genreList.value?.genres ?? [])
+const listLoading = ref(false)
+const selectedGenre = ref(null)            // 选中题材 name
 const synthLoading = ref(false)
 const synthElapsed = ref(0)
 let synthTimer = null
@@ -39,18 +37,21 @@ const startOpen = ref(false)
 const startMode = ref('current')
 const projectName = ref('')
 const confirmBusy = ref(false)
+/* synth 模式产出的精简卡（source=synth 时存 genre yaml） */
+const synthCard = ref(null)
 
 const startBtn = ref(null)
 const dialogEl = ref(null)
 const cancelBtn = ref(null)
 
 const chapterCount = computed(() => (props.project?.chapters ?? []).length)
-const busy = computed(() => drawing.value || confirmBusy.value)
+const busy = computed(() => listLoading.value || confirmBusy.value)
 
 const NAME_RE = /^[\p{L}\p{N} _-]+$/u
 const RESERVED_RE = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i
+const selectedGenreVM = computed(() => genres.value.find(g => g.name === selectedGenre.value) ?? null)
 const suggestedName = computed(() => {
-  const g = card.value?.genre.name || 'story'
+  const g = selectedGenre.value || synthCard.value?.genre?.name || 'story'
   const d = new Date()
   const mm = String(d.getMonth() + 1).padStart(2, '0')
   const dd = String(d.getDate()).padStart(2, '0')
@@ -63,27 +64,31 @@ const nameValid = computed(() => {
     && NAME_RE.test(n) && !RESERVED_RE.test(n)
 })
 
-const COLS = [
-  { key: 'genre', label: '题材' },
-  { key: 'culture', label: '文化' },
-  { key: 'archetype', label: '人物原型' },
-  { key: 'rules', label: '世界规则' },
-]
+/* 确认开工用的 card payload（P13 精简：{mode, genre:{name, source, yaml?}}） */
+const confirmPayload = computed(() => {
+  if (synthCard.value) return synthCard.value
+  if (!selectedGenre.value) return null
+  return {
+    mode: 'library',
+    genre: { name: selectedGenre.value, source: 'library', desc: '' },
+    note: null,
+  }
+})
 
-/* ===== 段 2/3：世界观向导（P12.5 新增） ===== */
+/* ===== 段 2/3：世界观向导（P12.5 保留） ===== */
 const stage = ref('theme')                // 'theme' | 'skeleton' | 'wizard'
-const schemaVM = ref(null)                // toWorldviewSchemaVM 输出
+const schemaVM = ref(null)
 const schemaLoading = ref(false)
-const wvProfile = ref({})                 // {L0:{param:value},...}
-const chosenPresetKey = ref(null)         // 当前选中骨架（'random' 为随机）
+const wvProfile = ref({})
+const chosenPresetKey = ref(null)
 const evalVM = ref({ allowed: {}, violations: [], byParam: {}, violationSet: new Set(), hasViolations: false })
 const evalPending = ref(false)
 const currentLayerIdx = ref(0)
 let evalTimer = null
-let evalSeq = 0                           // 防竞态：序列化请求
+let evalSeq = 0
 
 onMounted(() => {
-  draw('library')
+  loadGenres()
   loadSchema()
 })
 onBeforeUnmount(() => {
@@ -91,47 +96,51 @@ onBeforeUnmount(() => {
   clearTimeout(evalTimer)
 })
 
-/* ---- 段 1 抽卡（P8.6 逐字保留） ---- */
-function buildLock(except = null) {
-  const c = card.value
-  if (!c) return {}
-  const lock = {}
-  if (except !== 'genre' && c.genre.name) lock.genre = c.genre.name
-  if (except !== 'culture' && c.culture.name) lock.culture = c.culture.name
-  if (except !== 'archetype' && c.archetype.name) lock.archetype = c.archetype.name
-  if (except !== 'rules' && c.rulePacks.length) lock.rule_packs = c.rulePacks.map(p => p.name)
-  return lock
-}
-
-async function draw(mode, lock = null) {
-  if (drawing.value) return
-  drawing.value = true
-  synthLoading.value = mode === 'synth'
-  if (synthLoading.value) {
-    synthElapsed.value = 0
-    synthTimer = setInterval(() => { synthElapsed.value += 1 }, 1000)
-  }
+/* ---- 段 1 题材列表 ---- */
+async function loadGenres() {
+  if (listLoading.value) return
+  listLoading.value = true
   try {
-    const d = await api.gachaDraw(mode, lock)
-    rawCard.value = d
+    const d = await api.gachaDraw('library')
+    genreList.value = toGenreListVM(d)
     if (d.note) toast(d.note)
   } catch (e) {
-    toastError(`抽卡失败：${e.message}`)
+    toastError(`题材加载失败：${e.message}`)
   } finally {
-    drawing.value = false
+    listLoading.value = false
+  }
+}
+
+function chooseGenre(name) {
+  selectedGenre.value = name
+  synthCard.value = null     // 切回 library 选择时清 synth 卡
+}
+
+async function synthGenre() {
+  if (synthLoading.value) return
+  synthLoading.value = true
+  synthElapsed.value = 0
+  synthTimer = setInterval(() => { synthElapsed.value += 1 }, 1000)
+  try {
+    const d = await api.gachaDraw('synth')
+    /* synth 返回精简卡 {mode, genre:{name,source,desc,yaml?}, note} */
+    synthCard.value = d
+    selectedGenre.value = null   // synth 选中态与列表互斥
+    if (d.note) toast(d.note)
+  } catch (e) {
+    toastError(`AI 合成失败：${e.message}`)
+  } finally {
     synthLoading.value = false
     clearInterval(synthTimer)
     synthTimer = null
   }
 }
 
-const redrawAll = () => draw('library')
-const redrawCol = (key) => draw('library', buildLock(key))
-const synthGenre = () => draw('synth', buildLock())
+const hasSelection = computed(() => !!selectedGenre.value || !!synthCard.value)
 
 /* ---- 段 1 → 段 2 ---- */
 function goSkeleton() {
-  if (!card.value || busy.value) return
+  if (!hasSelection.value || busy.value) return
   stage.value = 'skeleton'
 }
 
@@ -151,8 +160,6 @@ async function loadSchema() {
 /* ---- 段 2 骨架选择 ---- */
 const presetCards = computed(() => schemaVM.value?.presets ?? [])
 
-/* summary 解析：summary = "physics_deviation=none;metaphysics=materialist;..."
-   → 在 paramMap/paramMeta 反查 label，做卡片高亮 chips */
 function presetHighlights(preset) {
   if (!preset.summary) return []
   const meta = schemaVM.value?.paramMeta ?? {}
@@ -183,7 +190,6 @@ function goWizard() {
   if (!schemaVM.value) return
   stage.value = 'wizard'
   currentLayerIdx.value = 0
-  /* 首次进入触发一次 evaluate（预填值也要校验） */
   scheduleEvaluate()
 }
 
@@ -196,17 +202,13 @@ const currentLayer = computed(() => layers.value[currentLayerIdx.value] ?? null)
 const isLastLayer = computed(() => currentLayerIdx.value === layers.value.length - 1)
 
 function layerStatus(layerId) {
-  /* 'done' | 'current' | 'todo' | 'violation' | 'pending'（即将上线） */
   const layer = layers.value.find(l => l.id === layerId)
   if (!layer) return 'todo'
   if (!layer.covered) return 'pending'
-  /* 当前层 */
   if (layers.value[currentLayerIdx.value]?.id === layerId) return 'current'
-  /* 该层任一参数在 violationSet → 'violation' */
   const params = layer.params ?? []
   const hasV = params.some(p => evalVM.value.violationSet.has(p.key))
   if (hasV) return 'violation'
-  /* 该层所有参数都已选 → 'done'，否则 'todo' */
   const allSet = params.length > 0 && params.every(p => {
     const layerData = wvProfile.value[layerId] ?? {}
     return !!layerData[p.key]
@@ -221,7 +223,6 @@ function jumpLayer(idx) {
 
 function layerProgressPct() {
   if (!layers.value.length) return 0
-  /* 进度轨填充宽度：已 done 或 violation 的层占比 */
   const done = layers.value.filter(l => {
     if (!l.covered) return false
     const s = layerStatus(l.id)
@@ -230,7 +231,6 @@ function layerProgressPct() {
   return (done / layers.value.length) * 100
 }
 
-/* 当前层每参数的渲染辅助 */
 function selectedValue(paramKey) {
   const layer = currentLayer.value
   if (!layer) return ''
@@ -238,21 +238,18 @@ function selectedValue(paramKey) {
 }
 
 function optionDisabled(paramKey, value) {
-  /* allowed 中 paramKey 的合法值集；不在集 → 禁用 */
   const allowed = evalVM.value.allowed[paramKey]
   if (!allowed) return false
   return !allowed.includes(value)
 }
 
 function optionDisabledReason(paramKey, value) {
-  /* 找到导致收窄的谓词 message（命中违例） */
   const vs = evalVM.value.byParam[paramKey] ?? []
   const hit = vs.find(v => v.value === value)
   return hit ? hit.message : '与当前其他选择冲突'
 }
 
 function optionViolated(paramKey, value) {
-  /* 当前已选值命中违例 → 标红 */
   const sel = selectedValue(paramKey)
   if (sel !== value) return false
   return evalVM.value.violationSet.has(paramKey)
@@ -282,7 +279,6 @@ function clearParam(paramKey) {
   scheduleEvaluate()
 }
 
-/* 级联 evaluate：debounce 300ms + 序列化防竞态 */
 function scheduleEvaluate() {
   clearTimeout(evalTimer)
   evalTimer = setTimeout(runEvaluate, 300)
@@ -294,7 +290,7 @@ async function runEvaluate() {
   evalPending.value = true
   try {
     const raw = await api.worldviewEvaluate(wvProfile.value)
-    if (seq !== evalSeq) return    /* 过期响应丢弃 */
+    if (seq !== evalSeq) return
     evalVM.value = toEvaluateVM(raw)
   } catch (e) {
     if (seq === evalSeq) toastError(`世界观校验失败：${e.message}`)
@@ -310,14 +306,11 @@ function prevLayer() {
   if (currentLayerIdx.value > 0) currentLayerIdx.value--
 }
 
-/* 确认开工入口：从段 3 底部「确认」按钮或段 3 末层按钮触发 */
 function requestConfirm() {
-  if (!rawCard.value || busy.value) return
-  /* 全量 evaluate（强制同步执行，不等 debounce） */
+  if (!confirmPayload.value || busy.value) return
   runEvaluate().then(() => {
     if (evalVM.value.hasViolations) {
       toastError(`世界观存在 ${evalVM.value.violations.length} 处违例，需先修正`)
-      /* 跳到第一个违例所在层 */
       const firstV = evalVM.value.violations[0]
       const layerId = schemaVM.value?.paramMeta?.[firstV.param]?.layerId
       if (layerId) {
@@ -350,11 +343,10 @@ function onDialogKeydown(e) {
 }
 
 async function doConfirm() {
-  if (!rawCard.value || confirmBusy.value) return
+  if (!confirmPayload.value || confirmBusy.value) return
   const asNew = startMode.value === 'new'
   const name = asNew ? projectName.value.trim() : null
   if (asNew && !nameValid.value) return
-  /* 再做一次全量校验（防用户改了又撤销但 debounce 未触发） */
   if (Object.keys(wvProfile.value).length > 0) {
     try {
       const raw = await api.worldviewEvaluate(wvProfile.value)
@@ -370,11 +362,10 @@ async function doConfirm() {
   }
   confirmBusy.value = true
   try {
-    /* worldview payload：仅当用户选过任何参数才带（空白骨架不带） */
     const wvPayload = Object.keys(wvProfile.value).length > 0
       ? { layers: wvProfile.value, preset: chosenPresetKey.value === 'blank' ? null : chosenPresetKey.value }
       : null
-    const payload = wvPayload ? { ...rawCard.value, worldview: wvPayload } : rawCard.value
+    const payload = wvPayload ? { ...confirmPayload.value, worldview: wvPayload } : confirmPayload.value
     const res = await api.gachaConfirm(payload, name)
     startOpen.value = false
     const finalGenre = res.genre ?? ''
@@ -404,17 +395,17 @@ async function doConfirm() {
 <template>
   <div class="gacha">
     <header class="gacha-head">
-      <h2>开局 · 抽一组开局配置</h2>
-      <p class="gacha-sub">题材 × 文化 × 人物原型 × 世界规则 × 世界观骨架 · 不喜欢就换，喜欢就开工。</p>
+      <h2>开局 · 选一个题材</h2>
+      <p class="gacha-sub">题材决定轨道/节奏/评估权重/人物阵容，世界观决定设定/规则。选题材 → 选骨架 → 世界观向导 → 开工。</p>
       <!-- 三段式面包屑 -->
       <ol class="gacha-stages" role="list">
         <li :class="{ active: stage === 'theme', done: stage !== 'theme' }">
-          <span class="gs-idx">1</span><span class="gs-name">题材四栏</span>
+          <span class="gs-idx">1</span><span class="gs-name">题材选择</span>
         </li>
-        <li :class="{ active: stage === 'skeleton', done: stage === 'wizard', disabled: !card }">
+        <li :class="{ active: stage === 'skeleton', done: stage === 'wizard', disabled: !hasSelection }">
           <span class="gs-idx">2</span><span class="gs-name">骨架选择</span>
         </li>
-        <li :class="{ active: stage === 'wizard', disabled: !card }">
+        <li :class="{ active: stage === 'wizard', disabled: !hasSelection }">
           <span class="gs-idx">3</span><span class="gs-name">世界观向导</span>
         </li>
       </ol>
@@ -424,61 +415,47 @@ async function doConfirm() {
       <span class="gc-spin" aria-hidden="true"></span>AI 正在生成题材包，通常 20-60 秒（已等待 {{ synthElapsed }} 秒）…
     </div>
 
-    <!-- ===== 段 1：题材四栏（P8.6 原貌） ===== -->
+    <!-- ===== 段 1：题材选择（P13 单栏卡片网格） ===== -->
     <template v-if="stage === 'theme'">
-      <div v-if="card" class="gacha-grid" role="region" aria-label="开局配置卡区" :aria-busy="drawing || undefined">
-        <div v-for="col in COLS" :key="col.key" class="gacha-col">
-          <div class="gc-col-t">{{ col.label }}</div>
-          <div class="gacha-card">
-            <template v-if="col.key === 'genre'">
-              <span class="gacha-src" :class="{ synth: card.genre.source === 'synth' }">
-                {{ card.genre.source === 'synth' ? 'AI 合成' : '库内' }}
-              </span>
-              <div class="gacha-name">{{ dn(card.genre.name) || '—' }}</div>
-              <div v-if="card.genre.name && dn(card.genre.name) !== card.genre.name" class="gacha-id">{{ card.genre.name }}</div>
-              <div class="gacha-desc">{{ card.genre.desc || '—' }}</div>
-            </template>
-            <template v-else-if="col.key === 'culture'">
-              <div class="gacha-name">{{ dn(card.culture.name) || '—' }}</div>
-              <div v-if="card.culture.name && dn(card.culture.name) !== card.culture.name" class="gacha-id">{{ card.culture.name }}</div>
-              <div class="gacha-desc">{{ card.culture.desc || '—' }}</div>
-            </template>
-            <template v-else-if="col.key === 'archetype'">
-              <div class="gacha-name">{{ dn(card.archetype.name) || '—' }}</div>
-              <div v-if="card.archetype.name && dn(card.archetype.name) !== card.archetype.name" class="gacha-id">{{ card.archetype.name }}</div>
-              <div class="gacha-desc">{{ card.archetype.desc || '—' }}</div>
-              <div v-if="card.archetype.voiceHint" class="gacha-voice">语气：{{ card.archetype.voiceHint }}</div>
-            </template>
-            <template v-else>
-              <template v-if="card.rulePacks.length">
-                <div v-for="r in card.rulePacks" :key="r.name" class="gacha-rule">
-                  <b>{{ dn(r.name) }}<span v-if="dn(r.name) !== r.name" class="gacha-id"> {{ r.name }}</span></b>
-                  <span>{{ r.desc || '—' }}</span>
-                </div>
-              </template>
-              <div v-else class="gacha-desc">未抽到世界规则包</div>
-            </template>
+      <!-- synth 选中态展示 -->
+      <div v-if="synthCard" class="gacha-synth-picked" role="status">
+        <span class="gacha-src synth">AI 合成</span>
+        <b>{{ dn(synthCard.genre.name) || synthCard.genre.name }}</b>
+        <span class="gacha-desc">{{ synthCard.genre.desc || '—' }}</span>
+        <button class="btn-line btn-line-xs" aria-label="取消 AI 合成，回到题材列表" @click="synthCard = null">重新选择</button>
+      </div>
+
+      <div v-else-if="listLoading" class="gacha-loading" role="status">
+        <span class="gc-spin" aria-hidden="true"></span>加载题材列表…
+      </div>
+      <section v-else-if="genres.length" class="gacha-genre-grid" role="group" aria-label="题材选择">
+        <button v-for="g in genres" :key="g.name"
+                class="gacha-genre-card"
+                :class="{ selected: selectedGenre === g.name }"
+                :aria-label="`选择题材：${g.title}。${g.desc}`"
+                :aria-pressed="selectedGenre === g.name"
+                @click="chooseGenre(g.name)">
+          <div class="gacha-genre-name">{{ g.title }}</div>
+          <div class="gacha-genre-desc">{{ g.desc || '—' }}</div>
+          <div v-if="g.cultureTitle" class="gacha-genre-badge">
+            <AppIcon name="globe" :size="11" /> {{ dn(g.cultureTitle) || g.cultureTitle }}
           </div>
-          <button class="btn-line" :disabled="busy" :aria-label="`换一张${col.label}，其余栏保持不变`"
-                  @click="redrawCol(col.key)">换这张</button>
-          <button v-if="col.key === 'genre'" class="btn-line gacha-synth-btn" :disabled="busy"
-                  aria-label="让 AI 自由发挥，现场合成新题材（其余栏不变）" @click="synthGenre">
-            <AppIcon name="zap" :size="12" /> 让 AI 自由发挥
-          </button>
-        </div>
-      </div>
-      <div v-else-if="drawing" class="gacha-loading" role="status">
-        <span class="gc-spin" aria-hidden="true"></span>抽卡中…
-      </div>
+          <ul v-if="g.castSummary.length" class="gacha-genre-chips" aria-hidden="true">
+            <li v-for="c in g.castSummary.slice(0, 5)" :key="c">{{ c.length > 10 ? c.slice(0, 10) + '…' : c }}</li>
+          </ul>
+        </button>
+      </section>
       <div v-else class="gacha-loading">
-        <span>还没抽到开局卡。</span>
-        <button class="btn-line" aria-label="重新抽一张开局卡" @click="redrawAll">重新抽卡</button>
+        <span>暂无可用题材。</span>
+        <button class="btn-line" aria-label="重新加载题材列表" @click="loadGenres">重新加载</button>
       </div>
 
       <footer class="gacha-foot">
-        <button class="btn-line" :disabled="busy || !card" aria-label="换一批，四栏全部重抽"
-                @click="redrawAll">换一批</button>
-        <button class="btn-main" :disabled="busy || !card"
+        <button class="btn-line gacha-synth-btn" :disabled="busy"
+                aria-label="让 AI 自由发挥，现场合成新题材" @click="synthGenre">
+          <AppIcon name="zap" :size="12" /> 让 AI 自由发挥
+        </button>
+        <button class="btn-main" :disabled="busy || !hasSelection"
                 aria-label="下一步：选择世界观骨架" @click="goSkeleton">
           下一步：选择骨架
         </button>
@@ -532,7 +509,7 @@ async function doConfirm() {
         </div>
 
         <footer class="gacha-foot">
-          <button class="btn-line" aria-label="返回题材四栏" @click="backToTheme">← 返回题材</button>
+          <button class="btn-line" aria-label="返回题材选择" @click="backToTheme">← 返回题材</button>
           <button class="btn-main" :disabled="chosenPresetKey === null"
                   aria-label="下一步：进入世界观向导" @click="goWizard">
             下一步：进入向导
