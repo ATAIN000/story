@@ -639,6 +639,54 @@ button { font: inherit; cursor: pointer; border: none; background: none; color: 
   padding-top: 12px; border-top: 1px solid var(--line); }
 .wv-nav .btn-main { margin-left: auto; }
 
-/* 段 4 人物原型占位 */
+/* 段 4 人物原型向导 */
 .wv-cast-stage { margin-top: 18px; display: flex; flex-direction: column; gap: 18px; }
 .wv-cast-stage .gacha-foot { justify-content: space-between; }
+
+.wv-cast-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.wv-cast-head .wv-intro { flex: 1; }
+
+.wv-cast-cards { display: flex; flex-direction: column; gap: 16px; }
+
+.wv-cast-card {
+  border: 1px solid var(--border, #e0e0e0); border-radius: 10px; padding: 16px;
+  background: var(--surface, #fafafa);
+}
+.wv-cast-card.main { border-color: var(--accent, #6366f1); border-width: 2px; }
+
+.wv-cast-card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.wv-cast-badge {
+  font-size: 12px; font-weight: 600; padding: 2px 10px; border-radius: 12px;
+  background: var(--border, #e0e0e0); color: var(--text-sec, #666); white-space: nowrap;
+}
+.wv-cast-badge.main { background: var(--accent, #6366f1); color: #fff; }
+.wv-cast-name-input {
+  flex: 1; border: 1px solid var(--border, #e0e0e0); border-radius: 6px;
+  padding: 6px 10px; font-size: 14px; background: var(--bg, #fff); color: var(--text, #333);
+}
+.wv-cast-name-input:focus { outline: 2px solid var(--accent, #6366f1); outline-offset: -1px; border-color: transparent; }
+
+.wv-char-layer { margin-bottom: 12px; }
+.wv-char-layer-name { font-size: 12px; font-weight: 600; color: var(--text-sec, #888); margin-bottom: 6px; }
+.wv-char-param { margin-bottom: 8px; }
+.wv-char-param-label { font-size: 13px; font-weight: 500; display: block; margin-bottom: 4px; color: var(--text, #333); }
+
+.wv-char-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.wv-char-chip {
+  font-size: 12px; padding: 3px 8px; border-radius: 14px; cursor: pointer;
+  border: 1px solid var(--border, #ddd); background: var(--bg, #fff); color: var(--text-sec, #555);
+  transition: all .15s;
+}
+.wv-char-chip:hover { border-color: var(--accent, #6366f1); }
+.wv-char-chip.selected {
+  background: var(--accent, #6366f1); color: #fff; border-color: var(--accent, #6366f1);
+}
+
+.wv-char-text-input { margin-top: 2px; }
+.wv-cast-text-field {
+  width: 100%; border: 1px solid var(--border, #e0e0e0); border-radius: 6px;
+  padding: 5px 10px; font-size: 13px; background: var(--bg, #fff); color: var(--text, #333);
+}
+.wv-cast-text-field:focus { outline: 2px solid var(--accent, #6366f1); outline-offset: -1px; border-color: transparent; }
+
+.wv-cast-add { align-self: flex-start; margin-top: 4px; }

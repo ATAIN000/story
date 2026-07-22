@@ -228,14 +228,58 @@ class CharacterActor:
             return await result
         return result
 
+    def _persona_prompt(self) -> str:
+        """P15.3：persona 字段（CHAR1-CHAR5）拼进 Actor propose 上下文。
+        persona 缺失或空时返回空串（行为与现状逐字一致）。"""
+        p = self.persona
+        if not p:
+            return ""
+        persona = p.get("persona")
+        if not isinstance(persona, dict) or not persona:
+            return ""
+        parts: list[str] = []
+        # CHAR2 心理原型
+        for key, label in (("pearson_primary", "原型"),
+                           ("schmidt_goddess", "神话模型"),
+                           ("schmidt_polarity", "正反极性")):
+            val = persona.get(key)
+            if val and val != "none":
+                parts.append(f"{label}={val}")
+        # CHAR3 性格
+        enn = persona.get("enneagram_type")
+        if enn and enn != "none":
+            parts.append(f"九型人格={enn}")
+        contradiction = persona.get("mckee_contradiction_text")
+        if contradiction:
+            parts.append(f"矛盾维度={contradiction}")
+        # CHAR4 弧光
+        arc = persona.get("arc_type")
+        if arc:
+            parts.append(f"弧光={arc}")
+        for key, label in (("arc_lie_text", "错误信念"),
+                           ("arc_want_text", "表面想要"),
+                           ("arc_need_text", "真实需要")):
+            val = persona.get(key)
+            if val:
+                parts.append(f"{label}={val}")
+        # CHAR5 人设标签
+        tropes = persona.get("tropes")
+        if tropes and tropes != "none":
+            parts.append(f"人设标签={tropes}")
+        if not parts:
+            return ""
+        return f"角色人设：{'；'.join(parts)}。\n"
+
     async def _propose_actions(self, world_state: Any, chapter: int) -> list[ActionCandidate]:
         """LLM 一次生成候选行动；失败则用规则兜底"""
         goals = "、".join(self.goals) or "完成当前职责"
         scene = ""
         if isinstance(world_state, WorldState):
             scene = world_state.narrative.current_scene
+        persona_ctx = self._persona_prompt()
         prompt = (
             f"你是角色「{self.id}」。{self.voice.prompt_snippet()}\n"
+            f"{persona_ctx}"
             f"活跃目标：{goals}\n"
             f"当前场景：{scene or '未知'}\n"
             f"工作记忆：\n{self.working.as_prompt() or '（空）'}\n\n"

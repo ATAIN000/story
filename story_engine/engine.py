@@ -92,7 +92,7 @@ def _mask_url(url: str) -> str:
     return f"{proto}://{masked_host}{masked_path}"
 
 
-def _make_genesis_factory(bundle: GenreBundle):
+def _make_genesis_factory(bundle: GenreBundle, project_dir: Path | None = None):
     """P11.1：bundle 感知的创世工厂 — 返回 factory() -> WorldState。
 
     阵容由 meta.cast.parse_cast(bundle.genre_params) 解析（L1 cast: 段 →
@@ -102,12 +102,25 @@ def _make_genesis_factory(bundle: GenreBundle):
     narrative 段保持现值（act=1/chapter=0/tension=0.3/current_scene="开场"/
     track_progress/last_story_time），causal_links 置空（非 mock 剧本
     无预置因果链）；physical 不预置（非 mock 题材无种子 fluents）。
+
+    P15.2：project_dir 下有 cast.json 时，用其中 cast 条目（含 persona）
+    覆盖 bundle 自带阵容——characters 条目额外携带 persona 字段，
+    spawn_character_actor 读取 persona 用于 Actor propose 上下文增强。
     """
     def _factory() -> WorldState:
         cast = parse_cast(bundle.genre_params)
+        # P15.2：项目目录的 cast.json 覆盖（用户自定义阵容 + persona）
+        cast_overrides = _load_cast_overrides(project_dir) if project_dir else []
+        persona_map: dict[str, dict] = {}
+        if cast_overrides:
+            # cast.json 提供 id/role/goals/voice_hint/persona
+            cast = _apply_cast_overrides(cast, cast_overrides, persona_map)
         state = WorldState(tick=0)
         for m in cast:
-            state.characters[m.id] = {"role": m.role, "voice": m.voice_hint}
+            entry: dict = {"role": m.role, "voice": m.voice_hint}
+            if m.id in persona_map:
+                entry["persona"] = persona_map[m.id]
+            state.characters[m.id] = entry
             state.minds[m.id] = CharacterMind(
                 character_id=m.id, goals=list(m.goals))
             for r in m.relations:
@@ -119,6 +132,56 @@ def _make_genesis_factory(bundle: GenreBundle):
             causal_links=[], last_story_time="第1日·清晨")
         return state
     return _factory
+
+
+def _load_cast_overrides(project_dir: Path | None) -> list[dict]:
+    """P15.2：读项目目录的 cast.json（gacha confirm 落盘的自定义阵容）。
+    文件缺失/损坏/非列表 → 空列表（容忍，不崩）。"""
+    if project_dir is None:
+        return []
+    path = Path(project_dir) / "cast.json"
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    if not isinstance(data, list):
+        return []
+    return [e for e in data if isinstance(e, dict) and e.get("id")]
+
+
+def _apply_cast_overrides(cast: list, overrides: list[dict],
+                          persona_map: dict[str, dict]) -> list:
+    """P15.2：用 cast.json 覆盖 bundle 自带阵容。
+
+    策略：以 overrides 的 id 为主——同名覆盖 CastMember 的 role/voice_hint/
+    goals，persona 存入 persona_map；overrides 中新增的 id 追加为 CastMember。
+    返回更新后的 cast 列表（persona_map 原地填充）。
+    """
+    from .meta.cast import CastMember
+    by_id = {m.id: m for m in cast}
+    for ov in overrides:
+        cid = str(ov["id"]).strip()
+        persona = ov.get("persona")
+        if isinstance(persona, dict):
+            persona_map[cid] = persona
+        goals = ov.get("goals")
+        if cid in by_id:
+            m = by_id[cid]
+            if ov.get("role"):
+                m.role = str(ov["role"])
+            if ov.get("voice_hint"):
+                m.voice_hint = str(ov["voice_hint"])
+            if isinstance(goals, list):
+                m.goals = [str(g) for g in goals if str(g).strip()]
+        else:
+            by_id[cid] = CastMember(
+                id=cid,
+                role=str(ov.get("role") or ""),
+                voice_hint=str(ov.get("voice_hint") or ""),
+                goals=[str(g) for g in goals if str(g).strip()]
+                       if isinstance(goals, list) else [],
+            )
+    return list(by_id.values())
 
 
 class _ChapterClosingKernelView:
@@ -356,10 +419,12 @@ class StoryEngine:
         cast 段表达不了的部分）——保持 _genesis_state 静态法，行为逐字
         零变化；其余题材走 bundle 感知的 cast 工厂（_make_genesis_factory），
         阵容由题材插件 cast:/prompt.characters 解析，不再回落包青天。
+
+        P15.2：project_dir 传入工厂以支持 cast.json 覆盖（含 persona）。
         """
         if self.bundle.genre == "mystery":
             return StoryEngine._genesis_state
-        return _make_genesis_factory(self.bundle)
+        return _make_genesis_factory(self.bundle, project_dir=self.project_dir)
 
     @staticmethod
     def _genesis_state() -> WorldState:

@@ -72,6 +72,7 @@ from story_engine.worldview import (  # noqa: E402
     WorldviewProfile, evaluate as wv_evaluate,
     param_values as wv_param_values,
     preset_summaries as wv_preset_summaries,
+    derive_cast as wv_derive_cast,
 )
 
 logger = logging.getLogger(__name__)
@@ -870,6 +871,24 @@ def worldview_evaluate_endpoint(req: WorldviewEvaluateReq):
     return wv_evaluate(flat)
 
 
+class DeriveCastReq(BaseModel):
+    """POST /api/worldview/derive_cast body：worldview 与 language 的分层 profile，
+    均可选（容忍空/部分填写）。"""
+    worldview: dict[str, dict[str, str]] = {}
+    language: dict[str, dict[str, str]] = {}
+
+
+@app.post("/api/worldview/derive_cast")
+def derive_cast_endpoint(req: DeriveCastReq):
+    """【P15.2】从世界观 + 语言 profile 推导建议阵容（2-4 角色，含 CHAR 原型参数）。
+
+    纯规则映射（无 LLM）：物理偏离度/形而上学 → Pearson/Schmidt/Enneagram；
+    冲突类型 → 弧光类型；语言文化 → 中文人设标签。返回 ``{cast: [...]}``，
+    每个 cast 条目含 ``name/role/persona``（persona 覆盖 CHAR1-CHAR5 全字段）。
+    """
+    return {"cast": wv_derive_cast(req.worldview, req.language)}
+
+
 # ---------- 抽卡开局（P8.3 library / P8.4 synth，独立开局页：题材×文化×原型×规则） ----------
 @app.post("/api/gacha/draw")
 async def gacha_draw(req: GachaDrawReq):
@@ -987,6 +1006,12 @@ def gacha_confirm(card: dict):
                 detail={"message": "世界观存在跨层一致性违例",
                         "violations": result["violations"]})
         wv_validated = True
+    # 【P15.2】cast 可选：用户自定义阵容（含 persona）。结构为 list[entry]，
+    # entry = {id, role?, goals?, voice_hint?, persona?}。提取后供 init/switch
+    # 后落盘到项目目录 cast.json（genesis 工厂读取覆盖 bundle 自带阵容）。
+    cast_data = card.get("cast")
+    if cast_data is not None and not isinstance(cast_data, list):
+        raise HTTPException(status_code=422, detail="cast 必须是数组")
     g = card.get("genre") or {}
     persisted = False
     name = g.get("name")
@@ -1059,6 +1084,9 @@ def gacha_confirm(card: dict):
                 project_dir,
                 worldview={"preset": wv_preset,
                            "param_count": wv_param_count})
+        # P15.2：cast 落盘（用户自定义阵容 + persona → genesis 覆盖）
+        if cast_data:
+            _write_json_atomic(project_dir / "cast.json", cast_data)
         return {**resp, "persisted": persisted, "genre": name,
                 "project": {"name": project_name, "genre": name,
                             "culture": culture}}
@@ -1075,6 +1103,9 @@ def gacha_confirm(card: dict):
             target,
             worldview={"preset": wv_preset,
                        "param_count": wv_param_count})
+    # P15.2：cast 落盘到当前 engine.project_dir
+    if cast_data:
+        _write_json_atomic(Path(engine.project_dir) / "cast.json", cast_data)
     return resp
 
 

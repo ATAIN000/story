@@ -324,3 +324,69 @@ def test_schema_endpoint_presets_have_name_vibe_and_summary():
         assert p["key"] and p["name"] and p["vibe"] and p["summary"], \
             f"preset 字段不完整：{p}"
         assert "metaphysics=" in p["summary"]   # 摘要含关键参数
+
+
+# ---------- P15.2 derive_cast + genesis persona（2 核心） ----------
+def test_derive_cast_returns_characters_with_filled_char_params():
+    """derive_cast 从世界观推导阵容：每个角色 persona 含 CHAR1-CHAR5 字段，
+    主角 pearson_primary 随物理偏离度变化（major → magician）。"""
+    from story_engine.worldview import derive_cast
+
+    # physics_deviation=major + metaphysics=dualist → 主角原型=magician
+    cast = derive_cast(
+        worldview_layers={"L0": {"physics_deviation": "major",
+                                 "metaphysics": "dualist"},
+                          "L9": {"conflict_types": "cosmic"}},
+        language_layers={"LANG3": {"narrative_reliability": "unreliable_by_design"}})
+    assert 2 <= len(cast) <= 4
+    # 主角
+    hero = cast[0]
+    assert hero["persona"]["pearson_primary"] == "magician"
+    assert hero["persona"]["narrative_function"] == "hero"
+    assert hero["persona"]["arc_type"]  # 非空
+    assert hero["persona"]["arc_lie_text"]  # 弧光文本非空
+    assert hero["persona"]["tropes"] == "hidden_master"  # 不可靠叙事→隐藏大佬
+    # 所有角色 persona 含必要键
+    for c in cast:
+        p = c["persona"]
+        for key in ("pearson_primary", "schmidt_goddess", "enneagram_type",
+                     "arc_type", "arc_lie_text", "arc_want_text",
+                     "arc_need_text", "arc_truth_text", "tropes"):
+            assert key in p, f"{c['name']} persona 缺 {key}"
+
+
+def test_confirm_with_persona_persists_cast_json():
+    """POST /api/gacha/confirm 携带 cast：落盘 cast.json，genesis 读取后
+    state.characters 含 persona 字段（spawn 时传入 Actor）。"""
+    import json as _json
+    from fastapi.testclient import TestClient
+    from conftest import import_backend_main
+    backend = import_backend_main()
+    orig = (backend.engine.genre.name, backend.engine.culture.name)
+    proj_dir = backend.engine.project_dir
+    c = TestClient(backend.app)
+    try:
+        card = {
+            "mode": "library",
+            "genre": {"name": "mystery", "source": "library", "desc": "d"},
+            "cast": [
+                {"id": "主角", "role": "主角", "goals": ["查清真相"],
+                 "persona": {"pearson_primary": "seeker", "enneagram_type": "5",
+                             "arc_type": "positive_change"}},
+                {"id": "配角甲", "role": "配角", "goals": ["保护主角"],
+                 "persona": {"pearson_primary": "caregiver", "enneagram_type": "2"}},
+            ],
+        }
+        r = c.post("/api/gacha/confirm", json=card)
+        assert r.status_code == 200, r.text
+        cast_file = proj_dir / "cast.json"
+        assert cast_file.exists()
+        cast_data = _json.loads(cast_file.read_text(encoding="utf-8"))
+        assert len(cast_data) == 2
+        assert cast_data[0]["persona"]["pearson_primary"] == "seeker"
+    finally:
+        for f in (proj_dir / "cast.json",):
+            if f.exists():
+                f.unlink(missing_ok=True)
+        c.post("/api/project/init",
+               json={"genre": orig[0], "culture": orig[1]})

@@ -88,4 +88,7 @@ export const api = {
      evaluate(profile) → profile: {L0:{param:value},...}，返回 {allowed, violations} */
   worldviewSchema: () => req('/api/worldview/schema'),
   worldviewEvaluate: (profile) => post('/api/worldview/evaluate', { profile }),
+  /* P15.2：人物原型推导 — worldview+language profile → 建议阵容（含 persona） */
+  deriveCast: (worldview = {}, language = {}) =>
+    post('/api/worldview/derive_cast', { worldview, language }),
 }

@@ -12,6 +12,7 @@ from .layers import (LAYERS, LANGUAGE_LAYERS, CHARACTER_LAYERS, ALL_PARAMS, LAYE
 from .predicates import PREDICATES, evaluate
 from .profile import WorldviewProfile
 from .presets import PRESETS, PRESET_BY_KEY, preset_summaries
+from .derive_cast import derive_cast
 
 __all__ = [
     "LAYERS", "LANGUAGE_LAYERS", "CHARACTER_LAYERS", "ALL_PARAMS", "LAYER_BY_ID",
@@ -19,4 +20,5 @@ __all__ = [
     "PREDICATES", "evaluate",
     "WorldviewProfile",
     "PRESETS", "PRESET_BY_KEY", "preset_summaries",
+    "derive_cast",
 ]

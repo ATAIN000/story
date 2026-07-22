@@ -195,7 +195,7 @@ tests/test_engine.py         赌注1/赌注4/核心循环回归测试
 
 ## 抽卡开局（Gacha）
 
-独立开局页：选题材 → 选世界观骨架 → 世界观+语言向导微调 → 人物原型占位 → 开工。
+独立开局页：选题材 → 选世界观骨架 → 世界观+语言向导微调 → 人物原型 → 开工。
 
 - **入口**：左侧 nav「开局」段（置于系统段上方）；写作台零章空态也有「抽卡开局」CTA
 - **两模式**：
@@ -210,13 +210,14 @@ tests/test_engine.py         赌注1/赌注4/核心循环回归测试
 
 ## 世界观向导（Worldview Wizard）
 
-抽卡确认前的第三段——世界观 + 语言文化向导，让用户从骨架或空白逐层选参数，级联校验后
-注入生成管线。架构定义 15 层 86 参数（世界观 L0-L9 共 71 参数 + 语言文化 LANG1-LANG5
-共 15 参数），所有取值均为合法枚举。
+抽卡确认前的四段式向导，让用户从骨架或空白逐层选参数，级联校验后
+注入生成管线。架构定义 20 层 100 参数（世界观 L0-L9 共 71 参数 + 语言文化
+LANG1-LANG5 共 15 参数 + 人物原型 CHAR1-CHAR5 共 14 参数），所有取值均为合法枚举。
 
 - **四段式向导**（抽卡页内 stage 状态机）：①题材选择（单栏卡片网格）
   → ②骨架选择（十卡 + 随机 + 空白自定义）→ ③世界观+语言文化分步向导
-  （左进度轨分区展示世界观/语言文化 + 右参数卡片）→ ④人物原型占位（即将上线）
+  （左进度轨分区展示世界观/语言文化 + 右参数卡片）→ ④人物原型向导
+  （多角色卡片管理 + CHAR1-CHAR5 分区选择）
 - **左栏分区**：世界观层（L0-L9）与语言文化层（LANG1-LANG5）以分隔线 +
   「语言文化」标题分区展示，同一向导页内
 - **十骨架**：现实本格 / 修真问道 / 武侠江湖 / 克苏鲁神话 / 赛博朋克 / 西幻史诗 /
@@ -234,9 +235,16 @@ tests/test_engine.py         赌注1/赌注4/核心循环回归测试
     生成 prompt，让 LLM 在选词/场景/氛围上贴合世界观
   - **world_rules 合并（硬）**：`to_world_rules()` 把可表达为布尔事实的设定
     （限 5 事实词汇表）翻译成 validator 可执行规则，追加进统一 world_rules 列表
+- **人物原型向导**（P15，第四段）：多角色卡片管理，主角必填 + 配角可选（≤8）。
+  每张卡片含 CHAR1-CHAR5 五层分区（叙事功能/心理原型/性格类型/弧光设计/中文人设），
+  枚举参数 chips 选择、文本参数（弧光 Lie/Want/Need/Truth）输入框。
+  「AI 自动分配」从当前 worldview+language profile 调 `POST /api/worldview/derive_cast`
+  推导合理原型（规则映射，无 LLM）。确认时 cast 数组（含 persona）落盘 `cast.json`，
+  genesis 读取后覆盖题材自带阵容；spawn 时 persona 进入 Actor propose 上下文
 
 端点契约：`GET /api/worldview/schema`、`POST /api/worldview/evaluate`、
-`POST /api/gacha/confirm` 的 `worldview` 扩展，见 `docs/接口规范_part2.md` §11.6。
+`POST /api/worldview/derive_cast`、`POST /api/gacha/confirm` 的 `worldview`+`cast`
+扩展，见 `docs/接口规范_part2.md` §11.6。
 
 ## 多项目管理（Projects）
 

@@ -16,7 +16,6 @@ import { toGachaCardVM, toGenreListVM, displayName, toWorldviewSchemaVM, toEvalu
 import { presetToLayers } from '../api/worldviewPresets'
 import { useToast } from '../composables/useToast'
 import AppIcon from '../components/AppIcon.vue'
-import EmptyState from '../components/EmptyState.vue'
 
 const props = defineProps({
   project: { type: Object, default: null },
@@ -199,18 +198,117 @@ function backToTheme() { stage.value = 'theme' }
 function backToSkeleton() { stage.value = 'skeleton' }
 function backToWizard() { stage.value = 'wizard' }
 
-/* ---- 段 3 → 段 4（人物原型占位） ---- */
+/* ---- 段 3 → 段 4（人物原型） ---- */
 function goCast() {
   stage.value = 'cast'
+  /* 自动调一次 derive_cast 预填主角 */
+  if (castCards.value.length === 0) autoDeriveCast()
+}
+
+/* ===== 段 4：人物原型向导（多角色管理） ===== */
+const castCards = ref([])         // [{name, role, persona: {key: value}}]
+const deriveLoading = ref(false)
+
+/* 角色卡persona的字段分组（来自 CHARACTER_LAYERS schema） */
+const charParamsByLayer = computed(() => {
+  const out = []
+  for (const layer of characterLayers.value) {
+    out.push({
+      id: layer.id,
+      name: layer.name,
+      params: layer.params.map(p => ({
+        key: p.key,
+        label: p.label,
+        type: p.options.length === 1 && p.options[0].value === '__text__' ? 'text' : 'enum',
+        options: p.options.filter(o => o.value !== '__text__'),
+      })),
+    })
+  }
+  return out
+})
+
+const MAX_SUPPORTING = 8
+
+function makeBlankCard(role = '配角') {
+  return { name: '', role, persona: {} }
+}
+
+function addCastCard() {
+  if (castCards.value.length >= MAX_SUPPORTING + 1) return
+  castCards.value.push(makeBlankCard())
+}
+
+function removeCastCard(idx) {
+  castCards.value.splice(idx, 1)
+  if (castCards.value.length === 0) {
+    castCards.value.push(makeBlankCard('主角'))
+  }
+  /* 确保第一个是主角 */
+  if (castCards.value.length > 0) castCards.value[0].role = '主角'
+}
+
+function setPersonaParam(card, paramKey, value) {
+  card.persona[paramKey] = value
+}
+
+function clearPersonaParam(card, paramKey) {
+  delete card.persona[paramKey]
+}
+
+async function autoDeriveCast() {
+  if (deriveLoading.value) return
+  deriveLoading.value = true
+  try {
+    /* 从当前 wvProfile 拆分 worldview / language layers */
+    const wvLayers = {}
+    const langLayers = {}
+    for (const [layerId, params] of Object.entries(wvProfile.value)) {
+      if (layerId.startsWith('LANG')) langLayers[layerId] = params
+      else if (!layerId.startsWith('CHAR')) wvLayers[layerId] = params
+    }
+    const res = await api.deriveCast(wvLayers, langLayers)
+    const suggested = res.cast ?? []
+    if (suggested.length > 0) {
+      castCards.value = suggested.map((c, i) => ({
+        name: c.name || `角色${i + 1}`,
+        role: c.role || (i === 0 ? '主角' : '配角'),
+        persona: { ...(c.persona || {}) },
+      }))
+      toast('AI 已自动分配人物原型')
+    } else {
+      toastError('AI 未能推导出人物原型，请手动填写')
+    }
+  } catch (e) {
+    toastError(`人物原型推导失败：${e.message}`)
+  } finally {
+    deriveLoading.value = false
+  }
+}
+
+/* 确认时将 castCards 组装成 cast payload */
+function buildCastPayload() {
+  if (castCards.value.length === 0) return null
+  return castCards.value
+    .filter(c => c.name.trim())
+    .map(c => ({
+      id: c.name.trim(),
+      role: c.role,
+      persona: c.persona,
+    }))
 }
 
 /* ---- 段 3 向导 ---- */
 const layers = computed(() => schemaVM.value?.layers ?? [])
 /* 世界观层（L0-L9）与语言文化层（LANG1-LANG5）分离，用于左栏分区展示 */
-const worldviewLayers = computed(() => layers.value.filter(l => !l.id.startsWith('LANG')))
+const worldviewLayers = computed(() => layers.value.filter(l => !l.id.startsWith('LANG') && !l.id.startsWith('CHAR')))
 const languageLayers = computed(() => layers.value.filter(l => l.id.startsWith('LANG')))
+const characterLayers = computed(() => layers.value.filter(l => l.id.startsWith('CHAR')))
 const currentLayer = computed(() => layers.value[currentLayerIdx.value] ?? null)
-const isLastLayer = computed(() => currentLayerIdx.value === layers.value.length - 1)
+const isLastLayer = computed(() => {
+  /* 跳过 CHAR 层（CHAR1-CHAR5 在人物原型段处理）——找到最后一个非 CHAR 层 */
+  const nonCharLayers = layers.value.filter(l => !l.id.startsWith('CHAR'))
+  return currentLayerIdx.value === layers.value.indexOf(nonCharLayers[nonCharLayers.length - 1])
+})
 
 function layerStatus(layerId) {
   const layer = layers.value.find(l => l.id === layerId)
@@ -229,17 +327,21 @@ function layerStatus(layerId) {
 
 function jumpLayer(idx) {
   if (idx < 0 || idx >= layers.value.length) return
+  /* CHAR 层不在向导中处理 */
+  if (layers.value[idx]?.id?.startsWith('CHAR')) return
   currentLayerIdx.value = idx
 }
 
 function layerProgressPct() {
-  if (!layers.value.length) return 0
-  const done = layers.value.filter(l => {
+  /* 排除 CHAR 层（人物原型在段 4 处理，不在向导进度中计算） */
+  const wizardLayers = layers.value.filter(l => !l.id.startsWith('CHAR'))
+  if (!wizardLayers.length) return 0
+  const done = wizardLayers.filter(l => {
     if (!l.covered) return false
     const s = layerStatus(l.id)
     return s === 'done' || s === 'violation' || s === 'current'
   }).length
-  return (done / layers.value.length) * 100
+  return (done / wizardLayers.length) * 100
 }
 
 function selectedValue(paramKey) {
@@ -311,10 +413,15 @@ async function runEvaluate() {
 }
 
 function nextLayer() {
-  if (currentLayerIdx.value < layers.value.length - 1) currentLayerIdx.value++
+  /* 跳过 CHAR 层（人物原型在段 4 处理） */
+  let idx = currentLayerIdx.value + 1
+  while (idx < layers.value.length && layers.value[idx]?.id?.startsWith('CHAR')) idx++
+  if (idx < layers.value.length) currentLayerIdx.value = idx
 }
 function prevLayer() {
-  if (currentLayerIdx.value > 0) currentLayerIdx.value--
+  let idx = currentLayerIdx.value - 1
+  while (idx >= 0 && layers.value[idx]?.id?.startsWith('CHAR')) idx--
+  if (idx >= 0) currentLayerIdx.value = idx
 }
 
 function requestConfirm() {
@@ -376,7 +483,10 @@ async function doConfirm() {
     const wvPayload = Object.keys(wvProfile.value).length > 0
       ? { layers: wvProfile.value, preset: chosenPresetKey.value === 'blank' ? null : chosenPresetKey.value }
       : null
-    const payload = wvPayload ? { ...confirmPayload.value, worldview: wvPayload } : confirmPayload.value
+    const castPayload = buildCastPayload()
+    let payload = { ...confirmPayload.value }
+    if (wvPayload) payload.worldview = wvPayload
+    if (castPayload) payload.cast = castPayload
     const res = await api.gachaConfirm(payload, name)
     startOpen.value = false
     const finalGenre = res.genre ?? ''
@@ -675,11 +785,63 @@ async function doConfirm() {
       </section>
     </template>
 
-    <!-- ===== 段 4：人物原型占位 ===== -->
+    <!-- ===== 段 4：人物原型向导（多角色管理） ===== -->
     <template v-else-if="stage === 'cast'">
-      <section class="wv-cast-stage" aria-label="人物原型">
-        <EmptyState icon="users" title="人物原型 · 即将上线，敬请期待"
-          desc="人物原型选择功能正在开发中。确认开工后可到人物视图手动添加角色，或等待后续版本接入原型驱动阵容。" />
+      <section class="wv-cast-stage" aria-label="人物原型向导">
+        <div class="wv-cast-head">
+          <p class="wv-intro">为每个角色配置人物原型（CHAR1-CHAR5）。主角必填，配角可选。点击「AI 自动分配」从当前世界观推导合理原型。</p>
+          <button class="btn-line" :disabled="deriveLoading"
+                  aria-label="从世界观+语言自动推导人物原型" @click="autoDeriveCast">
+            {{ deriveLoading ? '推导中…' : '✦ AI 自动分配' }}
+          </button>
+        </div>
+
+        <!-- 角色卡列表 -->
+        <div class="wv-cast-cards">
+          <div v-for="(card, idx) in castCards" :key="idx" class="wv-cast-card"
+               :class="{ main: idx === 0 }">
+            <div class="wv-cast-card-head">
+              <span class="wv-cast-badge" :class="{ main: idx === 0 }">{{ idx === 0 ? '主角' : `配角 ${idx}` }}</span>
+              <input v-model.trim="card.name" class="wv-cast-name-input"
+                     :placeholder="idx === 0 ? '主角名（必填）' : '配角名'"
+                     :aria-label="`${idx === 0 ? '主角' : '配角'}名`"
+                     maxlength="20">
+              <button v-if="idx > 0" class="wv-cast-del btn-line btn-line-xs"
+                      :aria-label="`删除配角 ${idx}`" @click="removeCastCard(idx)">删除</button>
+            </div>
+
+            <!-- CHAR1-CHAR5 分区 -->
+            <div v-for="layer in charParamsByLayer" :key="layer.id" class="wv-char-layer">
+              <div class="wv-char-layer-name">{{ layer.id }} · {{ layer.name }}</div>
+              <div v-for="param in layer.params" :key="param.key" class="wv-char-param">
+                <span class="wv-char-param-label">{{ param.label }}</span>
+                <!-- 枚举参数：chips -->
+                <div v-if="param.type === 'enum'" class="wv-char-chips" role="group"
+                     :aria-label="`${param.label} 选项`">
+                  <button v-for="opt in param.options" :key="opt.value"
+                          class="wv-char-chip"
+                          :class="{ selected: card.persona[param.key] === opt.value }"
+                          :aria-pressed="card.persona[param.key] === opt.value"
+                          :aria-label="opt.label"
+                          :title="opt.hint || opt.label"
+                          @click="setPersonaParam(card, param.key, opt.value)">
+                    {{ opt.label }}
+                  </button>
+                </div>
+                <!-- 文本参数：input -->
+                <div v-else class="wv-char-text-input">
+                  <input v-model="card.persona[param.key]" class="wv-cast-text-field"
+                         :placeholder="param.label" :aria-label="param.label"
+                         @input="setPersonaParam(card, param.key, $event.target.value)">
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <button v-if="castCards.length < MAX_SUPPORTING + 1" class="wv-cast-add btn-line"
+                aria-label="添加配角" @click="addCastCard">+ 添加配角</button>
+
         <footer class="gacha-foot">
           <button class="btn-line" aria-label="返回世界观向导" @click="backToWizard">← 返回向导</button>
           <button ref="startBtn" class="btn-main"
