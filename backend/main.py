@@ -22,6 +22,9 @@ API：
   POST /api/gacha/draw         【P8.3/P8.4】抽卡开局：library 随机组合 + lock 锁栏；synth LLM 合成（mock 短路降级）
   POST /api/gacha/confirm      【P8.5】抽卡确认：synth 卡复核+落盘 plugins/genres/（原子写、重名后缀）→ reload → init
                                【P10.2】body 可选 project_name：建新项目目录（已存在 → 409）→ 整栈切换 → init
+  GET  /api/macro/templates    【P17.3 新增】7 个幕结构模板列表（name + description + beat_count）
+  POST /api/macro/plan         【P17.3 新增】生成宏观计划（AI/mock 兜底）→ MacroPlan dict
+  GET  /api/macro/plan         【P17.3 新增】读取当前项目 macro_plan.json（无 → 404）
   POST /api/project/init       【P8.5】开局切换：重置世界 → 按 genre/culture 重建 engine 单例（进程内覆盖，不改 env/.env）
 静态：/ → frontend/dist（Vue SPA）
 """
@@ -65,6 +68,9 @@ from story_engine.logging_config import setup_logging  # noqa: E402
 from story_engine.meta import MetaGenerator, UserIntent  # noqa: E402
 from story_engine.meta.gacha import draw_card_async, derive_culture  # noqa: E402
 from story_engine.meta.genre_validator import validate_genre_pack  # noqa: E402
+from story_engine.macro import (  # noqa: E402
+    TEMPLATES as MACRO_TEMPLATES, compute_acts as macro_compute_acts,
+    generate_macro_plan, macro_plan_to_dict)
 from story_engine.types import StoryEngineError  # noqa: E402
 from story_engine.worldview import (  # noqa: E402
     ALL_PARAMS as WV_ALL_PARAMS, LAYERS as WV_LAYERS,
@@ -1016,6 +1022,8 @@ def gacha_confirm(card: dict):
     cast_data = card.get("cast")
     if cast_data is not None and not isinstance(cast_data, list):
         raise HTTPException(status_code=422, detail="cast 必须是数组")
+    # P17.3：宏观计划（可选；card.macro_plan 携带已生成的计划 dict → confirm 时落盘）
+    macro_plan_data = card.get("macro_plan")
     g = card.get("genre") or {}
     persisted = False
     name = g.get("name")
@@ -1091,6 +1099,16 @@ def gacha_confirm(card: dict):
         # P15.2：cast 落盘（用户自定义阵容 + persona → genesis 覆盖）
         if cast_data:
             _write_json_atomic(project_dir / "cast.json", cast_data)
+        # P17.3：宏观计划落盘（新项目目录）
+        if macro_plan_data is not None and isinstance(macro_plan_data, dict):
+            _write_json_atomic(project_dir / "macro_plan.json", macro_plan_data)
+            _write_project_meta(
+                project_dir,
+                macro={"template": macro_plan_data.get("act_structure", {})
+                                          .get("template", ""),
+                       "total_episodes": macro_plan_data.get("blueprint", {})
+                                          .get("total_episodes", 0),
+                       "has_plan": True})
         return {**resp, "persisted": persisted, "genre": name,
                 "project": {"name": project_name, "genre": name,
                             "culture": culture}}
@@ -1110,7 +1128,80 @@ def gacha_confirm(card: dict):
     # P15.2：cast 落盘到当前 engine.project_dir
     if cast_data:
         _write_json_atomic(Path(engine.project_dir) / "cast.json", cast_data)
+    # P17.3：宏观计划落盘（card.macro_plan 携带已生成的计划 dict）
+    macro_plan_data = card.get("macro_plan")
+    if macro_plan_data is not None and isinstance(macro_plan_data, dict):
+        target = Path(engine.project_dir)
+        _write_json_atomic(target / "macro_plan.json", macro_plan_data)
+        _write_project_meta(
+            target,
+            macro={"template": macro_plan_data.get("act_structure", {})
+                                      .get("template", ""),
+                   "total_episodes": macro_plan_data.get("blueprint", {})
+                                      .get("total_episodes", 0),
+                   "has_plan": True})
     return resp
+
+
+# ---------- 宏观规划（P17.3：宏观叙事规划层端点） ----------
+@app.get("/api/macro/templates")
+def macro_templates():
+    """【P17.3】返回 7 个幕结构模板列表（name + description + beat_count）。
+
+    beat_count 取模板定义的 beat 总数（不含 act 级别元数据），供前端展示卡面。
+    """
+    items = []
+    for name, acts in MACRO_TEMPLATES.items():
+        beat_count = sum(len(beats) for _, _, _, _, beats in acts)
+        first_act = acts[0][1] if acts else ""
+        items.append({
+            "name": name,
+            "description": first_act,
+            "beat_count": beat_count,
+        })
+    return {"templates": items}
+
+
+class MacroPlanReq(BaseModel):
+    template_name: str = "save_the_cat_15"
+    worldview: dict | None = None
+    cast: list | None = None
+
+
+@app.post("/api/macro/plan")
+async def macro_plan_generate(req: MacroPlanReq):
+    """【P17.3】生成宏观计划（AI / mock 兜底）→ 返回 MacroPlan dict。
+
+    从当前 engine 的 bundle 取题材上下文 + target_length；worldview/cast
+    可选（向导阶段还没落盘时从 body 传入）。生成后不落盘——由 gacha confirm
+    在用户确认时落盘到项目目录。
+    """
+    template = req.template_name
+    if template not in MACRO_TEMPLATES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"未知幕结构模板：{template}（可选：{sorted(MACRO_TEMPLATES)}）")
+    wv_profile = None
+    if req.worldview and isinstance(req.worldview.get("layers"), dict):
+        from story_engine.worldview import WorldviewProfile
+        wv_profile = WorldviewProfile(layers=req.worldview["layers"])
+    cast_profile = req.cast if isinstance(req.cast, list) else None
+    plan = await generate_macro_plan(
+        engine.kernel, engine.bundle, wv_profile, cast_profile, template)
+    return macro_plan_to_dict(plan)
+
+
+@app.get("/api/macro/plan")
+def macro_plan_get():
+    """【P17.3】读取当前项目的 macro_plan.json；无文件 → 404。"""
+    path = Path(engine.project_dir) / "macro_plan.json"
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="当前项目无宏观计划")
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise HTTPException(
+            status_code=500, detail=f"macro_plan.json 读取失败：{exc!r}")
 
 
 @app.post("/api/project/init")

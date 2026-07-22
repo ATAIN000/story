@@ -84,6 +84,9 @@ class DecisionCard:
     # ---- P5.12 新增（只增不改）：最新 intent 类作者介入文本（goal_update/
     # constraint/reason 拼装）；无介入或无事件源 → None，下游 prompt 与现状一致 ----
     author_intent: str | None = None
+    # ---- P17.4 新增（只增不改）：宏观上下文注入（beat/arc/foreshadow/tension）；
+    # 无 macro_plan 时为 None，下游 prompt 与现状逐字一致 ----
+    macro_context: dict | None = None
 
     def to_dict(self) -> dict:
         return asdict(self)

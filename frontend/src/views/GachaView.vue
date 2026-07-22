@@ -77,7 +77,7 @@ const confirmPayload = computed(() => {
 })
 
 /* ===== 段 2/3：世界观向导（P12.5 保留） ===== */
-const stage = ref('theme')                // 'theme' | 'skeleton' | 'wizard' | 'cast'
+const stage = ref('theme')    // 'theme' | 'skeleton' | 'wizard' | 'cast' | 'macro'
 const schemaVM = ref(null)
 const schemaLoading = ref(false)
 const wvProfile = ref({})
@@ -205,9 +205,95 @@ function goCast() {
   if (castCards.value.length === 0) autoDeriveCast()
 }
 
+/* ---- 段 4 → 段 5（宏观规划） ---- */
+function goMacro() {
+  stage.value = 'macro'
+  if (macroTemplates.value.length === 0) loadMacroTemplates()
+}
+
+function backToCast() { stage.value = 'cast' }
+
+/* ===== 段 5：宏观规划函数 ===== */
+async function loadMacroTemplates() {
+  if (macroTemplateLoading.value) return
+  macroTemplateLoading.value = true
+  try {
+    const res = await api.macroTemplates()
+    macroTemplates.value = res.templates ?? []
+  } catch (e) {
+    toastError(`幕结构模板加载失败：${e.message}`)
+  } finally {
+    macroTemplateLoading.value = false
+  }
+}
+
+async function generateMacro() {
+  if (macroGenerating.value) return
+  macroGenerating.value = true
+  try {
+    const wvPayload = Object.keys(wvProfile.value).length > 0
+      ? { layers: wvProfile.value } : null
+    const castPayload = buildCastPayload()
+    const body = {
+      template_name: selectedTemplate.value || 'save_the_cat_15',
+    }
+    if (wvPayload) body.worldview = wvPayload
+    if (castPayload) body.cast = castPayload
+    macroPlan.value = await api.macroPlanGenerate(body)
+    toast('宏观计划已生成')
+  } catch (e) {
+    toastError(`宏观计划生成失败：${e.message}`)
+  } finally {
+    macroGenerating.value = false
+  }
+}
+
+function skipMacro() {
+  macroPlan.value = null
+  requestConfirm()
+}
+
+function confirmMacro() {
+  requestConfirm()
+}
+
+/* macro_plan 摘要计算属性 */
+const macroSummary = computed(() => {
+  if (!macroPlan.value) return null
+  const p = macroPlan.value
+  return {
+    logline: p.blueprint?.logline || '—',
+    template: p.act_structure?.template || '',
+    acts: (p.act_structure?.acts ?? []).map(a => ({
+      name: a.name, range: a.episode_range, beats: a.beats?.length ?? 0,
+    })),
+    episodes: (p.episode_outlines ?? []).map(e => ({
+      ep: e.episode, synopsis: e.synopsis || '—', purpose: e.purpose || '',
+    })),
+    arcs: (p.arc_schedule?.characters ?? []).map(c => ({
+      name: c.name, arc: c.archetype_arc, milestones: c.milestones?.length ?? 0,
+    })),
+    foreshadows: (p.foreshadow_blueprint?.threads ?? []).map(f => ({
+      id: f.id, name: f.name, type: f.type,
+      plants: f.plant_episodes, harvest: f.harvest_episode,
+    })),
+    tensionPoints: (p.pacing_curve?.key_tension_points ?? []).map(t => ({
+      ep: t.episode, tension: t.tension,
+    })),
+    totalEpisodes: p.blueprint?.total_episodes ?? 0,
+  }
+})
+
 /* ===== 段 4：人物原型向导（多角色管理） ===== */
 const castCards = ref([])         // [{name, role, persona: {key: value}}]
 const deriveLoading = ref(false)
+
+/* ===== 段 5：宏观规划（P17.5） ===== */
+const macroTemplates = ref([])
+const macroTemplateLoading = ref(false)
+const selectedTemplate = ref('save_the_cat_15')
+const macroPlan = ref(null)           // 生成的 MacroPlan dict
+const macroGenerating = ref(false)
 
 /* 角色卡persona的字段分组（来自 CHARACTER_LAYERS schema） */
 const charParamsByLayer = computed(() => {
@@ -487,6 +573,7 @@ async function doConfirm() {
     let payload = { ...confirmPayload.value }
     if (wvPayload) payload.worldview = wvPayload
     if (castPayload) payload.cast = castPayload
+    if (macroPlan.value) payload.macro_plan = macroPlan.value
     const res = await api.gachaConfirm(payload, name)
     startOpen.value = false
     const finalGenre = res.genre ?? ''
@@ -517,20 +604,23 @@ async function doConfirm() {
   <div class="gacha">
     <header class="gacha-head">
       <h2>开局 · 选一个题材</h2>
-      <p class="gacha-sub">题材决定轨道/节奏/评估权重/人物阵容，世界观决定设定/规则。选题材 → 选骨架 → 世界观+语言向导 → 人物原型 → 开工。</p>
-      <!-- 四段式面包屑 -->
+      <p class="gacha-sub">题材决定轨道/节奏/评估权重/人物阵容，世界观决定设定/规则。选题材 → 选骨架 → 世界观+语言向导 → 人物原型 → 宏观规划 → 开工。</p>
+      <!-- 五段式面包屑 -->
       <ol class="gacha-stages" role="list">
         <li :class="{ active: stage === 'theme', done: stage !== 'theme' }">
           <span class="gs-idx">1</span><span class="gs-name">题材选择</span>
         </li>
-        <li :class="{ active: stage === 'skeleton', done: ['wizard','cast'].includes(stage), disabled: !hasSelection }">
+        <li :class="{ active: stage === 'skeleton', done: ['wizard','cast','macro'].includes(stage), disabled: !hasSelection }">
           <span class="gs-idx">2</span><span class="gs-name">骨架选择</span>
         </li>
-        <li :class="{ active: stage === 'wizard', done: stage === 'cast', disabled: !hasSelection }">
+        <li :class="{ active: stage === 'wizard', done: ['cast','macro'].includes(stage), disabled: !hasSelection }">
           <span class="gs-idx">3</span><span class="gs-name">世界观向导</span>
         </li>
-        <li :class="{ active: stage === 'cast', disabled: !hasSelection }">
+        <li :class="{ active: stage === 'cast', done: stage === 'macro', disabled: !hasSelection }">
           <span class="gs-idx">4</span><span class="gs-name">人物原型</span>
+        </li>
+        <li :class="{ active: stage === 'macro', disabled: !hasSelection }">
+          <span class="gs-idx">5</span><span class="gs-name">宏观规划</span>
         </li>
       </ol>
     </header>
@@ -844,9 +934,128 @@ async function doConfirm() {
 
         <footer class="gacha-foot">
           <button class="btn-line" aria-label="返回世界观向导" @click="backToWizard">← 返回向导</button>
+          <button class="btn-main"
+                  :disabled="busy"
+                  aria-label="下一步：宏观规划" @click="goMacro">
+            下一步：宏观规划 →
+          </button>
+        </footer>
+      </section>
+    </template>
+
+    <!-- ===== 段 5：宏观规划（P17.5） ===== -->
+    <template v-else-if="stage === 'macro'">
+      <section class="wv-macro-stage" aria-label="宏观规划">
+        <div class="wv-macro-head">
+          <p class="wv-intro">选择幕结构模板，AI 生成完整的宏观计划（六大组件）。生成后可审阅、重摇或跳过（无宏观计划也可开工）。</p>
+        </div>
+
+        <!-- 模板选择 -->
+        <div v-if="macroTemplateLoading" class="gacha-loading" role="status">
+          <span class="gc-spin" aria-hidden="true"></span>加载幕结构模板…
+        </div>
+        <div v-else class="wv-macro-templates" role="group" aria-label="幕结构模板选择">
+          <button v-for="t in macroTemplates" :key="t.name"
+                  class="wv-macro-tmpl-card"
+                  :class="{ selected: selectedTemplate === t.name }"
+                  :aria-pressed="selectedTemplate === t.name"
+                  :aria-label="`选择模板：${t.name}（${t.beat_count} 拍）`"
+                  @click="selectedTemplate = t.name">
+            <div class="wv-macro-tmpl-name">{{ t.name }}</div>
+            <div class="wv-macro-tmpl-beats">{{ t.beat_count }} 拍</div>
+          </button>
+        </div>
+
+        <!-- 生成按钮 -->
+        <div class="wv-macro-gen-row">
+          <button class="btn-main" :disabled="macroGenerating"
+                  aria-label="AI 生成宏观计划" @click="generateMacro">
+            {{ macroGenerating ? '生成中…' : '✦ AI 生成宏观计划' }}
+          </button>
+        </div>
+
+        <!-- 宏观计划摘要展示 -->
+        <div v-if="macroSummary" class="wv-macro-summary">
+          <!-- Blueprint logline -->
+          <div class="wv-macro-card">
+            <div class="wv-macro-card-title">故事蓝图</div>
+            <p class="wv-macro-logline">{{ macroSummary.logline }}</p>
+            <div class="wv-macro-meta">
+              模板：{{ macroSummary.template }} · 共 {{ macroSummary.totalEpisodes }} 集
+            </div>
+          </div>
+
+          <!-- Act beats position bar -->
+          <div class="wv-macro-card">
+            <div class="wv-macro-card-title">幕结构</div>
+            <div class="wv-macro-acts-bar">
+              <div v-for="(a, i) in macroSummary.acts" :key="i" class="wv-macro-act-seg"
+                   :style="{ flexGrow: (a.range[1] - a.range[0] + 1) }">
+                <span class="wv-macro-act-name">{{ a.name }}</span>
+                <span class="wv-macro-act-range">{{ a.range[0] }}-{{ a.range[1] }}</span>
+                <span class="wv-macro-act-beats">{{ a.beats }}拍</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Episode outlines -->
+          <div class="wv-macro-card">
+            <div class="wv-macro-card-title">分集梗概（{{ macroSummary.episodes.length }} 集）</div>
+            <div class="wv-macro-ep-list">
+              <div v-for="e in macroSummary.episodes" :key="e.ep" class="wv-macro-ep-item">
+                <span class="wv-macro-ep-num">第{{ e.ep }}集</span>
+                <span class="wv-macro-ep-syn">{{ e.synopsis }}</span>
+                <span v-if="e.purpose" class="wv-macro-ep-purpose">{{ e.purpose }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Arc milestones -->
+          <div v-if="macroSummary.arcs.length" class="wv-macro-card">
+            <div class="wv-macro-card-title">角色弧光</div>
+            <div class="wv-macro-arcs">
+              <span v-for="c in macroSummary.arcs" :key="c.name" class="wv-macro-arc-chip">
+                {{ c.name }}（{{ c.arc }}，{{ c.milestones }} 里程碑）
+              </span>
+            </div>
+          </div>
+
+          <!-- Foreshadow threads -->
+          <div v-if="macroSummary.foreshadows.length" class="wv-macro-card">
+            <div class="wv-macro-card-title">伏笔线（{{ macroSummary.foreshadows.length }} 条）</div>
+            <div class="wv-macro-fs-list">
+              <span v-for="f in macroSummary.foreshadows" :key="f.id" class="wv-macro-fs-chip">
+                {{ f.name }}（埋{{ f.plants?.join(',') }}→收{{ f.harvest }}）
+              </span>
+            </div>
+          </div>
+
+          <!-- Pacing sparkline -->
+          <div v-if="macroSummary.tensionPoints.length" class="wv-macro-card">
+            <div class="wv-macro-card-title">节奏曲线</div>
+            <div class="wv-macro-sparkline">
+              <svg :viewBox="`0 0 ${macroSummary.tensionPoints.length * 20} 40`"
+                   preserveAspectRatio="none" class="wv-macro-spark">
+                <polyline :points="macroSummary.tensionPoints.map((t, i) => `${i * 20},${40 - t.tension * 35}`).join(' ')"
+                          fill="none" stroke="var(--accent, #6c8)" stroke-width="2" />
+                <circle v-for="(t, i) in macroSummary.tensionPoints" :key="i"
+                        :cx="i * 20" :cy="40 - t.tension * 35" r="2"
+                        fill="var(--accent, #6c8)" />
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        <footer class="gacha-foot">
+          <button class="btn-line" aria-label="返回人物原型" @click="backToCast">← 返回人物</button>
+          <button v-if="macroPlan" class="btn-line" :disabled="macroGenerating"
+                  aria-label="重新生成宏观计划" @click="generateMacro">
+            {{ macroGenerating ? '生成中…' : '↻ 重摇' }}
+          </button>
+          <button class="btn-line" aria-label="跳过宏观计划，直接开工" @click="skipMacro">跳过</button>
           <button ref="startBtn" class="btn-main"
                   :disabled="busy"
-                  aria-label="确认开工，按当前配置开始创作" @click="requestConfirm">
+                  aria-label="确认开工" @click="confirmMacro">
             {{ confirmBusy ? '开工中…' : '确认开工' }}
           </button>
         </footer>

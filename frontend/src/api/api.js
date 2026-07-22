@@ -91,4 +91,12 @@ export const api = {
   /* P15.2：人物原型推导 — worldview+language profile → 建议阵容（含 persona） */
   deriveCast: (worldview = {}, language = {}) =>
     post('/api/worldview/derive_cast', { worldview, language }),
+
+  /* --- 宏观规划（P17.5：开局向导第⑤段） ---
+     templates() → {templates[{name, description, beat_count}]}
+     planGenerate(body) → {template_name, worldview?, cast?} → MacroPlan dict
+     planGet() → 当前项目 macro_plan.json（无 → 404） */
+  macroTemplates: () => req('/api/macro/templates'),
+  macroPlanGenerate: (body) => post('/api/macro/plan', body),
+  macroPlanGet: () => req('/api/macro/plan'),
 }

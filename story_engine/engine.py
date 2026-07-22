@@ -492,6 +492,10 @@ class StoryEngine:
         state = self.kernel.query_world("current_state")
         chapter_no = state.narrative.chapter + 1
         card = self.showrunner.generate_decision_card(chapter_no, state)
+        # P17.4：plan 预览也注入宏观上下文（无 macro_plan → None）
+        macro_ctx = self._build_macro_context(chapter_no)
+        if macro_ctx is not None:
+            card.macro_context = macro_ctx
         self._pending_plan = card
         return card.to_dict()
 
@@ -503,13 +507,22 @@ class StoryEngine:
                                mode: str):
         """P6.2：confirm 模式优先消费 plan 缓存的决策卡（消费即清除）；
         auto / 无缓存 / 缓存章号不匹配 → 现场产卡（现状逐字不变）。
-        章号匹配的缓存在任何模式下都清除：本章一生成，旧方案即失效。"""
+        章号匹配的缓存在任何模式下都清除：本章一生成，旧方案即失效。
+        P17.4：产卡后注入 macro_context（无 macro_plan → None，零行为变化）。"""
         pending = self._pending_plan
         if pending is not None and pending.episode == chapter_no:
             self._pending_plan = None
             if mode == "confirm":
-                return pending
-        return self.showrunner.generate_decision_card(chapter_no, state)
+                card = pending
+            else:
+                card = self.showrunner.generate_decision_card(chapter_no, state)
+        else:
+            card = self.showrunner.generate_decision_card(chapter_no, state)
+        # P17.4：宏观上下文注入（无 macro_plan → macro_context 保持 None）
+        macro_ctx = self._build_macro_context(chapter_no)
+        if macro_ctx is not None:
+            card.macro_context = macro_ctx
+        return card
 
     async def _generate_chapter_llm_path(
         self, chapter_no: int, state: WorldState, t0: float, *, scripted: bool,
@@ -751,7 +764,8 @@ class StoryEngine:
             sjuzhet = SjuzhetSelector().select(fabula, self.bundle)
             text = await Narrativizer(self.kernel, self.bundle).narrate(
                 ir, sjuzhet, recap=self._ir_recap(),
-                worldview_text=self._worldview_prompt_text())
+                worldview_text=self._worldview_prompt_text(),
+                macro_text=self._card_macro_text(card))
             _llog.info("IR-first 产出 | 章={} | beats={} | events={}", chapter_no,
                        len(ir.beats), len(ir.events))
         except Exception as exc:
@@ -1183,6 +1197,10 @@ class StoryEngine:
             f"情感弧={getattr(card, 'target_arc', '')}；"
             f"钩子={getattr(card, 'ending_hook', {})}；原语序列={prim_txt or '无'}"
         )
+        # P17.4：宏观指导注入 brief（Actor recall 可取；无 macro_plan → 缺席，零变化）
+        macro_ctx = getattr(card, "macro_context", None)
+        if macro_ctx:
+            brief += f"；本章宏观指导：{self._macro_context_text(macro_ctx)}"
         await banks.add(
             brief, bank="chapter_briefs", agent_id="_global",
             metadata={"chapter": chapter_no}, importance=7,
@@ -1264,11 +1282,18 @@ class StoryEngine:
         # prompt 与现状逐字一致
         wv_text = self._worldview_prompt_text()
         wv_txt = (f"=== 世界观设定 ===\n{wv_text}\n\n" if wv_text else "")
+        # P17.4：宏观指导段（从 card.macro_context 提取；None/空 → 缺席，零变化）
+        macro_ctx = getattr(card, "macro_context", None)
+        macro_txt = ""
+        if macro_ctx:
+            mt = self._macro_context_text(macro_ctx)
+            if mt:
+                macro_txt = f"=== 本章宏观指导 ===\n{mt}\n\n"
         return (
             f"【CHAPTER={chapter_no}】\n"
             f"你是{pcfg['role']}。背景：{pcfg['setting']}。\n"
             f"人物：{pcfg['characters']}。\n\n"
-            f"{wv_txt}"
+            f"{wv_txt}{macro_txt}"
             f"=== 已定稿前情 ===\n{history or '（开篇）'}\n\n"
             f"=== 本章调度 ===\n{intent_txt}推进轨道：{advance_txt}\n"
             f"原语序列：{prim_txt or '无'}\n"
@@ -1862,6 +1887,150 @@ class StoryEngine:
             return None
         text = profile.to_prompt_text()
         return text or None
+
+    def _read_macro_plan(self) -> dict | None:
+        """P17.4：读项目 macro_plan.json → dict；无文件/异常 → None。
+
+        无文件时返回 None（宏观注入的「无计划」路径：macro_context 全程 None，
+        所有 prompt 与现状逐字一致）。文件存在但格式异常 → warning + None。
+        """
+        path = self.project_dir / "macro_plan.json"
+        if not path.exists():
+            return None
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except Exception as exc:
+            warnings.warn(f"macro_plan.json 读取失败（{exc!r}），忽略",
+                          stacklevel=2)
+            return None
+        return data if isinstance(data, dict) else None
+
+    def _build_macro_context(self, chapter_no: int) -> dict | None:
+        """P17.4：从 macro_plan 提取当前章节的宏观上下文 → dict（供 DecisionCard。
+
+        macro_context 注入）；无 macro_plan 或当前集无匹配信息 → None（行为零变化）。
+
+        提取内容（设计文档 4.3 节）：
+        - act/beat/beat_description/beat_position：从 act_structure 定位当前章所在幕与 beat
+        - episode_synopsis/key_events_required：从 episode_outlines 取当前集梗概
+        - arc_directives：从 arc_schedule 取当前集所在里程碑的角色行为指导
+        - foreshadow_directives：从 foreshadow_blueprint 取当前集应埋/收的伏笔
+        - pacing_directive：从 pacing_curve 取当前集张力目标
+        """
+        plan = self._read_macro_plan()
+        if plan is None:
+            return None
+        ctx: dict = {
+            "act": "", "beat": "", "beat_description": "",
+            "beat_position": "", "episode_synopsis": "",
+            "arc_directives": [], "foreshadow_directives": [],
+            "pacing_directive": {}, "key_events_required": [],
+        }
+        # --- 幕 + beat 定位 ---
+        act_struct = plan.get("act_structure") or {}
+        for act in act_struct.get("acts") or []:
+            rng = act.get("episode_range") or []
+            if len(rng) == 2 and rng[0] <= chapter_no <= rng[1]:
+                ctx["act"] = act.get("name", "")
+                ctx["beat_position"] = f"{rng[0]}-{rng[1]}"
+                # 当前集最近的 beat（ep <= chapter_no 中最大者）
+                best_beat = None
+                for b in act.get("beats") or []:
+                    try:
+                        ep = int(b.get("ep", 0))
+                    except (ValueError, TypeError):
+                        continue
+                    if ep <= chapter_no and (best_beat is None
+                                             or ep > int(best_beat.get("ep", 0))):
+                        best_beat = b
+                if best_beat:
+                    ctx["beat"] = best_beat.get("name", "")
+                    ctx["beat_description"] = best_beat.get("desc", "")
+                break
+        # --- 分集梗概 ---
+        for ep in plan.get("episode_outlines") or []:
+            if ep.get("episode") == chapter_no:
+                ctx["episode_synopsis"] = ep.get("synopsis", "")
+                ctx["key_events_required"] = list(ep.get("key_events") or [])
+                break
+        # --- 角色弧光指导 ---
+        for char in (plan.get("arc_schedule") or {}).get("characters") or []:
+            for ms in char.get("milestones") or []:
+                rng = ms.get("episode_range", "")
+                if self._ep_in_range(chapter_no, rng):
+                    ctx["arc_directives"].append({
+                        "character": char.get("name", ""),
+                        "phase": ms.get("phase", ""),
+                        "behavior": ms.get("behavior", ""),
+                    })
+        # --- 伏笔指导 ---
+        for thread in (plan.get("foreshadow_blueprint") or {}).get("threads") or []:
+            plants = thread.get("plant_episodes") or []
+            harvest = thread.get("harvest_episode", 0)
+            if chapter_no in plants or chapter_no == harvest:
+                ctx["foreshadow_directives"].append({
+                    "id": thread.get("id", ""),
+                    "name": thread.get("name", ""),
+                    "action": "harvest" if chapter_no == harvest else "plant",
+                })
+        # --- 节奏张力 ---
+        for tp in (plan.get("pacing_curve") or {}).get("key_tension_points") or []:
+            if tp.get("episode") == chapter_no:
+                ctx["pacing_directive"] = {
+                    "tension": tp.get("tension", 0.0),
+                    "reason": tp.get("reason", ""),
+                }
+                break
+        return ctx
+
+    @staticmethod
+    def _ep_in_range(ep: int, rng: str) -> bool:
+        """解析 '1-3' / '5' 形式的章节范围，判断 ep 是否在内。"""
+        if not rng:
+            return False
+        parts = str(rng).split("-")
+        try:
+            if len(parts) == 1:
+                return ep == int(parts[0])
+            return int(parts[0]) <= ep <= int(parts[1])
+        except (ValueError, TypeError):
+            return False
+
+    @staticmethod
+    def _card_macro_text(card) -> str | None:
+        """P17.4：从 DecisionCard.macro_context 提取 prompt 文本段。
+
+        无 macro_context / 空文本 → None（Realizer prompt 与现状逐字一致）。
+        """
+        ctx = getattr(card, "macro_context", None)
+        if not ctx:
+            return None
+        text = StoryEngine._macro_context_text(ctx)
+        return text or None
+
+    @staticmethod
+    def _macro_context_text(ctx: dict) -> str:
+        """P17.4：macro_context dict → prompt 可用文本段（beat/arc/foreshadow/tension）。
+
+        供 Actor brief 和 Realizer/生成 prompt 的宏观指导段使用；空 ctx → 空串。
+        """
+        parts = []
+        if ctx.get("beat"):
+            desc = ctx.get("beat_description", "")
+            parts.append(f"当前 beat={ctx['beat']}" + (f"（{desc}）" if desc else ""))
+        if ctx.get("episode_synopsis"):
+            parts.append(f"集纲={ctx['episode_synopsis']}")
+        if ctx.get("key_events_required"):
+            parts.append(f"关键事件={', '.join(ctx['key_events_required'])}")
+        for arc in ctx.get("arc_directives") or []:
+            parts.append(f"{arc.get('character', '')}弧光-{arc.get('phase', '')}：{arc.get('behavior', '')}")
+        for fs in ctx.get("foreshadow_directives") or []:
+            action = "回收" if fs.get("action") == "harvest" else "埋设"
+            parts.append(f"{action}伏笔-{fs.get('name', '')}")
+        pace = ctx.get("pacing_directive") or {}
+        if pace.get("reason"):
+            parts.append(f"张力目标={pace['reason']}")
+        return "；".join(parts)
 
     def _read_chapters(self) -> list[dict]:
         return json.loads(self.chapters_path.read_text(encoding="utf-8"))

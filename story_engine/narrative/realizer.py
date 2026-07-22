@@ -147,15 +147,19 @@ class LanguageRealizer:
     # ---------- 主入口：1 次 LLM 调用 ----------
     async def realize(self, ir: NarrativeIR, sjuzhet=None, bundle=None,
                       *, recap: str | None = None,
-                      worldview_text: str | None = None) -> str:
+                      worldview_text: str | None = None,
+                      macro_text: str | None = None) -> str:
         """IR → 目标语言文本（共创模式，恰好 1 次 LLM 调用；无设施/异常 → ""）
 
         recap：可选前情提要文本（P5.12 ②，章节连续性上下文）；None 时 prompt
         与现状逐字一致。
         worldview_text：可选世界观设定文本（P12.3，双通道融合）；None/空 时
-        prompt 与现状逐字一致。"""
+        prompt 与现状逐字一致。
+        macro_text：可选宏观指导文本（P17.4，beat/arc/foreshadow/tension）；
+        None/空 时 prompt 与现状逐字一致。"""
         prompt = self._render_prompt(ir, sjuzhet, bundle, recap=recap,
-                                     worldview_text=worldview_text)
+                                     worldview_text=worldview_text,
+                                     macro_text=macro_text)
         if self._llm_call is None:
             return ""
         try:
@@ -222,7 +226,8 @@ class LanguageRealizer:
     # ---------- prompt 组装 ----------
     def _render_prompt(self, ir: NarrativeIR, sjuzhet=None, bundle=None,
                        *, recap: str | None = None,
-                       worldview_text: str | None = None) -> str:
+                       worldview_text: str | None = None,
+                       macro_text: str | None = None) -> str:
         pcfg = _plugin_prompt_config(bundle)
         hard_reqs = [pcfg["style"], *(pcfg.get("hard_requirements") or []),
                      *self._craft_rules()]
@@ -237,10 +242,15 @@ class LanguageRealizer:
         worldview_txt = (
             f"=== 世界观设定 ===\n{worldview_text}\n\n"
             if worldview_text else "")
+        # P17.4：可选宏观指导段（beat/arc/foreshadow/tension）；None/空串时
+        # 整段缺席，prompt 与现状逐字一致
+        macro_txt = (
+            f"=== 本章宏观指导 ===\n{macro_text}\n\n"
+            if macro_text else "")
         return (
             f"你是{pcfg['role']}。背景：{pcfg['setting']}。\n"
             f"人物：{pcfg['characters']}。\n\n"
-            f"{worldview_txt}{recap_txt}"
+            f"{worldview_txt}{macro_txt}{recap_txt}"
             f"=== 本章故事骨架（IR 概念级摘要，供你再创作，不是待译原文） ===\n"
             f"{self._ir_summary(ir, sjuzhet)}\n\n"
             f"=== 质感目标（创作指令） ===\n{self._texture_block(ir.texture)}\n\n"
@@ -394,7 +404,8 @@ class EnglishRealizer(LanguageRealizer):
 
     def _render_prompt(self, ir: NarrativeIR, sjuzhet=None, bundle=None,
                        *, recap: str | None = None,
-                       worldview_text: str | None = None) -> str:
+                       worldview_text: str | None = None,
+                       macro_text: str | None = None) -> str:
         pcfg = _plugin_prompt_config(bundle)
         hard_reqs = [pcfg["style"], *(pcfg.get("hard_requirements") or []),
                      *self._craft_rules()]
@@ -410,10 +421,14 @@ class EnglishRealizer(LanguageRealizer):
         worldview_txt = (
             f"=== Worldview ===\n{worldview_text}\n\n"
             if worldview_text else "")
+        # P17.4：optional macro guidance block; absent when None/empty
+        macro_txt = (
+            f"=== Macro Guidance ===\n{macro_text}\n\n"
+            if macro_text else "")
         return (
             f"You are {pcfg['role']}. Setting: {pcfg['setting']}.\n"
             f"Characters: {pcfg['characters']}.\n\n"
-            f"{worldview_txt}{recap_txt}"
+            f"{worldview_txt}{macro_txt}{recap_txt}"
             f"=== Story skeleton (concept-level IR summary — raw material to "
             f"re-create from, not text to translate) ===\n"
             f"{self._ir_summary(ir, sjuzhet)}\n\n"
@@ -529,16 +544,20 @@ class Narrativizer:
 
     async def narrate(self, ir: NarrativeIR, sjuzhet=None,
                       *, recap: str | None = None,
-                      worldview_text: str | None = None) -> str:
+                      worldview_text: str | None = None,
+                      macro_text: str | None = None) -> str:
         """realize（1 次 LLM）→ _filter_ai_isms → （env 门控的）_inject_imperfection
 
         recap：可选前情提要（P5.12 ②，engine IR-first 路径注入最近章节结尾 +
         未回收伏笔）；None 时 prompt 与现状逐字一致。
         worldview_text：可选世界观设定文本（P12.3 双通道融合，engine 注入
         WorldviewProfile.to_prompt_text()）；None/空 时 prompt 与现状逐字一致。
+        macro_text：可选宏观指导文本（P17.4，beat/arc/foreshadow/tension）；
+        None/空 时 prompt 与现状逐字一致。
         """
         realizer = self.select_realizer(self.bundle.language)
         text = await realizer.realize(ir, sjuzhet, self.bundle, recap=recap,
-                                      worldview_text=worldview_text)
+                                      worldview_text=worldview_text,
+                                      macro_text=macro_text)
         text = _filter_ai_isms(text, realizer.language)
         return _inject_imperfection(text, realizer.language)

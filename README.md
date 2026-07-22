@@ -165,7 +165,10 @@ tests/test_engine.py         赌注1/赌注4/核心循环回归测试
 | POST | /api/project/rollback | 回滚到指定 tick（`{"tick": 14}`） |
 | POST | /api/project/reset | 重置项目 |
 | POST | /api/gacha/draw | 抽卡开局：library 返回题材列表 / synth LLM 合成（mock 恒降级） |
-| POST | /api/gacha/confirm | 确认抽卡：card={genre:{name,source,yaml?}} + 可选 worldview/project_name；synth 落盘 + init 切换 |
+| POST | /api/gacha/confirm | 确认抽卡：card={genre:{name,source,yaml?}} + 可选 worldview/project_name/macro_plan；synth 落盘 + init 切换 |
+| GET | /api/macro/templates | 7 个幕结构模板列表（name + description + beat_count） |
+| POST | /api/macro/plan | 生成宏观计划（AI/mock 兜底）→ MacroPlan dict |
+| GET | /api/macro/plan | 读取当前项目 macro_plan.json（无 → 404） |
 | POST | /api/project/init | 开局切换：reset + 按 genre/culture 重建单例（进程内覆盖不写 env） |
 | GET | /api/projects | 项目列表（扫描 data/projects/*，含 current 字段；老项目补写 project.json） |
 | POST | /api/projects/open | 续旧切换：恢复项目自身 genre/culture 整栈重建（404 不存在 / 422 组合非法） |
@@ -195,7 +198,7 @@ tests/test_engine.py         赌注1/赌注4/核心循环回归测试
 
 ## 抽卡开局（Gacha）
 
-独立开局页：选题材 → 选世界观骨架 → 世界观+语言向导微调 → 人物原型 → 开工。
+独立开局页：选题材 → 选世界观骨架 → 世界观+语言向导微调 → 人物原型 → 宏观规划 → 开工。
 
 - **入口**：左侧 nav「开局」段（置于系统段上方）；写作台零章空态也有「抽卡开局」CTA
 - **两模式**：
@@ -245,6 +248,31 @@ LANG1-LANG5 共 15 参数 + 人物原型 CHAR1-CHAR5 共 14 参数），所有�
 端点契约：`GET /api/worldview/schema`、`POST /api/worldview/evaluate`、
 `POST /api/worldview/derive_cast`、`POST /api/gacha/confirm` 的 `worldview`+`cast`
 扩展，见 `docs/接口规范_part2.md` §11.6。
+
+## 宏观叙事规划层（Macro Story Planner，P17）
+
+在开局向导末尾（人物原型之后、确认开工之前）加一段**宏观规划**：
+选幕结构模板 → AI 生成完整宏观计划 → 审阅六大组件摘要 → 重摇/跳过/确认。
+确认后落盘 `macro_plan.json`，每章生成时自动注入当前集的宏观上下文
+（beat 定位 / 集纲梗概 / 角色弧光指导 / 伏笔埋收指令 / 张力目标）到
+DecisionCard.macro_context → Actor propose brief + Realizer prompt + 直连生成
+prompt。无 macro_plan.json 时所有行为零变化（旧项目完全兼容）。
+
+- **六组件**：Story Blueprint（故事蓝图 logline + 主题论证 + 核心冲突）/
+  Act Structure（幕结构映射，7 模板可选）/ Episode Outlines（分集梗概）/
+  Arc Schedule（角色弧光里程碑表）/ Foreshadow Blueprint（伏笔全局布局图）/
+  Pacing Curve（全书情感强度曲线）
+- **七模板**：save_the_cat_15 / truby_22 / three_act_classic / dtg_50_30 /
+  wuxia_classic / romance_beat / custom——按 total_episodes 自动计算 beat 章节位置
+- **五段式开局向导**：①题材 → ②骨架 → ③世界观+语言向导 → ④人物原型
+  → **⑤宏观规划（NEW）** → 确认开工
+- **注入链**：`_build_macro_context(chapter_no)` 读 macro_plan.json →
+  DecisionCard.macro_context → `_macro_context_text()` 转 prompt 段 →
+  Actor brief + Realizer `_render_prompt` + 直连 `_real_generate_prompt`
+  三处注入点，无计划 → None → 整段缺席（prompt 逐字不变）
+
+端点契约：`GET /api/macro/templates`、`POST /api/macro/plan`、
+`GET /api/macro/plan`，见 `docs/接口规范_part2.md` §12。
 
 ## 多项目管理（Projects）
 

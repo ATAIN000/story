@@ -14,6 +14,8 @@ from story_engine.macro import (
 )
 from story_engine.types import GenreBundle
 
+from conftest import import_backend_main
+
 
 def run(coro):
     return asyncio.run(coro)
@@ -152,3 +154,91 @@ def test_parse_failure_falls_back_to_skeleton():
     # 兜底骨架一定有 10 集大纲（total_episodes 来自 bundle）
     assert len(plan.episode_outlines) == 10
     assert len(plan.act_structure.acts) == 3  # three_act_classic
+
+
+# ============================================================
+# P17.3: 端点 + 落盘
+# ============================================================
+
+def test_macro_templates_endpoint():
+    """GET /api/macro/templates → 7 模板，每项含 name + beat_count"""
+    backend = import_backend_main()
+    from fastapi.testclient import TestClient
+    with TestClient(backend.app) as c:
+        resp = c.get("/api/macro/templates")
+    assert resp.status_code == 200
+    items = resp.json()["templates"]
+    assert len(items) == 7
+    names = {t["name"] for t in items}
+    assert "save_the_cat_15" in names
+    for t in items:
+        assert t["beat_count"] >= 1
+
+
+def test_macro_plan_generate_endpoint():
+    """POST /api/macro/plan → mock 兜底产出完整 MacroPlan dict"""
+    backend = import_backend_main()
+    from fastapi.testclient import TestClient
+    with TestClient(backend.app) as c:
+        resp = c.post("/api/macro/plan", json={
+            "template_name": "save_the_cat_15",
+        })
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "blueprint" in data
+    assert "act_structure" in data
+    assert "episode_outlines" in data
+    assert data["act_structure"]["template"] == "save_the_cat_15"
+
+
+def test_macro_plan_get_404_without_file():
+    """GET /api/macro/plan → 临时项目无 macro_plan.json → 404"""
+    backend = import_backend_main()
+    from fastapi.testclient import TestClient
+    with TestClient(backend.app) as c:
+        resp = c.get("/api/macro/plan")
+    assert resp.status_code == 404
+
+
+# ============================================================
+# P17.4: macro_context 构建 + 无计划时 None
+# ============================================================
+
+def test_build_macro_context_for_chapter():
+    """engine._build_macro_context(N) 从 macro_plan.json 提取正确 beat/synopsis/arc"""
+    import json
+    import tempfile
+    from pathlib import Path
+    from story_engine.engine import StoryEngine
+
+    plan = macro_plan_to_dict(run(generate_macro_plan(
+        _mock_kernel(True), _bundle(), None, _cast(), "save_the_cat_15")))
+    # 确保第 5 集有 outline
+    assert any(e["episode"] == 5 for e in plan["episode_outlines"])
+
+    with tempfile.TemporaryDirectory() as td:
+        (Path(td) / "macro_plan.json").write_text(
+            json.dumps(plan, ensure_ascii=False), encoding="utf-8")
+        kernel = SimpleNamespace(
+            llm=SimpleNamespace(is_mock=True),
+            project_dir=Path(td))
+        # 最小化构造：只需 project_dir 即可测试 _build_macro_context
+        engine = StoryEngine.__new__(StoryEngine)
+        engine.project_dir = Path(td)
+        ctx = engine._build_macro_context(5)
+    assert ctx is not None
+    assert ctx["episode_synopsis"]  # 第 5 集有梗概
+    assert ctx["act"]  # 落在某个 act 内
+
+
+def test_build_macro_context_none_without_plan():
+    """无 macro_plan.json → _build_macro_context 返回 None（零行为变化）"""
+    import tempfile
+    from pathlib import Path
+    from story_engine.engine import StoryEngine
+
+    with tempfile.TemporaryDirectory() as td:
+        engine = StoryEngine.__new__(StoryEngine)
+        engine.project_dir = Path(td)
+        ctx = engine._build_macro_context(1)
+    assert ctx is None

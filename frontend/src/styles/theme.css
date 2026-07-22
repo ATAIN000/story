@@ -690,3 +690,45 @@ button { font: inherit; cursor: pointer; border: none; background: none; color: 
 .wv-cast-text-field:focus { outline: 2px solid var(--accent, #6366f1); outline-offset: -1px; border-color: transparent; }
 
 .wv-cast-add { align-self: flex-start; margin-top: 4px; }
+
+/* ===== 段 5：宏观规划（P17.5） ===== */
+.wv-macro-stage { margin-top: 18px; display: flex; flex-direction: column; gap: 18px; }
+.wv-macro-stage .gacha-foot { justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+.wv-macro-head .wv-intro { margin-bottom: 4px; }
+.wv-macro-templates { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }
+.wv-macro-tmpl-card {
+  border: 1px solid var(--border, #e0e0e0); border-radius: 8px; padding: 12px;
+  background: var(--surface, #fafafa); cursor: pointer; text-align: center; transition: border-color .15s;
+}
+.wv-macro-tmpl-card.selected { border-color: var(--accent, #6366f1); border-width: 2px; }
+.wv-macro-tmpl-name { font-weight: 600; font-size: 13px; word-break: break-all; }
+.wv-macro-tmpl-beats { font-size: 11px; color: var(--text-sec, #888); margin-top: 4px; }
+.wv-macro-gen-row { text-align: center; }
+.wv-macro-summary { display: flex; flex-direction: column; gap: 14px; }
+.wv-macro-card {
+  border: 1px solid var(--border, #e0e0e0); border-radius: 10px; padding: 14px;
+  background: var(--surface, #fafafa);
+}
+.wv-macro-card-title { font-weight: 600; font-size: 13px; margin-bottom: 8px; color: var(--text-sec, #555); }
+.wv-macro-logline { font-size: 14px; line-height: 1.5; margin: 0 0 6px 0; }
+.wv-macro-meta { font-size: 12px; color: var(--text-sec, #888); }
+.wv-macro-acts-bar { display: flex; gap: 3px; height: 48px; }
+.wv-macro-act-seg {
+  display: flex; flex-direction: column; justify-content: center; align-items: center;
+  border-radius: 6px; background: var(--accent-fade, rgba(99,102,241,.12)); padding: 4px;
+  font-size: 11px; min-width: 0; overflow: hidden;
+}
+.wv-macro-act-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wv-macro-act-range { color: var(--text-sec, #888); }
+.wv-macro-act-beats { font-size: 10px; color: var(--text-sec, #aaa); }
+.wv-macro-ep-list { max-height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+.wv-macro-ep-item { display: flex; gap: 8px; align-items: baseline; font-size: 12px; line-height: 1.4; }
+.wv-macro-ep-num { font-weight: 600; white-space: nowrap; color: var(--accent, #6366f1); }
+.wv-macro-ep-syn { flex: 1; }
+.wv-macro-ep-purpose { font-size: 10px; color: var(--text-sec, #aaa); white-space: nowrap; }
+.wv-macro-arcs { display: flex; flex-wrap: wrap; gap: 6px; }
+.wv-macro-arc-chip { font-size: 12px; padding: 3px 10px; border-radius: 12px; background: var(--border, #e0e0e0); }
+.wv-macro-fs-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.wv-macro-fs-chip { font-size: 12px; padding: 3px 10px; border-radius: 12px; background: var(--accent-fade, rgba(99,102,241,.12)); }
+.wv-macro-sparkline { width: 100%; height: 48px; }
+.wv-macro-spark { width: 100%; height: 100%; }
