@@ -136,7 +136,7 @@ def test_prompt_contains_worldview_and_cast_context():
     run(generate_macro_plan(kernel, _bundle(), None, _cast(),
                             "save_the_cat_15"))
     prompt = llm_call.prompt
-    assert "mystery" in prompt
+    assert "悬疑" in prompt or "mystery" in prompt  # P18: prompt 用中文 title
     assert "陆明" in prompt
     assert "信任等于软弱" in prompt  # arc_lie
     assert "save_the_cat_15" in prompt
