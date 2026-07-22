@@ -126,18 +126,28 @@ class ProcessGate:
     async def check_l5(self, text: str) -> Gate:
         """三规则：首行标题格式 / 字数在 genre style 区间 / 无半截句。
 
-        首行标题格式对齐引擎级约定（engine.py：「标题：XXXX」，空一行接正文）。
+        标题格式接受三种：
+        - 「标题：XXXX」（引擎级约定，全角冒号）
+        - 「# 第X章…」（markdown 标题，LLM 常见产出）
+        - 「第X章…」（纯文本标题）
+        字数检查放宽 ±50% 容差（LLM 不精确控制篇幅）。
         """
         failures: dict[str, str] = {}
         stripped = (text or "").strip()
         first_line = stripped.splitlines()[0] if stripped else ""
-        if not re.match(r"^标题：\S+", first_line):
-            failures["title_format"] = "首行标题格式不符（要求「标题：XXXX」）"
+        # 标题格式：接受三种（全角冒号 / markdown / 纯文本章标题）
+        if not (re.match(r"^标题：\S+", first_line)
+                or re.match(r"^#\s*.+", first_line)
+                or re.match(r"^第.+章", first_line)):
+            failures["title_format"] = "首行标题格式不符（要求「标题：XXXX」或 markdown 标题或「第X章」）"
+        # 字数检查：±50% 容差（LLM 不精确控制篇幅，硬上下限各放宽 50%）
         lo, hi = parse_word_range(self.style)
+        margin_lo = max(50, int(lo * 0.5))
+        margin_hi = int(hi * 1.5)
         n_chars = len(re.sub(r"\s", "", stripped))
-        if not (lo <= n_chars <= hi):
+        if not (lo - margin_lo <= n_chars <= margin_hi):
             failures["word_count"] = (
-                f"字数 {n_chars} 超出区间 [{lo}, {hi}]（genre style）")
+                f"字数 {n_chars} 超出容差区间 [{lo - margin_lo}, {margin_hi}]（genre style {lo}-{hi}，±50% 容差）")
         if stripped and stripped[-1] not in SENTENCE_ENDINGS:
             failures["truncated"] = f"结尾无句末标点（疑半截句）：…{stripped[-10:]}"
         return Gate(layer="L5", passed=not failures, failures=failures)

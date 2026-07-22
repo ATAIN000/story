@@ -89,9 +89,15 @@ class IterationController:
             # 过程 gate（能跑的层）
             gates = await self._run_process_gates(chapter, chapter_spec)
             if not all(g.passed for g in gates):
-                # gate FAIL 轮次不记 Version（蓝图原文如此）——
-                # 可能导致 versions 为空，兜底见 _select_best
+                # gate FAIL：记为 Version（不白跑），feedback 进下一轮修正
+                # （修复 2026-07-22：原蓝图 continue 跳过 critic 导致 token 白花；
+                #   现在记 Version + 走 feedback 修正路径，best-of-K 可选出最优版）
                 self._last_feedback = self._gate_feedback(gates)
+                versions.append(Version(
+                    round=round_num, text=chapter, critiques=[],
+                    revision=None, gates=gates))
+                if len(versions) >= 2 and not self._has_improvement(versions):
+                    break
                 continue
 
             # critic 议会 + leader 仲裁

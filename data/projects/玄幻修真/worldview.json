@@ -1,0 +1,119 @@
+{
+  "layers": {
+    "L0": {
+      "physics_deviation": "minor",
+      "metaphysics": "materialist",
+      "time_structure": "linear",
+      "space_structure": "3d_standard",
+      "causality": "deterministic",
+      "consciousness_nature": "emergent",
+      "information_laws": "conserved",
+      "entropy_law": "standard"
+    },
+    "L1": {
+      "cosmo_scope": "regional",
+      "cosmo_mutability": "immutable",
+      "divine_nature": "absent",
+      "cosmo_cognition": "known",
+      "origin_type": "evolution",
+      "eschatology": "unknown",
+      "plane_structure": "single",
+      "destiny_mechanism": "threads"
+    },
+    "L2": {
+      "terrain_paradigm": "earthlike",
+      "gravity_atmosphere": "standard",
+      "resource_paradigm": "land",
+      "magical_geography": "none",
+      "environmental_hazards": "natural_only",
+      "celestial_bodies": "standard",
+      "infrastructure_level": "basic"
+    },
+    "L3": {
+      "power_existence": "common",
+      "power_source": "internal",
+      "acquisition_method": "cultivation",
+      "cost_structure": "physical_fatigue",
+      "progression_model": "skill_tree",
+      "system_transparency": "hard",
+      "power_interaction": "transformative",
+      "power_regulation": "self_regulated"
+    },
+    "L4": {
+      "species_diversity": "dual",
+      "species_origin": "mutated",
+      "species_hierarchy": "egalitarian",
+      "mortality_model": "mortal",
+      "transformation_type": "forced",
+      "biological_basis": "genetic",
+      "cross_species_rules": "rare"
+    },
+    "L5": {
+      "political_system": "sect_based",
+      "economic_system": "barter",
+      "stratification_basis": "power",
+      "knowledge_distribution": "monopolized",
+      "legal_system": "customary",
+      "military_organization": "magical_order",
+      "power_society_relation": "revere"
+    },
+    "L6": {
+      "language_paradigm": "diverse",
+      "religion_type": "atheist",
+      "core_values": "power",
+      "taboo_system": "moral",
+      "death_customs": "final",
+      "education_system": "systematic",
+      "gender_family_structure": "segregated",
+      "aesthetic_ideal": "sublime"
+    },
+    "L7": {
+      "timeline_depth": "medium",
+      "history_accuracy": "mythologized",
+      "civilization_cycle": "ascending",
+      "lost_civilizations": "one",
+      "artifact_significance": "functional",
+      "historical_relevance": "driving"
+    },
+    "L8": {
+      "truth_structure": "layered",
+      "information_asymmetry": "individual",
+      "hidden_truths": "none",
+      "forbidden_knowledge": "political",
+      "knowledge_reliability": "biased",
+      "discovery_potential": "possible",
+      "memory_system": "fallible"
+    },
+    "L9": {
+      "conflict_types": "class",
+      "conflict_intensity": "medium",
+      "conflict_scale": "factional",
+      "conflict_resolution": "none",
+      "tension_source": "power_gap"
+    },
+    "LANG1": {
+      "language_power": "mundane"
+    },
+    "LANG2": {
+      "classifier_system": "power_marked",
+      "slang_system": "cultivation_terms"
+    },
+    "LANG3": {
+      "register_hierarchy_depth": "deep",
+      "self_deprecation": "none",
+      "forbidden_address": "names_only"
+    },
+    "LANG4": {
+      "narrative_person": "second_person",
+      "perspective_distance": "distant",
+      "narrative_reliability": "reliable",
+      "temporal_narrative": "chronological"
+    },
+    "LANG5": {
+      "metaphor_source_domain": "cosmic_natural",
+      "preferred_rhetoric": "parallelism_exaggeration"
+    }
+  },
+  "preset": "wuxia_jianghu",
+  "created_at": "2026-07-22T15:05:54"
+}

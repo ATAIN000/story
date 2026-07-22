@@ -210,7 +210,7 @@ def test_blueprint_acceptance_chain_actor_path(monkeypatch, tmp_path):
     # —— reader / score（展示层聚合随返回体给出）——
     assert ev["reader"]["engagement"] == 4
     assert ev["score"]["critic_pass_rate"] == "4/4"
-    assert ev["score"]["overall"] == pytest.approx(1.0)
+    assert ev["score"]["overall"] == pytest.approx(0.85)  # 4维PASS(1.0)+3维未评估(0.5)
     assert ev["score"]["reader_engagement"] == pytest.approx(4.0)
     assert len(ev["reader_predictions"]) == 2
 

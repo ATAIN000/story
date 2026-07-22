@@ -53,9 +53,11 @@ class PresentationScorer:
         total = len(evaluated) if evaluated else len(ALL_DIMENSIONS)
 
         # 7 维展示分：verdict 映射（PASS→1.0 / FAIL→0.0）；
-        # 无 critique 的维度 → 1.0 记「未见问题」（展示层简化，
+        # 无 critique 的维度 → 0.5 记「未评估」（展示层简化，
         # 串联模式下 judge 未标记的维度本就没有 critic 精审）
-        dimensions: dict[str, float] = {d: 1.0 for d in ALL_DIMENSIONS}
+        # 修复 2026-07-22：原 1.0 导致空 critiques 时 overall 虚假满分；
+        # 改为 0.5（中性）使 overall 反映真实评估状态
+        dimensions: dict[str, float] = {d: 0.5 for d in ALL_DIMENSIONS}
         for c in critiques:
             if c.dimension in dimensions:
                 dimensions[c.dimension] = 1.0 if c.verdict == "PASS" else 0.0
