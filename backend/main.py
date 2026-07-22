@@ -70,7 +70,7 @@ from story_engine.meta.gacha import draw_card_async, derive_culture  # noqa: E40
 from story_engine.meta.genre_validator import validate_genre_pack  # noqa: E402
 from story_engine.macro import (  # noqa: E402
     TEMPLATES as MACRO_TEMPLATES, compute_acts as macro_compute_acts,
-    generate_macro_plan, macro_plan_to_dict)
+    generate_macro_plan, macro_plan_to_dict, check_cross_layer)
 from story_engine.types import StoryEngineError  # noqa: E402
 from story_engine.worldview import (  # noqa: E402
     ALL_PARAMS as WV_ALL_PARAMS, LAYERS as WV_LAYERS,
@@ -899,6 +899,36 @@ def derive_cast_endpoint(req: DeriveCastReq):
     return {"cast": wv_derive_cast(req.worldview, req.language)}
 
 
+class CrossCheckReq(BaseModel):
+    worldview: dict | None = None
+    cast: list | None = None
+
+
+@app.post("/api/worldview/cross_check")
+def worldview_cross_check_endpoint(req: CrossCheckReq):
+    """【P18.1】跨层冲突检测（③.5 Patch A）：规则化扫描 5 类跨层冲突。
+
+    从当前 engine bundle 取 genre_params + genre_name，从 body 取 worldview/cast；
+    返回 {warnings: [{type, severity, title, description, suggestion}]}。
+
+    纯规则匹配，零 LLM 调用。
+    """
+    genre_params = getattr(engine.bundle, "genre_params", None) or {}
+    genre_name = getattr(engine.bundle, "genre", "")
+    wv_profile = None
+    if req.worldview and isinstance(req.worldview.get("layers"), dict):
+        wv_profile = WorldviewProfile(layers=req.worldview["layers"])
+    elif req.worldview:
+        wv_profile = req.worldview
+    cast_profile = req.cast if isinstance(req.cast, list) else None
+    warnings = check_cross_layer(genre_params, wv_profile, cast_profile, genre_name)
+    return {"warnings": [
+        {"type": w.type, "severity": w.severity, "title": w.title,
+         "description": w.description, "suggestion": w.suggestion}
+        for w in warnings
+    ]}
+
+
 # ---------- 抽卡开局（P8.3 library / P8.4 synth，独立开局页：题材×文化×原型×规则） ----------
 @app.post("/api/gacha/draw")
 async def gacha_draw(req: GachaDrawReq):
@@ -1178,15 +1208,23 @@ class MacroPlanReq(BaseModel):
     template_name: str = "save_the_cat_15"
     worldview: dict | None = None
     cast: list | None = None
+    regenerate_component: str | None = None       # P18.2: 单组件重摇
+    conflict_warnings: list | None = None         # P18.2: ③.5 冲突标记注入
+    existing_plan: dict | None = None             # P18.2: 单组件重摇时的已有计划
 
 
 @app.post("/api/macro/plan")
 async def macro_plan_generate(req: MacroPlanReq):
-    """【P17.3】生成宏观计划（AI / mock 兜底）→ 返回 MacroPlan dict。
+    """【P17.3 / P18.2】生成宏观计划（AI / mock 兜底）→ 返回 MacroPlan dict。
 
     从当前 engine 的 bundle 取题材上下文 + target_length；worldview/cast
     可选（向导阶段还没落盘时从 body 传入）。生成后不落盘——由 gacha confirm
     在用户确认时落盘到项目目录。
+
+    P18.2 新增：
+    - regenerate_component: 指定单组件重摇（blueprint/acts/episodes/arcs/
+      foreshadow/pacing），此时 existing_plan 必须提供（保留其余组件）
+    - conflict_warnings: ③.5 的冲突标记，注入宏观生成 prompt 作为约束
     """
     template = req.template_name
     if template not in MACRO_TEMPLATES:
@@ -1195,11 +1233,23 @@ async def macro_plan_generate(req: MacroPlanReq):
             detail=f"未知幕结构模板：{template}（可选：{sorted(MACRO_TEMPLATES)}）")
     wv_profile = None
     if req.worldview and isinstance(req.worldview.get("layers"), dict):
-        from story_engine.worldview import WorldviewProfile
         wv_profile = WorldviewProfile(layers=req.worldview["layers"])
     cast_profile = req.cast if isinstance(req.cast, list) else None
+
+    # P18.2: 冲突标记注入
+    conflict_warnings = req.conflict_warnings if isinstance(req.conflict_warnings, list) else None
+
+    # P18.2: 单组件重摇
+    if req.regenerate_component and req.existing_plan:
+        from story_engine.macro.generator import regenerate_component as _regen
+        plan = await _regen(
+            engine.kernel, engine.bundle, wv_profile, cast_profile, template,
+            req.regenerate_component, req.existing_plan, conflict_warnings)
+        return macro_plan_to_dict(plan)
+
     plan = await generate_macro_plan(
-        engine.kernel, engine.bundle, wv_profile, cast_profile, template)
+        engine.kernel, engine.bundle, wv_profile, cast_profile, template,
+        conflict_warnings=conflict_warnings)
     return macro_plan_to_dict(plan)
 
 
@@ -1214,6 +1264,187 @@ def macro_plan_get():
     except (OSError, ValueError) as exc:
         raise HTTPException(
             status_code=500, detail=f"macro_plan.json 读取失败：{exc!r}")
+
+
+@app.get("/api/macro/progress")
+def macro_progress():
+    """【P18.3】宏观进度：当前章节 / beat / 伏笔状态 / 弧光阶段。
+
+    从 macro_plan.json + 项目已写章节列表推导当前进度快照。
+    """
+    plan_path = Path(engine.project_dir) / "macro_plan.json"
+    if not plan_path.exists():
+        raise HTTPException(status_code=404, detail="当前项目无宏观计划")
+    try:
+        plan = json.loads(plan_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise HTTPException(status_code=500, detail=f"macro_plan.json 读取失败：{exc!r}")
+
+    chapters = getattr(engine, "project", None)
+    chapter_count = 0
+    if chapters and isinstance(chapters, dict):
+        chapter_count = len(chapters.get("chapters") or [])
+    current_ep = chapter_count + 1
+
+    # 当前 beat / act
+    current_act = ""
+    current_beat = ""
+    current_beat_desc = ""
+    for act in (plan.get("act_structure") or {}).get("acts") or []:
+        rng = act.get("episode_range") or []
+        if len(rng) == 2 and rng[0] <= current_ep <= rng[1]:
+            current_act = act.get("name", "")
+            best = None
+            for b in act.get("beats") or []:
+                try:
+                    ep = int(b.get("ep", 0))
+                except (ValueError, TypeError):
+                    continue
+                if ep <= current_ep and (best is None or ep > int(best.get("ep", 0))):
+                    best = b
+            if best:
+                current_beat = best.get("name", "")
+                current_beat_desc = best.get("desc", "")
+            break
+
+    # 当前集梗概
+    current_synopsis = ""
+    current_key_events: list = []
+    for ep in plan.get("episode_outlines") or []:
+        if ep.get("episode") == current_ep:
+            current_synopsis = ep.get("synopsis", "")
+            current_key_events = list(ep.get("key_events") or [])
+            break
+
+    # 伏笔状态
+    foreshadow_status: list[dict] = []
+    for t in (plan.get("foreshadow_blueprint") or {}).get("threads") or []:
+        plants = t.get("plant_episodes") or []
+        harvest = t.get("harvest_episode", 0)
+        if harvest and harvest <= chapter_count:
+            status = "harvested"
+        elif any(p <= chapter_count for p in plants):
+            status = "planted"
+        else:
+            status = "pending"
+        foreshadow_status.append({
+            "id": t.get("id", ""), "name": t.get("name", ""),
+            "status": status,
+            "plant_episodes": plants, "harvest_episode": harvest,
+        })
+
+    # 弧光阶段
+    arc_phases: list[dict] = []
+    for char in (plan.get("arc_schedule") or {}).get("characters") or []:
+        for ms in char.get("milestones") or []:
+            rng = ms.get("episode_range", "")
+            if _ep_in_range(current_ep, rng):
+                arc_phases.append({
+                    "character": char.get("name", ""),
+                    "phase": ms.get("phase", ""),
+                    "state": ms.get("state", ""),
+                    "behavior": ms.get("behavior", ""),
+                })
+                break
+
+    return {
+        "current_episode": current_ep,
+        "total_episodes": (plan.get("blueprint") or {}).get("total_episodes", 0),
+        "chapters_written": chapter_count,
+        "current_act": current_act,
+        "current_beat": current_beat,
+        "current_beat_description": current_beat_desc,
+        "current_synopsis": current_synopsis,
+        "current_key_events": current_key_events,
+        "foreshadow_status": foreshadow_status,
+        "arc_phases": arc_phases,
+    }
+
+
+@app.get("/api/macro/deviation")
+def macro_deviation():
+    """【P18.3】偏差检测：实际（已写章节）vs 计划（macro_plan）对比。
+
+    返回各集的 key_events 覆盖情况、伏笔执行状态、弧光阶段达成度。
+    """
+    plan_path = Path(engine.project_dir) / "macro_plan.json"
+    if not plan_path.exists():
+        raise HTTPException(status_code=404, detail="当前项目无宏观计划")
+    try:
+        plan = json.loads(plan_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise HTTPException(status_code=500, detail=f"macro_plan.json 读取失败：{exc!r}")
+
+    chapters = getattr(engine, "project", None)
+    chapter_count = 0
+    if chapters and isinstance(chapters, dict):
+        chapter_count = len(chapters.get("chapters") or [])
+
+    # key_events 覆盖
+    episode_coverage: list[dict] = []
+    for ep in plan.get("episode_outlines") or []:
+        ep_num = ep.get("episode", 0)
+        episode_coverage.append({
+            "episode": ep_num,
+            "planned_key_events": list(ep.get("key_events") or []),
+            "status": "written" if ep_num <= chapter_count else "not_written",
+        })
+
+    # 伏笔偏差
+    foreshadow_deviation: list[dict] = []
+    for t in (plan.get("foreshadow_blueprint") or {}).get("threads") or []:
+        plants = t.get("plant_episodes") or []
+        harvest = t.get("harvest_episode", 0)
+        all_eps = sorted(set(plants + [harvest]))
+        missed = [e for e in all_eps if e and e <= chapter_count]
+        foreshadow_deviation.append({
+            "id": t.get("id", ""), "name": t.get("name", ""),
+            "plant_episodes": plants, "harvest_episode": harvest,
+            "expected_by_now": missed,
+            "status": "on_track" if missed else "pending",
+        })
+
+    # 弧光偏差
+    arc_deviation: list[dict] = []
+    for char in (plan.get("arc_schedule") or {}).get("characters") or []:
+        for ms in char.get("milestones") or []:
+            rng = ms.get("episode_range", "")
+            parts = str(rng).split("-")
+            try:
+                end_ep = int(parts[-1]) if parts else 0
+            except (ValueError, TypeError):
+                end_ep = 0
+            if end_ep and end_ep <= chapter_count:
+                arc_deviation.append({
+                    "character": char.get("name", ""),
+                    "phase": ms.get("phase", ""),
+                    "episode_range": rng,
+                    "status": "expected_met",
+                })
+
+    written = chapter_count
+    total = (plan.get("blueprint") or {}).get("total_episodes", 0)
+    return {
+        "chapters_written": written,
+        "total_planned": total,
+        "progress_pct": round(written / total * 100, 1) if total else 0,
+        "episode_coverage": episode_coverage,
+        "foreshadow_deviation": foreshadow_deviation,
+        "arc_deviation": arc_deviation,
+    }
+
+
+def _ep_in_range(ep: int, rng: str) -> bool:
+    """解析 '1-3' / '5' 形式的章节范围"""
+    if not rng:
+        return False
+    parts = str(rng).split("-")
+    try:
+        if len(parts) == 1:
+            return ep == int(parts[0])
+        return int(parts[0]) <= ep <= int(parts[1])
+    except (ValueError, TypeError):
+        return False
 
 
 @app.post("/api/project/init")

@@ -14,9 +14,9 @@ from typing import Any
 import yaml
 
 from .plan import (
-    Act, ArcCharacter, ArcMilestone, ArcSchedule, CentralConflict,
-    EpisodeOutline, ForeshadowBlueprint, ForeshadowThread, MacroPlan,
-    PacingCurve, SaliencePoint, StoryBlueprint, TensionPoint,
+    Act, ActBeat, ActStructure, ArcCharacter, ArcMilestone, ArcSchedule,
+    CentralConflict, EpisodeOutline, ForeshadowBlueprint, ForeshadowThread,
+    MacroPlan, PacingCurve, SaliencePoint, StoryBlueprint, TensionPoint,
     ThematicArgument,
 )
 from .templates import TEMPLATES, compute_acts
@@ -32,6 +32,7 @@ async def generate_macro_plan(
     worldview_profile=None,
     cast_profile: list[dict] | None = None,
     template_name: str = "save_the_cat_15",
+    conflict_warnings: list[dict] | None = None,
 ) -> MacroPlan:
     """生成宏观计划（AI 驱动 / mock 兜底）。
 
@@ -41,6 +42,7 @@ async def generate_macro_plan(
       worldview_profile: WorldviewProfile（可选，提取 to_prompt_text）
       cast_profile: derive_cast() 返回的人物列表（可选）
       template_name: 幕结构模板名
+      conflict_warnings: P18.2 ③.5 跨层冲突标记，注入 prompt 作为约束（可选）
 
     返回：填充完整的 MacroPlan
     """
@@ -54,7 +56,7 @@ async def generate_macro_plan(
 
     # 非 mock：尝试 LLM 生成
     prompt = _build_prompt(bundle, worldview_profile, cast_profile,
-                           template_name, total_episodes)
+                           template_name, total_episodes, conflict_warnings)
     try:
         resp = await kernel.llm_call(
             prompt, purpose="macro_plan", temperature=0.7, max_tokens=8192)
@@ -69,13 +71,66 @@ async def generate_macro_plan(
                               template_name, total_episodes)
 
 
+async def regenerate_component(
+    kernel,
+    bundle,
+    worldview_profile,
+    cast_profile: list[dict] | None,
+    template_name: str,
+    component: str,
+    existing_plan: dict,
+    conflict_warnings: list[dict] | None = None,
+) -> MacroPlan:
+    """P18.2: 单组件重摇——只重新生成指定组件，其余从 existing_plan 保留。
+
+    component: blueprint / acts / episodes / arcs / foreshadow / pacing
+    existing_plan: 已有宏观计划 dict（macro_plan_to_dict 输出格式）
+    """
+    total_episodes = getattr(bundle, "target_length", 12)
+    cast_profile = cast_profile or []
+    valid = {"blueprint", "acts", "episodes", "arcs", "foreshadow", "pacing"}
+    if component not in valid:
+        # 无效组件名 → 返回 existing_plan 原样
+        return _plan_from_dict(existing_plan, template_name, total_episodes)
+
+    # mock 模式：重新生成骨架再替换指定组件
+    if kernel.llm.is_mock:
+        skeleton = _generate_skeleton(bundle, worldview_profile, cast_profile,
+                                      template_name, total_episodes)
+        return _merge_component(existing_plan, skeleton, component)
+
+    # 非 mock：用 LLM 重生成
+    prompt = _build_regen_prompt(bundle, worldview_profile, cast_profile,
+                                 template_name, total_episodes, component,
+                                 existing_plan, conflict_warnings)
+    try:
+        resp = await kernel.llm_call(
+            prompt, purpose=f"macro_regen_{component}",
+            temperature=0.7, max_tokens=4096)
+        text = getattr(resp, "text", "") or ""
+        parsed = _parse_yaml(text)
+        if parsed:
+            return _merge_component(existing_plan, _build_plan_partial(parsed, component, template_name, total_episodes), component)
+    except Exception:
+        pass
+
+    # 兜底：骨架重生成
+    skeleton = _generate_skeleton(bundle, worldview_profile, cast_profile,
+                                  template_name, total_episodes)
+    return _merge_component(existing_plan, skeleton, component)
+
+
 # ============================================================
 # Prompt 构建
 # ============================================================
 
 def _build_prompt(bundle, worldview_profile, cast_profile,
-                  template_name: str, total_episodes: int) -> str:
-    """构建 LLM 提示词：题材 + 世界观 + 人物 + 模板 → 要求输出完整宏观计划 YAML"""
+                  template_name: str, total_episodes: int,
+                  conflict_warnings: list[dict] | None = None) -> str:
+    """构建 LLM 提示词：题材 + 世界观 + 人物 + 模板 → 要求输出完整宏观计划 YAML
+
+    P18.2: conflict_warnings（③.5 冲突标记）注入为约束段。
+    """
     # 题材参数摘要
     genre_params = getattr(bundle, "genre_params", {}) or {}
     genre_name = getattr(bundle, "genre", "unknown")
@@ -94,6 +149,20 @@ def _build_prompt(bundle, worldview_profile, cast_profile,
     act_structure = compute_acts(template_name, total_episodes)
     beat_text = _beat_summary(act_structure)
 
+    # P18.2: 冲突标记约束段
+    conflict_block = ""
+    if conflict_warnings:
+        lines = []
+        for w in conflict_warnings:
+            if isinstance(w, dict):
+                lines.append(
+                    f"- [{w.get('severity', 'MEDIUM')}] {w.get('title', '')}: "
+                    f"{w.get('description', '')} → 建议：{w.get('suggestion', '')}")
+        if lines:
+            conflict_block = (
+                "\n【⚠️ 跨层冲突约束（来自③.5检测，生成时必须遵守）】\n"
+                + "\n".join(lines) + "\n")
+
     return f"""你是专业的故事编剧和叙事架构师。请根据以下输入，生成一份完整的宏观叙事计划。
 
 【题材】{genre_name}
@@ -109,7 +178,7 @@ def _build_prompt(bundle, worldview_profile, cast_profile,
 
 【幕结构 beat 位置（必须遵循）】
 {beat_text}
-
+{conflict_block}
 【输出要求】
 输出完整 YAML，包含以下六个顶层键（均不可省略）：
 1. story_blueprint: logline, thematic_argument(lie/truth/url), central_conflict(protagonist_want/protagonist_need/antagonist_want/stakes), story_type, total_episodes={total_episodes}, target_pace
@@ -121,6 +190,210 @@ def _build_prompt(bundle, worldview_profile, cast_profile,
 
 只输出 YAML，不要解释、前言后语或 markdown 代码围栏。
 """
+
+
+def _build_regen_prompt(bundle, worldview_profile, cast_profile,
+                        template_name: str, total_episodes: int,
+                        component: str, existing_plan: dict,
+                        conflict_warnings: list[dict] | None = None) -> str:
+    """P18.2: 单组件重摇 prompt——只要求重生成指定组件"""
+    genre_name = getattr(bundle, "genre", "unknown")
+    component_map = {
+        "blueprint": ("story_blueprint",
+                      "logline, thematic_argument(lie/truth/url), "
+                      "central_conflict(protagonist_want/protagonist_need/"
+                      "antagonist_want/stakes), story_type, total_episodes, "
+                      "target_pace"),
+        "acts": ("act_structure",
+                 "template, acts(每幕含 id/name/episode_range/function/beats)"),
+        "episodes": ("episode_outlines",
+                     f"列表(1-{total_episodes})，每条 episode/synopsis/purpose/"
+                     "key_events/ends_with_hook/character_arc_focus"),
+        "arcs": ("arc_schedule",
+                 "characters 列表，每个 name/archetype_arc/lie/truth/"
+                 "milestones(episode_range/phase/state/event/behavior)"),
+        "foreshadow": ("foreshadow_blueprint",
+                       "threads 列表，每个 id/name/type/plant_episodes/"
+                       "harvest_episode/salience_ladder/spacing_rule/status"),
+        "pacing": ("pacing_curve",
+                   "curve_type, key_tension_points(episode/tension/reason), "
+                   "genre_pace_profile"),
+    }
+    yaml_key, spec = component_map.get(component, ("story_blueprint", ""))
+    conflict_block = ""
+    if conflict_warnings:
+        clines = [f"- [{w.get('severity','MEDIUM')}] {w.get('title','')}: "
+                  f"{w.get('description','')}" for w in conflict_warnings if isinstance(w, dict)]
+        if clines:
+            conflict_block = "\n【冲突约束】\n" + "\n".join(clines) + "\n"
+    import json as _json
+    return f"""你是专业的故事编剧。请只重新生成宏观计划的「{component}」组件。
+
+【题材】{genre_name}
+【总集数】{total_episodes}
+【已有计划（其余组件保持不变）】
+{_json.dumps(existing_plan, ensure_ascii=False, indent=2)[:2000]}
+{conflict_block}
+【输出要求】
+只输出 YAML，包含单个顶层键 {yaml_key}：{spec}
+不要输出其他组件，不要解释。
+"""
+
+
+def _plan_from_dict(d: dict, template_name: str, total_episodes: int) -> MacroPlan:
+    """从 macro_plan_to_dict 输出格式重建 MacroPlan（键名映射）"""
+    bp = d.get("blueprint") or d.get("story_blueprint") or {}
+    ta = bp.get("thematic_argument") or {}
+    cc = bp.get("central_conflict") or {}
+    blueprint = StoryBlueprint(
+        logline=bp.get("logline", ""),
+        thematic_argument=ThematicArgument(
+            lie=ta.get("lie", ""), truth=ta.get("truth", ""),
+            url=ta.get("url", "")),
+        central_conflict=CentralConflict(
+            protagonist_want=cc.get("protagonist_want", ""),
+            protagonist_need=cc.get("protagonist_need", ""),
+            antagonist_want=cc.get("antagonist_want", ""),
+            stakes=cc.get("stakes", "")),
+        story_type=bp.get("story_type", ""),
+        total_episodes=bp.get("total_episodes", total_episodes),
+        target_pace=bp.get("target_pace", "fast_escalation"),
+    )
+    # act_structure：优先用已有 dict，否则用模板
+    act_dict = d.get("act_structure") or {}
+    if act_dict.get("acts"):
+        act_structure = _acts_from_dict(act_dict)
+    else:
+        act_structure = compute_acts(template_name, total_episodes)
+    # episode_outlines
+    outlines = []
+    for o in (d.get("episode_outlines") or []):
+        if not isinstance(o, dict):
+            continue
+        outlines.append(EpisodeOutline(
+            episode=o.get("episode", 1), synopsis=o.get("synopsis", ""),
+            purpose=o.get("purpose", ""), key_events=o.get("key_events", []),
+            ends_with_hook=o.get("ends_with_hook", ""),
+            character_arc_focus=o.get("character_arc_focus", ""),
+            flexibility=o.get("flexibility", "medium")))
+    # arc_schedule
+    arc_chars = []
+    for c in ((d.get("arc_schedule") or {}).get("characters") or []):
+        if not isinstance(c, dict):
+            continue
+        milestones = [
+            ArcMilestone(
+                episode_range=m.get("episode_range", ""),
+                phase=m.get("phase", ""), state=m.get("state", ""),
+                event=m.get("event", ""), behavior=m.get("behavior", ""))
+            for m in (c.get("milestones") or []) if isinstance(m, dict)]
+        arc_chars.append(ArcCharacter(
+            name=c.get("name", ""), archetype_arc=c.get("archetype_arc", ""),
+            lie=c.get("lie", ""), truth=c.get("truth", ""),
+            milestones=milestones))
+    # foreshadow_blueprint
+    threads = []
+    for t in ((d.get("foreshadow_blueprint") or {}).get("threads") or []):
+        if not isinstance(t, dict):
+            continue
+        ladder = [
+            SaliencePoint(ep=s.get("ep", 0), level=s.get("level", 0.0),
+                          form=s.get("form", ""))
+            for s in (t.get("salience_ladder") or []) if isinstance(s, dict)]
+        threads.append(ForeshadowThread(
+            id=t.get("id", ""), name=t.get("name", ""), type=t.get("type", ""),
+            plant_episodes=t.get("plant_episodes", []),
+            harvest_episode=t.get("harvest_episode", 0),
+            salience_ladder=ladder, spacing_rule=t.get("spacing_rule", ""),
+            status=t.get("status", "planned")))
+    # pacing_curve
+    pc = d.get("pacing_curve") or {}
+    tension_points = [
+        TensionPoint(episode=tp.get("episode", 0),
+                     tension=tp.get("tension", 0.0),
+                     reason=tp.get("reason", ""))
+        for tp in (pc.get("key_tension_points") or []) if isinstance(tp, dict)]
+    pacing = PacingCurve(
+        curve_type=pc.get("curve_type", "wave_escalation"),
+        key_tension_points=tension_points,
+        genre_pace_profile=pc.get("genre_pace_profile", {}))
+    return MacroPlan(
+        blueprint=blueprint, act_structure=act_structure,
+        episode_outlines=outlines, arc_schedule=ArcSchedule(characters=arc_chars),
+        foreshadow_blueprint=ForeshadowBlueprint(threads=threads),
+        pacing_curve=pacing,
+    )
+
+
+def _acts_from_dict(act_dict: dict) -> ActStructure:
+    """从 dict 重建 ActStructure"""
+    acts = []
+    for a in (act_dict.get("acts") or []):
+        if not isinstance(a, dict):
+            continue
+        beats = [
+            ActBeat(name=b.get("name", ""), ep=str(b.get("ep", "")),
+                    desc=b.get("desc", ""))
+            for b in (a.get("beats") or []) if isinstance(b, dict)]
+        acts.append(Act(
+            id=a.get("id", ""), name=a.get("name", ""),
+            episode_range=a.get("episode_range", [1, 1]),
+            function=a.get("function", ""), beats=beats))
+    tmpl = act_dict.get("template", "save_the_cat_15")
+    return ActStructure(template=tmpl, acts=acts)
+
+
+def _build_plan_partial(parsed: dict, component: str,
+                        template_name: str, total_episodes: int) -> MacroPlan:
+    """从单组件 LLM 输出构建只含该组件的 MacroPlan（其余为默认空值）"""
+    plan = MacroPlan(
+        blueprint=StoryBlueprint(),
+        act_structure=compute_acts(template_name, total_episodes),
+        episode_outlines=[], arc_schedule=ArcSchedule(),
+        foreshadow_blueprint=ForeshadowBlueprint(),
+        pacing_curve=PacingCurve(),
+    )
+    if component == "blueprint" and "story_blueprint" in parsed:
+        built = _build_plan({"story_blueprint": parsed["story_blueprint"]},
+                            template_name, total_episodes)
+        plan.blueprint = built.blueprint
+    elif component == "episodes" and "episode_outlines" in parsed:
+        built = _build_plan({"episode_outlines": parsed["episode_outlines"]},
+                            template_name, total_episodes)
+        plan.episode_outlines = built.episode_outlines
+    elif component == "arcs" and "arc_schedule" in parsed:
+        built = _build_plan({"arc_schedule": parsed["arc_schedule"]},
+                            template_name, total_episodes)
+        plan.arc_schedule = built.arc_schedule
+    elif component == "foreshadow" and "foreshadow_blueprint" in parsed:
+        built = _build_plan({"foreshadow_blueprint": parsed["foreshadow_blueprint"]},
+                            template_name, total_episodes)
+        plan.foreshadow_blueprint = built.foreshadow_blueprint
+    elif component == "pacing" and "pacing_curve" in parsed:
+        built = _build_plan({"pacing_curve": parsed["pacing_curve"]},
+                            template_name, total_episodes)
+        plan.pacing_curve = built.pacing_curve
+    return plan
+
+
+def _merge_component(existing: dict, new_plan: MacroPlan, component: str) -> MacroPlan:
+    """P18.2: 从 existing dict 构建 MacroPlan，用 new_plan 的指定组件替换"""
+    total = (existing.get("blueprint") or {}).get("total_episodes", 12)
+    template = (existing.get("act_structure") or {}).get("template", "save_the_cat_15")
+    plan = _plan_from_dict(existing, template, total)
+    if component == "blueprint":
+        plan.blueprint = new_plan.blueprint
+    elif component == "acts":
+        plan.act_structure = new_plan.act_structure
+    elif component == "episodes":
+        plan.episode_outlines = new_plan.episode_outlines
+    elif component == "arcs":
+        plan.arc_schedule = new_plan.arc_schedule
+    elif component == "foreshadow":
+        plan.foreshadow_blueprint = new_plan.foreshadow_blueprint
+    elif component == "pacing":
+        plan.pacing_curve = new_plan.pacing_curve
+    return plan
 
 
 def _dict_summary(d: dict, keys: list[str]) -> str:

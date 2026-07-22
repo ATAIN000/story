@@ -169,6 +169,9 @@ tests/test_engine.py         赌注1/赌注4/核心循环回归测试
 | GET | /api/macro/templates | 7 个幕结构模板列表（name + description + beat_count） |
 | POST | /api/macro/plan | 生成宏观计划（AI/mock 兜底）→ MacroPlan dict |
 | GET | /api/macro/plan | 读取当前项目 macro_plan.json（无 → 404） |
+| GET | /api/macro/progress | 宏观进度：当前章节/beat/伏笔状态/弧光阶段（P18.3） |
+| GET | /api/macro/deviation | 偏差检测：实际vs计划对比（P18.3） |
+| POST | /api/worldview/cross_check | 跨层冲突检测：5类C1-C5规则化扫描（P18.1） |
 | POST | /api/project/init | 开局切换：reset + 按 genre/culture 重建单例（进程内覆盖不写 env） |
 | GET | /api/projects | 项目列表（扫描 data/projects/*，含 current 字段；老项目补写 project.json） |
 | POST | /api/projects/open | 续旧切换：恢复项目自身 genre/culture 整栈重建（404 不存在 / 422 组合非法） |
@@ -273,6 +276,43 @@ prompt。无 macro_plan.json 时所有行为零变化（旧项目完全兼容）
 
 端点契约：`GET /api/macro/templates`、`POST /api/macro/plan`、
 `GET /api/macro/plan`，见 `docs/接口规范_part2.md` §12。
+
+## 跨层冲突检测 + 审阅面板升级 + 偏差检测（Phase 18）
+
+### ③.5 跨层冲突检测（Patch A）
+
+在开局向导③世界观完成后、④宏观规划之前，自动扫描 5 类跨层冲突
+（规则化检测引擎，零 LLM 调用）：
+
+- **C1** 题材核心承诺 vs 世界观力量体系（fair_deduction + 预知能力 = 破坏推理公平）
+- **C2** 人物身份 vs 世界观社会结构（提刑官 + 神权社会 = 权力来源冲突）
+- **C3** 力量体系多源矛盾（≥2 种力量来源未定义关系）
+- **C4** 世界观基调 vs 题材节奏要求（末日废土 + 快节奏甜宠 = 基调冲突）
+- **C5** 语言质感 vs 题材对白密度（深层语域 + 高频对话 = 阅读负担）
+
+用户可选「接受警告继续」（冲突标记注入宏观规划作为约束）或「回③修改设定」。
+
+端点：`POST /api/worldview/cross_check`，见 `docs/接口规范_part2.md` §13。
+
+### ④.5 审阅面板升级（Patch B）
+
+宏观计划从单摘要卡升级为**六组件折叠审阅面板**：
+
+- 逐组件展开/折叠审阅（蓝图 / 幕结构 / 分集 / 弧光 / 伏笔 / 节奏）
+- **单组件重摇**：只重新生成不满意的组件（POST /api/macro/plan 加
+  `regenerate_component` 字段），其余组件保持不变
+- 冲突标记自动注入宏观生成 prompt 作为约束
+
+### macro_alignment critic + 偏差检测
+
+- **macro_alignment 维度**：自评器新增第 9 维 critic，检测每章是否偏离宏观
+  计划（beat 功能 / 弧光阶段 / 伏笔指令 / 张力目标 / 必须事件覆盖）。
+  仲裁优先级位于 setting_consistency 之后、plot_coherence 之前（重要但非
+  blocking-top-3）
+- **GET /api/macro/progress**：当前章节 / beat / 伏笔状态 / 弧光阶段
+- **GET /api/macro/deviation**：实际（已写章节）vs 计划（macro_plan）对比
+
+端点见 `docs/接口规范_part2.md` §13。
 
 ## 多项目管理（Projects）
 

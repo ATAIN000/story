@@ -74,7 +74,7 @@ ALL_DIMENSIONS = [
     "theme_depth",           # 主题深度
 ]
 # repo 扩展：romance.yaml/wuxia.yaml 的 active_critics 含 emotion_arc（插件 yaml 不动）
-EXTRA_DIMENSIONS = ["emotion_arc"]
+EXTRA_DIMENSIONS = ["emotion_arc", "macro_alignment"]
 KNOWN_DIMENSIONS = frozenset(ALL_DIMENSIONS) | frozenset(EXTRA_DIMENSIONS)
 
 # 每维 prompt 用说明 + 正反例（各一行，critic prompt 的针对性指令）
@@ -111,6 +111,10 @@ DIMENSION_GUIDE: dict[str, tuple[str, str, str]] = {
         "情感弧线：本章情感是否有起伏与变化，而非全程一平到底",
         "正例：由期待到失落再到释然，情感有转折",
         "反例：整章情绪单一，人物反应始终雷同"),
+    "macro_alignment": (
+        "宏观对齐：本章是否遵循宏观计划的 beat/弧光/伏笔/张力/必须事件安排",
+        "正例：本章覆盖了 macro_plan 中该集的 key_events，伏笔按时埋收",
+        "反例：本章完全偏离计划，未覆盖任何必须事件，遗漏了应埋伏笔"),
 }
 
 # LLM 调用参数（蓝图：critique 低温更确定）

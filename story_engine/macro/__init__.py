@@ -10,7 +10,8 @@ from .plan import (
     TensionPoint, ThematicArgument, macro_plan_to_dict,
 )
 from .templates import TEMPLATES, compute_acts
-from .generator import generate_macro_plan
+from .generator import generate_macro_plan, regenerate_component
+from .conflict_check import ConflictWarning, check_cross_layer
 
 __all__ = [
     # plan.py
@@ -24,5 +25,7 @@ __all__ = [
     # templates.py
     "TEMPLATES", "compute_acts",
     # generator.py
-    "generate_macro_plan",
+    "generate_macro_plan", "regenerate_component",
+    # conflict_check.py
+    "ConflictWarning", "check_cross_layer",
 ]

@@ -47,6 +47,10 @@ BLOCKING_DIMENSIONS = frozenset(CONSTITUTIONAL_PRIORITY[:3])
 ARBITRATION_ORDER = list(CONSTITUTIONAL_PRIORITY)
 ARBITRATION_ORDER.insert(
     ARBITRATION_ORDER.index("character_motivation") + 1, "emotion_arc")
+# P18.3: macro_alignment 插在 setting_consistency 之后、plot_coherence 之前
+# （重要但非 blocking-top-3）
+ARBITRATION_ORDER.insert(
+    ARBITRATION_ORDER.index("plot_coherence"), "macro_alignment")
 
 
 class LeaderArbiter:

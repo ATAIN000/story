@@ -99,4 +99,12 @@ export const api = {
   macroTemplates: () => req('/api/macro/templates'),
   macroPlanGenerate: (body) => post('/api/macro/plan', body),
   macroPlanGet: () => req('/api/macro/plan'),
+
+  /* P18.1: 跨层冲突检测 */
+  crossCheck: (worldview = null, cast = null) =>
+    post('/api/worldview/cross_check', { worldview, cast }),
+
+  /* P18.3: 宏观进度 + 偏差检测 */
+  macroProgress: () => req('/api/macro/progress'),
+  macroDeviation: () => req('/api/macro/deviation'),
 }

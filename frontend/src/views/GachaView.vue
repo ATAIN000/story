@@ -205,7 +205,45 @@ function goCast() {
   if (castCards.value.length === 0) autoDeriveCast()
 }
 
-/* ---- 段 4 → 段 5（宏观规划） ---- */
+/* ===== 段 4.5：跨层冲突检测（③.5 Patch A） ===== */
+const crossCheckLoading = ref(false)
+const crossCheckWarnings = ref([])
+const conflictAccepted = ref(false)
+
+/* 段 4 → 段 4.5（跨层冲突检测）→ 段 5（宏观规划） */
+function goCrossCheck() {
+  stage.value = 'crosscheck'
+  runCrossCheck()
+}
+
+function backToCastFromCross() { stage.value = 'cast' }
+
+async function runCrossCheck() {
+  crossCheckLoading.value = true
+  crossCheckWarnings.value = []
+  try {
+    const wvPayload = Object.keys(wvProfile.value).length > 0
+      ? { layers: wvProfile.value } : null
+    const castPayload = buildCastPayload()
+    const res = await api.crossCheck(wvPayload, castPayload)
+    crossCheckWarnings.value = res.warnings ?? []
+  } catch (e) {
+    /* 跨层检测失败不阻塞流程 */
+    toastError(`跨层检测失败：${e.message}`)
+  } finally {
+    crossCheckLoading.value = false
+  }
+}
+
+function acceptConflicts() {
+  /* 接受冲突，冲突标记传给宏观规划 */
+  conflictAccepted.value = true
+  goMacro()
+}
+
+function backToWizardFromCross() { stage.value = 'wizard' }
+
+/* ---- 段 4.5 → 段 5（宏观规划） ---- */
 function goMacro() {
   stage.value = 'macro'
   if (macroTemplates.value.length === 0) loadMacroTemplates()
@@ -239,7 +277,12 @@ async function generateMacro() {
     }
     if (wvPayload) body.worldview = wvPayload
     if (castPayload) body.cast = castPayload
+    /* P18.2: 冲突标记注入 */
+    if (conflictAccepted.value && crossCheckWarnings.value.length > 0) {
+      body.conflict_warnings = crossCheckWarnings.value
+    }
     macroPlan.value = await api.macroPlanGenerate(body)
+    expandedMacroSection.value = 'blueprint'
     toast('宏观计划已生成')
   } catch (e) {
     toastError(`宏观计划生成失败：${e.message}`)
@@ -247,6 +290,53 @@ async function generateMacro() {
     macroGenerating.value = false
   }
 }
+
+/* P18.2: 单组件重摇 */
+const regeneratingComponent = ref('')
+async function regenerateComponent(component) {
+  if (regeneratingComponent.value) return
+  if (!macroPlan.value) return
+  regeneratingComponent.value = component
+  try {
+    const wvPayload = Object.keys(wvProfile.value).length > 0
+      ? { layers: wvProfile.value } : null
+    const castPayload = buildCastPayload()
+    const body = {
+      template_name: selectedTemplate.value || 'save_the_cat_15',
+      regenerate_component: component,
+      existing_plan: macroPlan.value,
+    }
+    if (wvPayload) body.worldview = wvPayload
+    if (castPayload) body.cast = castPayload
+    if (conflictAccepted.value && crossCheckWarnings.value.length > 0) {
+      body.conflict_warnings = crossCheckWarnings.value
+    }
+    macroPlan.value = await api.macroPlanGenerate(body)
+    toast(`「${component}」已重新生成`)
+  } catch (e) {
+    toastError(`重摇失败：${e.message}`)
+  } finally {
+    regeneratingComponent.value = ''
+  }
+}
+
+/* P18.2: 六组件折叠审阅 */
+const expandedMacroSection = ref('blueprint')
+function toggleMacroSection(id) {
+  expandedMacroSection.value = expandedMacroSection.value === id ? null : id
+}
+const macroSections = computed(() => {
+  if (!macroPlan.value) return []
+  const p = macroPlan.value
+  const list = []
+  list.push({ id: 'blueprint', title: '故事蓝图' })
+  if ((p.act_structure?.acts ?? []).length) list.push({ id: 'acts', title: '幕结构' })
+  if ((p.episode_outlines ?? []).length) list.push({ id: 'episodes', title: `分集梗概（${p.episode_outlines.length} 集）` })
+  if ((p.arc_schedule?.characters ?? []).length) list.push({ id: 'arcs', title: '角色弧光' })
+  if ((p.foreshadow_blueprint?.threads ?? []).length) list.push({ id: 'foreshadow', title: `伏笔线（${p.foreshadow_blueprint.threads.length} 条）` })
+  if ((p.pacing_curve?.key_tension_points ?? []).length) list.push({ id: 'pacing', title: '节奏曲线' })
+  return list
+})
 
 function skipMacro() {
   macroPlan.value = null
@@ -638,14 +728,17 @@ async function doConfirm() {
         <li :class="{ active: stage === 'theme', done: stage !== 'theme' }">
           <span class="gs-idx">1</span><span class="gs-name">题材选择</span>
         </li>
-        <li :class="{ active: stage === 'skeleton', done: ['wizard','cast','macro'].includes(stage), disabled: !hasSelection }">
+        <li :class="{ active: stage === 'skeleton', done: ['wizard','cast','crosscheck','macro'].includes(stage), disabled: !hasSelection }">
           <span class="gs-idx">2</span><span class="gs-name">骨架选择</span>
         </li>
-        <li :class="{ active: stage === 'wizard', done: ['cast','macro'].includes(stage), disabled: !hasSelection }">
+        <li :class="{ active: stage === 'wizard', done: ['cast','crosscheck','macro'].includes(stage), disabled: !hasSelection }">
           <span class="gs-idx">3</span><span class="gs-name">世界观向导</span>
         </li>
-        <li :class="{ active: stage === 'cast', done: stage === 'macro', disabled: !hasSelection }">
+        <li :class="{ active: stage === 'cast', done: ['crosscheck','macro'].includes(stage), disabled: !hasSelection }">
           <span class="gs-idx">4</span><span class="gs-name">人物原型</span>
+        </li>
+        <li :class="{ active: stage === 'crosscheck', done: stage === 'macro', disabled: !hasSelection }">
+          <span class="gs-idx">4.5</span><span class="gs-name">冲突检测</span>
         </li>
         <li :class="{ active: stage === 'macro', disabled: !hasSelection }">
           <span class="gs-idx">5</span><span class="gs-name">宏观规划</span>
@@ -964,8 +1057,51 @@ async function doConfirm() {
           <button class="btn-line" aria-label="返回世界观向导" @click="backToWizard">← 返回向导</button>
           <button class="btn-main"
                   :disabled="busy"
-                  aria-label="下一步：宏观规划" @click="goMacro">
-            下一步：宏观规划 →
+                  aria-label="下一步：跨层冲突检测" @click="goCrossCheck">
+            下一步：冲突检测 →
+          </button>
+        </footer>
+      </section>
+    </template>
+
+    <!-- ===== 段 4.5：跨层冲突检测（③.5 Patch A） ===== -->
+    <template v-else-if="stage === 'crosscheck'">
+      <section class="wv-crosscheck-stage" aria-label="跨层冲突检测">
+        <div class="wv-crosscheck-head">
+          <p class="wv-intro">系统自动扫描 5 类跨层冲突（题材×力量体系 / 人物×社会 / 力量多源 / 基调×节奏 / 语言×密度），发现冲突会给出修正建议。</p>
+        </div>
+
+        <div v-if="crossCheckLoading" class="gacha-loading" role="status">
+          <span class="gc-spin" aria-hidden="true"></span>正在扫描跨层冲突…
+        </div>
+
+        <div v-else-if="crossCheckWarnings.length === 0" class="wv-crosscheck-ok" role="status">
+          <div class="wv-crosscheck-ok-icon">✅</div>
+          <p>所有层次对齐，未发现跨层冲突。可以安全进入宏观规划。</p>
+        </div>
+
+        <div v-else class="wv-crosscheck-warnings">
+          <div v-for="(w, i) in crossCheckWarnings" :key="i"
+               class="wv-cc-warning"
+               :class="'sev-' + w.severity.toLowerCase()">
+            <div class="wv-cc-sev">
+              <span class="wv-cc-icon">{{ w.severity === 'HIGH' ? '🔴' : w.severity === 'MEDIUM' ? '🟡' : '🟢' }}</span>
+              <span class="wv-cc-type">{{ w.type }}</span>
+              <span class="wv-cc-severity">{{ w.severity }}</span>
+            </div>
+            <div class="wv-cc-title">{{ w.title }}</div>
+            <p class="wv-cc-desc">{{ w.description }}</p>
+            <p class="wv-cc-suggestion">💡 {{ w.suggestion }}</p>
+          </div>
+        </div>
+
+        <footer class="gacha-foot">
+          <button class="btn-line" aria-label="返回人物原型" @click="backToCastFromCross">← 返回人物</button>
+          <button class="btn-line" aria-label="返回世界观向导修改设定" @click="backToWizardFromCross">🔧 回③修改设定</button>
+          <button class="btn-main"
+                  :disabled="busy"
+                  aria-label="接受并继续到宏观规划" @click="acceptConflicts">
+            {{ crossCheckWarnings.length > 0 ? '✅ 接受继续' : '✅ 进入宏观规划' }} →
           </button>
         </footer>
       </section>
@@ -1003,8 +1139,130 @@ async function doConfirm() {
           </button>
         </div>
 
-        <!-- 宏观计划摘要展示 -->
-        <div v-if="macroSummary" class="wv-macro-summary">
+        <!-- P18.2: 六组件折叠审阅面板 -->
+        <div v-if="macroPlan" class="wv-macro-review">
+          <!-- 冲突约束提示 -->
+          <div v-if="conflictAccepted && crossCheckWarnings.length > 0" class="wv-macro-conflict-note">
+            <span class="wv-macro-conflict-badge">⚠️ 冲突约束已注入</span>
+            <span class="wv-macro-conflict-count">{{ crossCheckWarnings.length }} 条</span>
+          </div>
+
+          <!-- 组件标签栏 -->
+          <div class="wv-macro-tabs" role="tablist">
+            <button v-for="s in macroSections" :key="s.id"
+                    class="wv-macro-tab"
+                    :class="{ active: expandedMacroSection === s.id }"
+                    role="tab"
+                    :aria-selected="expandedMacroSection === s.id"
+                    @click="toggleMacroSection(s.id)">
+              {{ s.title }}
+            </button>
+          </div>
+
+          <!-- 组件内容 + 单组件重摇 -->
+          <div class="wv-macro-panel">
+            <!-- 故事蓝图 -->
+            <div v-if="expandedMacroSection === 'blueprint'" class="wv-macro-comp">
+              <p class="wv-macro-logline">{{ macroSummary.logline }}</p>
+              <div class="wv-macro-meta">
+                {{ macroSummary.storyType }} · {{ macroSummary.pace }} · 共 {{ macroSummary.totalEpisodes }} 集
+              </div>
+              <button class="btn-line btn-line-xs wv-macro-regen-btn"
+                      :disabled="!!regeneratingComponent"
+                      @click="regenerateComponent('blueprint')">
+                {{ regeneratingComponent === 'blueprint' ? '重摇中…' : '↻ 重摇此组件' }}
+              </button>
+            </div>
+
+            <!-- 幕结构 -->
+            <div v-if="expandedMacroSection === 'acts'" class="wv-macro-comp">
+              <div class="wv-macro-acts-bar">
+                <div v-for="(a, i) in macroSummary.acts" :key="i" class="wv-macro-act-seg"
+                     :style="{ flexGrow: (a.range[1] - a.range[0] + 1) }">
+                  <span class="wv-macro-act-name">{{ a.name }}</span>
+                  <span class="wv-macro-act-range">{{ a.range[0] }}-{{ a.range[1] }}</span>
+                  <span class="wv-macro-act-beats">{{ a.beats }}拍</span>
+                </div>
+              </div>
+              <button class="btn-line btn-line-xs wv-macro-regen-btn"
+                      :disabled="!!regeneratingComponent"
+                      @click="regenerateComponent('acts')">
+                {{ regeneratingComponent === 'acts' ? '重摇中…' : '↻ 重摇此组件' }}
+              </button>
+            </div>
+
+            <!-- 分集梗概 -->
+            <div v-if="expandedMacroSection === 'episodes'" class="wv-macro-comp">
+              <div class="wv-macro-ep-list">
+                <div v-for="e in macroSummary.episodes" :key="e.ep" class="wv-macro-ep-item">
+                  <span class="wv-macro-ep-num">第{{ e.ep }}集</span>
+                  <span class="wv-macro-ep-syn">{{ e.synopsis }}</span>
+                  <span v-if="e.purpose" class="wv-macro-ep-purpose">{{ e.purpose }}</span>
+                </div>
+              </div>
+              <button class="btn-line btn-line-xs wv-macro-regen-btn"
+                      :disabled="!!regeneratingComponent"
+                      @click="regenerateComponent('episodes')">
+                {{ regeneratingComponent === 'episodes' ? '重摇中…' : '↻ 重摇此组件' }}
+              </button>
+            </div>
+
+            <!-- 角色弧光 -->
+            <div v-if="expandedMacroSection === 'arcs'" class="wv-macro-comp">
+              <div class="wv-macro-arcs">
+                <div v-for="c in macroSummary.arcs" :key="c.name" class="wv-macro-arc-entry">
+                  <span class="wv-macro-arc-name">{{ c.name }}（{{ c.arc }}）</span>
+                  <div v-if="c.milestones?.length" class="wv-macro-milestones">
+                    <span v-for="(m, mi) in c.milestones" :key="mi" class="wv-macro-ms-chip">
+                      {{ m.phase }}：{{ m.state }}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <button class="btn-line btn-line-xs wv-macro-regen-btn"
+                      :disabled="!!regeneratingComponent"
+                      @click="regenerateComponent('arcs')">
+                {{ regeneratingComponent === 'arcs' ? '重摇中…' : '↻ 重摇此组件' }}
+              </button>
+            </div>
+
+            <!-- 伏笔 -->
+            <div v-if="expandedMacroSection === 'foreshadow'" class="wv-macro-comp">
+              <div class="wv-macro-fs-list">
+                <span v-for="f in macroSummary.foreshadows" :key="f.id" class="wv-macro-fs-chip">
+                  {{ f.name }}（埋{{ f.plants?.join(',') }}→收{{ f.harvest }}）
+                </span>
+              </div>
+              <button class="btn-line btn-line-xs wv-macro-regen-btn"
+                      :disabled="!!regeneratingComponent"
+                      @click="regenerateComponent('foreshadow')">
+                {{ regeneratingComponent === 'foreshadow' ? '重摇中…' : '↻ 重摇此组件' }}
+              </button>
+            </div>
+
+            <!-- 节奏 -->
+            <div v-if="expandedMacroSection === 'pacing'" class="wv-macro-comp">
+              <div class="wv-macro-sparkline">
+                <svg :viewBox="`0 0 ${macroSummary.tensionPoints.length * 20} 40`"
+                     preserveAspectRatio="none" class="wv-macro-spark">
+                  <polyline :points="macroSummary.tensionPoints.map((t, i) => `${i * 20},${40 - t.tension * 35}`).join(' ')"
+                            fill="none" stroke="var(--accent, #6c8)" stroke-width="2" />
+                  <circle v-for="(t, i) in macroSummary.tensionPoints" :key="i"
+                          :cx="i * 20" :cy="40 - t.tension * 35" r="2"
+                          fill="var(--accent, #6c8)" />
+                </svg>
+              </div>
+              <button class="btn-line btn-line-xs wv-macro-regen-btn"
+                      :disabled="!!regeneratingComponent"
+                      @click="regenerateComponent('pacing')">
+                {{ regeneratingComponent === 'pacing' ? '重摇中…' : '↻ 重摇此组件' }}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 无计划时的摘要（保持兼容） -->
+        <div v-if="!macroPlan && macroSummary" class="wv-macro-summary">
           <!-- Blueprint logline -->
           <div class="wv-macro-card">
             <div class="wv-macro-card-title">故事蓝图</div>
@@ -1081,10 +1339,10 @@ async function doConfirm() {
         </div>
 
         <footer class="gacha-foot">
-          <button class="btn-line" aria-label="返回人物原型" @click="backToCast">← 返回人物</button>
+          <button class="btn-line" aria-label="返回冲突检测" @click="stage = 'crosscheck'">← 返回冲突检测</button>
           <button v-if="macroPlan" class="btn-line" :disabled="macroGenerating"
                   aria-label="重新生成宏观计划" @click="generateMacro">
-            {{ macroGenerating ? '生成中…' : '↻ 重摇' }}
+            {{ macroGenerating ? '生成中…' : '↻ 全局重摇' }}
           </button>
           <button class="btn-line" aria-label="跳过宏观计划，直接开工" @click="skipMacro">跳过</button>
           <button ref="startBtn" class="btn-main"
