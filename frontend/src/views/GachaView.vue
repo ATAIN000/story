@@ -1,10 +1,11 @@
 <script setup>
-/* 抽卡开局页（P13 简化：题材 + 世界观两段式）
+/* 抽卡开局页（P14 四段式：题材 + 世界观+语言 + 人物原型占位 + 确认）
  *   段 1 题材选择（单栏卡片网格，全量 registry 题材列表）→ 段 2 骨架选择
- *   （10 卡+随机+空白）→ 段 3 十层向导 → 确认开工
+ *   （10 卡+随机+空白）→ 段 3 世界观+语言文化向导（L0-L9 + LANG1-LANG5）
+ *   → 段 4 人物原型占位 → 确认开工
  *
- * P13 变更：删除四栏（题材×文化×原型×规则），文化从题材 allowed_cultures
- * 自带（后端 confirm 推导），世界规则由世界观向导产出取代随机抽包栏。
+ * P14 变更：向导左栏分区（世界观 L0-L9 / 语言文化 LANG1-LANG5）；
+ *   人物原型为占位页（即将上线）；文化默认 confucian_officialdom（不再推导）。
  * synth 模式（让 AI 自由发挥）保留不变。
  *
  * a11y：层/卡 aria-label、chips role="group"、键盘可达、对话框焦点圈保留。
@@ -15,6 +16,7 @@ import { toGachaCardVM, toGenreListVM, displayName, toWorldviewSchemaVM, toEvalu
 import { presetToLayers } from '../api/worldviewPresets'
 import { useToast } from '../composables/useToast'
 import AppIcon from '../components/AppIcon.vue'
+import EmptyState from '../components/EmptyState.vue'
 
 const props = defineProps({
   project: { type: Object, default: null },
@@ -76,7 +78,7 @@ const confirmPayload = computed(() => {
 })
 
 /* ===== 段 2/3：世界观向导（P12.5 保留） ===== */
-const stage = ref('theme')                // 'theme' | 'skeleton' | 'wizard'
+const stage = ref('theme')                // 'theme' | 'skeleton' | 'wizard' | 'cast'
 const schemaVM = ref(null)
 const schemaLoading = ref(false)
 const wvProfile = ref({})
@@ -195,9 +197,18 @@ function goWizard() {
 
 function backToTheme() { stage.value = 'theme' }
 function backToSkeleton() { stage.value = 'skeleton' }
+function backToWizard() { stage.value = 'wizard' }
+
+/* ---- 段 3 → 段 4（人物原型占位） ---- */
+function goCast() {
+  stage.value = 'cast'
+}
 
 /* ---- 段 3 向导 ---- */
 const layers = computed(() => schemaVM.value?.layers ?? [])
+/* 世界观层（L0-L9）与语言文化层（LANG1-LANG5）分离，用于左栏分区展示 */
+const worldviewLayers = computed(() => layers.value.filter(l => !l.id.startsWith('LANG')))
+const languageLayers = computed(() => layers.value.filter(l => l.id.startsWith('LANG')))
 const currentLayer = computed(() => layers.value[currentLayerIdx.value] ?? null)
 const isLastLayer = computed(() => currentLayerIdx.value === layers.value.length - 1)
 
@@ -396,17 +407,20 @@ async function doConfirm() {
   <div class="gacha">
     <header class="gacha-head">
       <h2>开局 · 选一个题材</h2>
-      <p class="gacha-sub">题材决定轨道/节奏/评估权重/人物阵容，世界观决定设定/规则。选题材 → 选骨架 → 世界观向导 → 开工。</p>
-      <!-- 三段式面包屑 -->
+      <p class="gacha-sub">题材决定轨道/节奏/评估权重/人物阵容，世界观决定设定/规则。选题材 → 选骨架 → 世界观+语言向导 → 人物原型 → 开工。</p>
+      <!-- 四段式面包屑 -->
       <ol class="gacha-stages" role="list">
         <li :class="{ active: stage === 'theme', done: stage !== 'theme' }">
           <span class="gs-idx">1</span><span class="gs-name">题材选择</span>
         </li>
-        <li :class="{ active: stage === 'skeleton', done: stage === 'wizard', disabled: !hasSelection }">
+        <li :class="{ active: stage === 'skeleton', done: ['wizard','cast'].includes(stage), disabled: !hasSelection }">
           <span class="gs-idx">2</span><span class="gs-name">骨架选择</span>
         </li>
-        <li :class="{ active: stage === 'wizard', disabled: !hasSelection }">
+        <li :class="{ active: stage === 'wizard', done: stage === 'cast', disabled: !hasSelection }">
           <span class="gs-idx">3</span><span class="gs-name">世界观向导</span>
+        </li>
+        <li :class="{ active: stage === 'cast', disabled: !hasSelection }">
+          <span class="gs-idx">4</span><span class="gs-name">人物原型</span>
         </li>
       </ol>
     </header>
@@ -518,8 +532,8 @@ async function doConfirm() {
       </section>
     </template>
 
-    <!-- ===== 段 3：十层向导 ===== -->
-    <template v-else>
+    <!-- ===== 段 3：世界观 + 语言文化向导 ===== -->
+    <template v-else-if="stage === 'wizard'">
       <section v-if="schemaVM" class="wv-wizard" aria-label="世界观十层向导">
         <!-- 左进度轨 -->
         <nav class="wv-rail" aria-label="世界观层进度">
@@ -527,7 +541,7 @@ async function doConfirm() {
             <div class="wv-rail-fill" :style="{ width: layerProgressPct() + '%' }"></div>
           </div>
           <ol class="wv-rail-list" role="list">
-            <li v-for="(layer, idx) in layers" :key="layer.id"
+            <li v-for="(layer, idx) in worldviewLayers" :key="layer.id"
                 class="wv-rail-item"
                 :class="['st-' + layerStatus(layer.id), { active: idx === currentLayerIdx }]"
                 :aria-current="idx === currentLayerIdx ? 'step' : undefined">
@@ -548,6 +562,32 @@ async function doConfirm() {
               </button>
             </li>
           </ol>
+          <template v-if="languageLayers.length">
+            <div class="wv-rail-divider" role="separator" aria-label="语言文化分区">
+              <span>语言文化</span>
+            </div>
+            <ol class="wv-rail-list" role="list">
+              <li v-for="layer in languageLayers" :key="layer.id"
+                  class="wv-rail-item"
+                  :class="['st-' + layerStatus(layer.id), { active: layers[currentLayerIdx]?.id === layer.id }]">
+                <button class="wv-rail-btn"
+                        :aria-label="`${layer.id} ${layer.name}${layer.covered ? '' : '（即将上线）'}`"
+                        :disabled="!layer.covered"
+                        @click="jumpLayer(layers.findIndex(l => l.id === layer.id))">
+                  <span class="wv-rail-mark" aria-hidden="true">
+                    <template v-if="!layer.covered">○</template>
+                    <template v-else-if="layerStatus(layer.id) === 'done'">✓</template>
+                    <template v-else-if="layerStatus(layer.id) === 'violation'">!</template>
+                    <template v-else-if="layers[currentLayerIdx]?.id === layer.id">●</template>
+                    <template v-else>○</template>
+                  </span>
+                  <span class="wv-rail-id">{{ layer.id }}</span>
+                  <span class="wv-rail-name">{{ layer.name }}</span>
+                  <span v-if="!layer.covered" class="wv-rail-soon">即将上线</span>
+                </button>
+              </li>
+            </ol>
+          </template>
         </nav>
 
         <!-- 右参数卡片 -->
@@ -626,13 +666,28 @@ async function doConfirm() {
             <button v-if="!isLastLayer" class="btn-main"
                     :disabled="currentLayerIdx >= layers.length - 1"
                     aria-label="进入下一层" @click="nextLayer">下一层 →</button>
-            <button v-else ref="startBtn" class="btn-main"
-                    :disabled="busy"
-                    aria-label="确认开工，按当前配置开始创作" @click="requestConfirm">
-              {{ confirmBusy ? '开工中…' : '确认开工' }}
+            <button v-else class="btn-main"
+                    aria-label="下一步：人物原型" @click="goCast">
+              下一步：人物原型 →
             </button>
           </footer>
         </div>
+      </section>
+    </template>
+
+    <!-- ===== 段 4：人物原型占位 ===== -->
+    <template v-else-if="stage === 'cast'">
+      <section class="wv-cast-stage" aria-label="人物原型">
+        <EmptyState icon="users" title="人物原型 · 即将上线，敬请期待"
+          desc="人物原型选择功能正在开发中。确认开工后可到人物视图手动添加角色，或等待后续版本接入原型驱动阵容。" />
+        <footer class="gacha-foot">
+          <button class="btn-line" aria-label="返回世界观向导" @click="backToWizard">← 返回向导</button>
+          <button ref="startBtn" class="btn-main"
+                  :disabled="busy"
+                  aria-label="确认开工，按当前配置开始创作" @click="requestConfirm">
+            {{ confirmBusy ? '开工中…' : '确认开工' }}
+          </button>
+        </footer>
       </section>
     </template>
 

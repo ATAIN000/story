@@ -574,6 +574,11 @@ button { font: inherit; cursor: pointer; border: none; background: none; color: 
   background: var(--s3); color: var(--faint); }
 .wv-rail-item.st-pending .wv-rail-name { color: var(--faint); }
 
+/* 左栏分区分隔线（世界观 / 语言文化） */
+.wv-rail-divider { display: flex; align-items: center; gap: 8px; margin: 14px 0 6px;
+  padding-top: 10px; border-top: 1px solid var(--line2); font-size: 10.5px;
+  font-weight: 700; color: var(--primary); letter-spacing: .5px; }
+
 /* 右参数面板 */
 .wv-panel { display: flex; flex-direction: column; gap: 14px;
   border: 1px solid var(--line); border-radius: 10px; background: var(--s2);
@@ -633,3 +638,7 @@ button { font: inherit; cursor: pointer; border: none; background: none; color: 
 .wv-nav { display: flex; gap: 10px; justify-content: space-between; align-items: center;
   padding-top: 12px; border-top: 1px solid var(--line); }
 .wv-nav .btn-main { margin-left: auto; }
+
+/* 段 4 人物原型占位 */
+.wv-cast-stage { margin-top: 18px; display: flex; flex-direction: column; gap: 18px; }
+.wv-cast-stage .gacha-foot { justify-content: space-between; }

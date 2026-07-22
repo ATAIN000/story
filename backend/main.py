@@ -67,6 +67,7 @@ from story_engine.meta.genre_validator import validate_genre_pack  # noqa: E402
 from story_engine.types import StoryEngineError  # noqa: E402
 from story_engine.worldview import (  # noqa: E402
     ALL_PARAMS as WV_ALL_PARAMS, LAYERS as WV_LAYERS,
+    LANGUAGE_LAYERS as WV_LANGUAGE_LAYERS,
     WorldviewProfile, evaluate as wv_evaluate,
     param_values as wv_param_values,
     preset_summaries as wv_preset_summaries,
@@ -834,16 +835,17 @@ def characters():
 # ---------- 世界观架构（P12.2：L0-L3 全量参数 + 跨层一致性校验） ----------
 @app.get("/api/worldview/schema")
 def worldview_schema():
-    """【P12.2】返回世界观 10 层架构定义 + 当前已数据化的层。
+    """【P12.2 / P14】返回世界观 10 层架构定义 + 语言文化 5 层 + 十骨架摘要。
 
-    前端据此渲染向导：``layers`` 是 L0-L9 的完整参数/枚举/连锁描述；
-    ``layers_covered`` 为当前已数据化层（L0-L9）。
-    ``param_count`` 为当前已数据化参数总数（L0-L9 合计 71）。
+    前端据此渲染向导：``layers`` 是 L0-L9 + LANG1-LANG5 的完整参数/枚举/连锁描述；
+    ``layers_covered`` 为当前已数据化层（L0-L9 + LANG1-LANG5）。
+    ``param_count`` 为当前已数据化参数总数（L0-L9 合计 71 + LANG1-LANG5 合计 15 = 86）。
     """
+    all_layers = WV_LAYERS + WV_LANGUAGE_LAYERS
     return {
-        "layers": WV_LAYERS,
+        "layers": all_layers,
         "param_count": len(WV_ALL_PARAMS),
-        "layers_covered": [layer["id"] for layer in WV_LAYERS],
+        "layers_covered": [layer["id"] for layer in all_layers],
         "presets": wv_preset_summaries(),
     }
 
@@ -1009,7 +1011,8 @@ def gacha_confirm(card: dict):
                                 detail=f"合成包未过校验：{'；'.join(errs)}")
         allowed = pack.get("allowed_cultures") or ["*"]
         culture = derive_culture(allowed)
-        # P13：文化从 allowed_cultures 推导；验证推导结果在 registry 已注册
+        # P14：文化默认 confucian_officialdom（题材含该文化或通配时取它）；
+        # 验证推导结果在 registry 已注册
         # （allowed_cultures 引用不存在的文化 → 422 不落盘，口径同 init）
         if "*" not in allowed:
             reg_cultures = engine.kernel.registry.list_plugins(
@@ -1023,7 +1026,7 @@ def gacha_confirm(card: dict):
         engine.kernel.registry.reload()
         persisted = True
     else:
-        # P13：文化从题材 allowed_cultures 自带（不再从 card.culture 读取）
+        # P14：文化默认 confucian_officialdom（不再从 card.culture 读取）
         try:
             m = engine.kernel.registry.get_manifest("story.genre", name)
             culture = derive_culture(m.allowed_cultures)

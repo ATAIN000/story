@@ -102,19 +102,19 @@ def test_layers_data_integrity():
 
 # ---------- P12.2 端点测试（3 核心） ----------
 def test_schema_endpoint_layers_and_param_count():
-    """GET /api/worldview/schema：layers 含 L0-L9、param_count 与 ALL_PARAMS 一致、
-    layers_covered 为当前已数据化层。"""
+    """GET /api/worldview/schema：layers 含 L0-L9 + LANG1-LANG5、param_count 与
+    ALL_PARAMS 一致（86）、layers_covered 为当前已数据化层。"""
     from fastapi.testclient import TestClient
     from conftest import import_backend_main
     backend = import_backend_main()
     r = TestClient(backend.app).get("/api/worldview/schema")
     assert r.status_code == 200, r.text
     body = r.json()
-    assert [l["id"] for l in body["layers"]] == [
-        "L0", "L1", "L2", "L3", "L4", "L5", "L6", "L7", "L8", "L9"]
-    assert body["param_count"] == len(ALL_PARAMS)  # 71
-    assert body["layers_covered"] == [
-        "L0", "L1", "L2", "L3", "L4", "L5", "L6", "L7", "L8", "L9"]
+    expected = ["L0", "L1", "L2", "L3", "L4", "L5", "L6", "L7", "L8", "L9",
+                "LANG1", "LANG2", "LANG3", "LANG4", "LANG5"]
+    assert [l["id"] for l in body["layers"]] == expected
+    assert body["param_count"] == len(ALL_PARAMS)  # 86（71 世界观 + 15 语言）
+    assert body["layers_covered"] == expected
 
 
 def test_evaluate_endpoint_materialist_narrows_consciousness_nature():

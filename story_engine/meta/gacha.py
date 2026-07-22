@@ -233,12 +233,15 @@ def _simplify_card(card: dict) -> dict:
 # ---------- P13：文化推导（confirm 从题材自带取，不再从 card.culture 读） ----------
 
 def derive_culture(allowed_cultures: list | None) -> str:
-    """从题材的 allowed_cultures 推导文化 id：通配或缺省 → 默认 confucian_officialdom；
-    否则取首条。confirm 端点用此取代 card.culture.name 读取。"""
+    """P14：文化默认 confucian_officialdom（题材含该文化或通配时取它）；
+    否则取 allowed_cultures 首条。开局不阻塞——用户可后续在设置页改。
+
+    文化维度已融入语言 7 层向导，不再在开局页单独选文化包。但引擎构造
+    GenreBundle 仍需 culture_name，故用默认值兜底。"""
     allowed = allowed_cultures or ["*"]
-    if "*" in allowed or not allowed:
+    if "*" in allowed or "confucian_officialdom" in allowed:
         return "confucian_officialdom"
-    return allowed[0]
+    return allowed[0] if allowed else "confucian_officialdom"
 
 
 # ---------- 内部：synth 四栏上下文（仅供 _synth_prompt，不暴露前端） ----------
