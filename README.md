@@ -264,3 +264,43 @@ project.json 元数据 + training_data/），互不干扰；后端持有「当�
 - 对白质量盲区（验证报告：8.3% 召回率）需 DialogueCritic —— Module 6 待建
 - 记忆系统（16-bank + sqlite-vec 混合检索）、CharacterActor 完整实现为 Phase 2
 - 分层 IR（bet7 部分通过）与语言 realizer 插件为 Phase 3
+
+## 日志系统（Phase 16）
+
+基于 [loguru](https://github.com/Delgan/loguru)，统一管理全链路日志，**LLM 调用的完整 prompt/response 全文落盘**，便于跟踪生成链路排查问题。
+
+### 日志输出
+
+| 通道 | 级别 | 格式 | 说明 |
+|------|------|------|------|
+| 控制台 | INFO | `HH:mm:ss \| LEVEL \| trace_id \| 模块:行 \| 消息` | 彩色，减少噪音 |
+| `logs/story_engine.log` | DEBUG | `YYYY-MM-DD HH:mm:ss \| ...` | 按天轮转保留 7 天，utf-8；含完整 LLM prompt/response + traceback |
+
+### trace_id 全链路追踪
+
+每章生成时引擎生成唯一 `trace_id`（格式 `ch{章号}-{8位hex}`，如 `ch1-a3f2b1c9`），
+经 loguru 的 `contextualize` 传播到该章所有异步子调用（决策卡→Actor→IR→Realizer→
+验证→自评→修正→提交），包括 `llm_pool` 的 LLM 调用日志。grep 一个 `trace_id`
+即可拉出该章的完整生成链路：
+
+```bash
+grep "ch1-a3f2b1c9" logs/story_engine.log
+```
+
+### LLM 调用日志
+
+`llm_pool.call()` 的每次调用在 DEBUG 级别记录（仅文件层，控制台不输出全文）：
+
+- **调用前**：`[LLM] 调用 | purpose=X | model=Y | temp=Z | prompt:\n{完整prompt}`
+- **响应后**：`[LLM] 响应 | purpose=X | latency=Yms | tokens=A/B | response:\n{完整response}`
+- **异常**：`[LLM] 异常 | purpose=X` + traceback
+- **Mock 路径**：同款日志，前缀标 `[LLM][MOCK]`
+
+### stdlib logging 兼容
+
+现有代码中的 `logging.getLogger(__name__)` 调用经 `InterceptHandler` 自动转发到 loguru，
+无需改动。新代码请直接 `from loguru import logger`。
+
+### 测试环境
+
+`tests/conftest.py` 调 `setup_logging(level="WARNING")`，测试输出无日志噪音。

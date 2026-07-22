@@ -61,6 +61,7 @@ from story_engine.hitl import (  # noqa: E402
     HumanInput, InterventionRouter, TrainingPipeline)
 from story_engine.kernel import Kernel, LLMPool  # noqa: E402
 from story_engine.llm import LLMError  # noqa: E402
+from story_engine.logging_config import setup_logging  # noqa: E402
 from story_engine.meta import MetaGenerator, UserIntent  # noqa: E402
 from story_engine.meta.gacha import draw_card_async, derive_culture  # noqa: E402
 from story_engine.meta.genre_validator import validate_genre_pack  # noqa: E402
@@ -90,6 +91,9 @@ def _load_dotenv():
 
 
 _load_dotenv()
+
+# Phase 16：loguru 日志系统初始化（在 app 创建前）
+setup_logging()
 
 PROJECT_DIR = os.environ.get("STORY_ENGINE_PROJECT_DIR",
                              str(ROOT / "data" / "projects" / "yupei"))

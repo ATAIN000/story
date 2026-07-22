@@ -13,6 +13,10 @@ os.environ.setdefault("STORY_ENGINE_EMBED_DIMENSIONS", "512")
 # 老测试默认走剧本路径
 os.environ.setdefault("STORY_ENGINE_SCRIPTED_DEMO", "1")
 
+# Phase 16：loguru 日志系统（WARNING 级别减少测试噪音）
+from story_engine.logging_config import setup_logging  # noqa: E402
+setup_logging(level="WARNING")
+
 _backend_module = None
 
 

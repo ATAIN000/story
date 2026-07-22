@@ -17,6 +17,7 @@ frontend/dist/
 frontend/npm-install*.log
 
 # 项目数据（运行时生成）
+logs/
 data/projects/*/story.db
 data/projects/*/story.db-wal
 data/projects/*/story.db-shm

@@ -37,6 +37,8 @@ from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
 
+from loguru import logger as _llog
+
 from .kernel import Kernel
 from .kernel.actor import CharacterConfig
 from .creativity import ConceptualBlending
@@ -453,25 +455,27 @@ class StoryEngine:
         t0 = time.perf_counter()
         state = self.kernel.query_world("current_state")
         chapter_no = state.narrative.chapter + 1
-        scripted = self._scripted(chapter_no)
+        trace_id = f"ch{chapter_no}-{uuid4().hex[:8]}"
+        with _llog.contextualize(trace_id=trace_id):
+            scripted = self._scripted(chapter_no)
 
-        # 剧本路径：完全保留 Phase 1 行为
-        if scripted:
-            return await self._generate_chapter_llm_path(
-                chapter_no, state, t0, scripted=True, mode=mode)
+            # 剧本路径：完全保留 Phase 1 行为
+            if scripted:
+                return await self._generate_chapter_llm_path(
+                    chapter_no, state, t0, scripted=True, mode=mode)
 
-        # SCRIPTED_DEMO=1 且 Mock 剧本已完：保持旧行为提示切换 LLM
-        demo_on = os.environ.get("STORY_ENGINE_SCRIPTED_DEMO", "1") == "1"
-        if demo_on and self.llm.is_mock:
-            raise StoryEngineMockEnded(
-                f"Mock 剧本已完结（共{max(mock_script.DRAFTS)}章）。"
-                "配置 STORY_ENGINE_LLM_API_KEY 后切换真实 LLM 继续生成，"
-                "或设 STORY_ENGINE_SCRIPTED_DEMO=0 走 Actor 模式，"
-                "或在时间线面板回滚到任意快照重新生成。")
+            # SCRIPTED_DEMO=1 且 Mock 剧本已完：保持旧行为提示切换 LLM
+            demo_on = os.environ.get("STORY_ENGINE_SCRIPTED_DEMO", "1") == "1"
+            if demo_on and self.llm.is_mock:
+                raise StoryEngineMockEnded(
+                    f"Mock 剧本已完结（共{max(mock_script.DRAFTS)}章）。"
+                    "配置 STORY_ENGINE_LLM_API_KEY 后切换真实 LLM 继续生成，"
+                    "或设 STORY_ENGINE_SCRIPTED_DEMO=0 走 Actor 模式，"
+                    "或在时间线面板回滚到任意快照重新生成。")
 
-        # Actor 路径（STORY_ENGINE_SCRIPTED_DEMO=0）
-        return await self._generate_chapter_actor_path(
-            chapter_no, state, t0, mode=mode)
+            # Actor 路径（STORY_ENGINE_SCRIPTED_DEMO=0）
+            return await self._generate_chapter_actor_path(
+                chapter_no, state, t0, mode=mode)
 
     # ============ P6.2：两阶段生成（plan + confirm） ============
     def plan_chapter(self) -> dict:
@@ -519,11 +523,15 @@ class StoryEngine:
 
         # Step 0: Showrunner 决策卡（P6.2：confirm 模式复用 plan 缓存卡）
         card = self._resolve_decision_card(chapter_no, state, mode)
+        _llog.info("决策卡生成 | 章={} | advance={} | tracks={}", chapter_no,
+                   getattr(card, "advance", []), len(getattr(card, "beats", [])))
         # P3.7：env 门控默认关；剧本路径（mock_script）不挂 seed，保持原行为
         if not scripted:
             card = await self.showrunner.attach_creative_seed(card, chapter_no)
 
         # Step 1-4: 初稿 → 事件抽取 → 7步验证 → 修正回路
+        _llog.info("生成初稿 | eval_enabled={} | ir_first={}",
+                   self._eval_enabled(), self._ir_first_enabled())
         # P4.5（决策5）：真实 LLM 且自评门控通过 → 包 IterationController（best-of-K）；
         # 自评链路任何异常 → 退回未迭代结果（自评是增强不是门禁）
         evaluation = None
@@ -614,6 +622,9 @@ class StoryEngine:
         chapters = self._read_chapters()
         chapters.append(record)
         self._write_chapters(chapters)
+        _llog.info("章节提交 | 章={} | 事件={} | 时长={}ms | 修正={}",
+                   chapter_no, len(committed), record["duration_ms"],
+                   "是" if correction else "否")
         return record
 
     async def _generate_and_repair(self, chapter_no: int, card,
@@ -635,6 +646,8 @@ class StoryEngine:
             {"event": r["event_summary"], "check": c["label"], "reason": c["reason"]}
             for r in draft_results for c in r["checks"] if not c["passed"]
         ]
+        _llog.info("验证结果 | 章={} | 事件={} | 违规={}", chapter_no,
+                   len(draft_results), len(violations))
 
         # Step 4: 修正回路（修正通道 — WorldState + 违规报告）
         correction = None
@@ -646,6 +659,8 @@ class StoryEngine:
             recheck = self._validate_event_sequence(final_events, state)
             correction["recheck_passed"] = all(
                 c["passed"] for r in recheck for c in r["checks"])
+            _llog.info("修正完成 | 章={} | 复验={}", chapter_no,
+                       correction["recheck_passed"])
         return (draft_text, draft_results, violations, correction,
                 final_text, final_events)
 
@@ -737,6 +752,8 @@ class StoryEngine:
             text = await Narrativizer(self.kernel, self.bundle).narrate(
                 ir, sjuzhet, recap=self._ir_recap(),
                 worldview_text=self._worldview_prompt_text())
+            _llog.info("IR-first 产出 | 章={} | beats={} | events={}", chapter_no,
+                       len(ir.beats), len(ir.events))
         except Exception as exc:
             warnings.warn(
                 f"P5.6 IR-first 链路异常（{exc!r}），回退旧文本产出路径",
@@ -870,6 +887,9 @@ class StoryEngine:
         # 章节级迭代：L1/L2/L3 缺单事件/角色/beat 上下文自动跳过，L5 恒跑
         result = await controller.run(
             generate_fn, ChapterSpec(state=state, decision=card))
+        _llog.info("自评迭代完成 | 章={} | 轮数={} | best_round={}", chapter_no,
+                   controller.max_rounds,
+                   result.best.round if result.best else None)
         evaluation = await self._assemble_evaluation(
             result, controller, reader, scorer,
             rounds[0]["text"] if rounds else "")
@@ -962,6 +982,8 @@ class StoryEngine:
         """
         # P6.2：confirm 模式复用 plan 缓存卡
         card = self._resolve_decision_card(chapter_no, state, mode)
+        _llog.info("决策卡生成（Actor） | 章={} | advance={}", chapter_no,
+                   getattr(card, "advance", []))
         # P3.7：env 门控默认关；开启时每 N 章附 1 个 CreativeSeed（失败不阻塞）
         card = await self.showrunner.attach_creative_seed(card, chapter_no)
         await self._ensure_character_actors()
@@ -978,6 +1000,8 @@ class StoryEngine:
             batch = await self.kernel.scheduler.tick_all(
                 cur, chapter=chapter_no, timeout=120.0)
             all_actions.extend(batch)
+        _llog.info("Actor tick 完成 | 章={} | 行动数={}", chapter_no,
+                   len(all_actions))
 
         # 本 tick 区间内由 Actor 提交的事件
         all_ev = self.kernel.query_world("all_events")
@@ -1103,6 +1127,8 @@ class StoryEngine:
         chapters = self._read_chapters()
         chapters.append(record)
         self._write_chapters(chapters)
+        _llog.info("章节提交（Actor） | 章={} | 行动={} | 时长={}ms",
+                   chapter_no, len(all_actions), record["duration_ms"])
         return record
 
     async def _ensure_character_actors(self) -> None:

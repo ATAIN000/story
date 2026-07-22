@@ -20,6 +20,7 @@ import time
 from dataclasses import dataclass
 
 import httpx
+from loguru import logger
 
 KIMI_CODE_UA = "claude-code/0.1.0"
 
@@ -54,14 +55,28 @@ class LLMPool:
 
     async def call(self, prompt: str, *, purpose: str = "generate",
                    temperature: float = 0.7, max_tokens: int = 8192) -> LLMResponse:
-        if self.is_mock:
-            resp = await self._mock_call(prompt, purpose)
-        else:
-            resp = await self._openai_call(prompt, temperature, max_tokens)
-            if not resp.text.strip() and purpose != "_retry":
-                resp = await self._openai_call(
-                    prompt, temperature, max(max_tokens * 2, 16384),
-                    force_thinking=True)
+        tag = "[LLM][MOCK]" if self.is_mock else "[LLM]"
+        logger.debug(
+            "{} 调用 | purpose={} | model={} | temp={} | max_tokens={} | "
+            "prompt:\n{}", tag, purpose, self.model, temperature, max_tokens,
+            prompt)
+        try:
+            if self.is_mock:
+                resp = await self._mock_call(prompt, purpose)
+            else:
+                resp = await self._openai_call(prompt, temperature, max_tokens)
+                if not resp.text.strip() and purpose != "_retry":
+                    resp = await self._openai_call(
+                        prompt, temperature, max(max_tokens * 2, 16384),
+                        force_thinking=True)
+        except Exception:
+            logger.exception("{} 异常 | purpose={} | model={}", tag, purpose,
+                             self.model)
+            raise
+        logger.debug(
+            "{} 响应 | purpose={} | latency={}ms | tokens={}/{} | response:\n{}",
+            tag, purpose, round(resp.latency_ms, 1), resp.tokens_in,
+            resp.tokens_out, resp.text)
         self.call_log.append({
             "purpose": purpose, "model": resp.model, "mock": resp.mock,
             "latency_ms": round(resp.latency_ms, 1),
