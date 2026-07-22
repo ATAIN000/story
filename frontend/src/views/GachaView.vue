@@ -258,27 +258,55 @@ function confirmMacro() {
 }
 
 /* macro_plan 摘要计算属性 */
+
+// 枚举值中文映射（beat name / story_type / pacing / foreshadow type / arc phase / purpose）
+const BEAT_CN = {
+  opening_image: '开场意象', setup: '建置', theme_stated: '点题', inciting_incident: '触发事件',
+  debate: '犹豫辩论', break_into_two: '进入第二幕', b_story: '副线开启', fun_and_games: '施展才华',
+  midpoint: '中点转折', bad_guys_close_in: '危机逼近', all_is_lost: '全线溃败',
+  dark_night: '灵魂黑夜', break_into_three: '进入第三幕', finale: '终局对决', final_image: '终场意象',
+  gathering_team: '集结队伍', executing_plan: '执行计划', high_tower_surprise: '高塔惊变',
+  dig_down_deep: '深层挖掘', selection_of_natural_law: '天道选择', prologue: '序章',
+  first_meeting: '初遇', misunderstanding: '误会', sweet_moments: '甜蜜日常',
+  jealousy: '吃醋', reconciliation: '和解', confession: '告白', crisis: '危机',
+  choice: '抉择', epilogue: '尾声'
+}
+const STORY_TYPE_CN = { redemption:'救赎型', revenge:'复仇型', growth:'成长型', forbidden_love:'禁忌之恋型', mystery:'悬疑型', coming_of_age:'成长觉醒型', quest:'征途型' }
+const PACE_CN = { fast_escalation:'快速升级', slow_burn:'慢热铺垫', wave:'波浪起伏', wave_escalation:'波浪上升', dtg_staircase:'阶梯攀升', linear:'线性递进', custom:'自定义' }
+const FS_TYPE_CN = { main_mystery:'主线悬念', subplot:'副线', character_secret:'角色秘密', world_rule:'世界规则', callback:'回调伏笔' }
+const ARC_PHASE_CN = { setup:'建置', crack:'裂痕', midpoint_shift:'中点转变', relapse:'倒退', awakening:'觉醒', truth_embrace:'拥抱真相', new_equilibrium:'新均衡', tested:'受考验', strained:'紧绷', vindicated:'被证明', steadfast_positive:'坚定正向' }
+const FLEX_CN = { rigid:'严格', flexible:'灵活', free:'自由', medium:'灵活', high:'自由', low:'严格' }
+function beatCn(name) { return BEAT_CN[name] || name }
+function storyTypeCn(t) { return STORY_TYPE_CN[t] || t }
+function paceCn(t) { return PACE_CN[t] || t }
+function fsTypeCn(t) { return FS_TYPE_CN[t] || t }
+function arcPhaseCn(t) { return ARC_PHASE_CN[t] || t }
+function flexCn(t) { return FLEX_CN[t] || t }
+
 const macroSummary = computed(() => {
   if (!macroPlan.value) return null
   const p = macroPlan.value
   return {
     logline: p.blueprint?.logline || '—',
+    storyType: storyTypeCn(p.blueprint?.story_type || ''),
+    pace: paceCn(p.blueprint?.target_pace || ''),
     template: p.act_structure?.template || '',
     acts: (p.act_structure?.acts ?? []).map(a => ({
       name: a.name, range: a.episode_range, beats: a.beats?.length ?? 0,
     })),
     episodes: (p.episode_outlines ?? []).map(e => ({
-      ep: e.episode, synopsis: e.synopsis || '—', purpose: e.purpose || '',
+      ep: e.episode, synopsis: e.synopsis || '—', purpose: beatCn(e.purpose || ''),
     })),
     arcs: (p.arc_schedule?.characters ?? []).map(c => ({
-      name: c.name, arc: c.archetype_arc, milestones: c.milestones?.length ?? 0,
+      name: c.name, arc: arcPhaseCn(c.archetype_arc || ''),
+      milestones: c.milestones?.map(m => ({phase: arcPhaseCn(m.phase||''), state: m.state||'', behavior: m.behavior||''})) ?? [],
     })),
     foreshadows: (p.foreshadow_blueprint?.threads ?? []).map(f => ({
-      id: f.id, name: f.name, type: f.type,
+      id: f.id, name: f.name, type: fsTypeCn(f.type || ''),
       plants: f.plant_episodes, harvest: f.harvest_episode,
     })),
     tensionPoints: (p.pacing_curve?.key_tension_points ?? []).map(t => ({
-      ep: t.episode, tension: t.tension,
+      ep: t.episode, tension: t.tension, reason: t.reason || '',
     })),
     totalEpisodes: p.blueprint?.total_episodes ?? 0,
   }
@@ -981,7 +1009,7 @@ async function doConfirm() {
             <div class="wv-macro-card-title">故事蓝图</div>
             <p class="wv-macro-logline">{{ macroSummary.logline }}</p>
             <div class="wv-macro-meta">
-              模板：{{ macroSummary.template }} · 共 {{ macroSummary.totalEpisodes }} 集
+              {{ macroSummary.storyType }} · {{ macroSummary.pace }} · 共 {{ macroSummary.totalEpisodes }} 集
             </div>
           </div>
 
@@ -1014,9 +1042,14 @@ async function doConfirm() {
           <div v-if="macroSummary.arcs.length" class="wv-macro-card">
             <div class="wv-macro-card-title">角色弧光</div>
             <div class="wv-macro-arcs">
-              <span v-for="c in macroSummary.arcs" :key="c.name" class="wv-macro-arc-chip">
-                {{ c.name }}（{{ c.arc }}，{{ c.milestones }} 里程碑）
-              </span>
+              <div v-for="c in macroSummary.arcs" :key="c.name" class="wv-macro-arc-entry">
+                <span class="wv-macro-arc-name">{{ c.name }}（{{ c.arc }}）</span>
+                <div v-if="c.milestones?.length" class="wv-macro-milestones">
+                  <span v-for="(m, mi) in c.milestones" :key="mi" class="wv-macro-ms-chip">
+                    {{ m.phase }}：{{ m.state }}
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
 
