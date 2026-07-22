@@ -16,6 +16,7 @@ import { toGachaCardVM, toGenreListVM, displayName, toWorldviewSchemaVM, toEvalu
 import { presetToLayers } from '../api/worldviewPresets'
 import { useToast } from '../composables/useToast'
 import AppIcon from '../components/AppIcon.vue'
+import MacroDashboard from '../components/MacroDashboard.vue'
 
 const props = defineProps({
   project: { type: Object, default: null },
@@ -320,24 +321,6 @@ async function regenerateComponent(component) {
   }
 }
 
-/* P18.2: 六组件折叠审阅 */
-const expandedMacroSection = ref('blueprint')
-function toggleMacroSection(id) {
-  expandedMacroSection.value = expandedMacroSection.value === id ? null : id
-}
-const macroSections = computed(() => {
-  if (!macroPlan.value) return []
-  const p = macroPlan.value
-  const list = []
-  list.push({ id: 'blueprint', title: '故事蓝图' })
-  if ((p.act_structure?.acts ?? []).length) list.push({ id: 'acts', title: '幕结构' })
-  if ((p.episode_outlines ?? []).length) list.push({ id: 'episodes', title: `分集梗概（${p.episode_outlines.length} 集）` })
-  if ((p.arc_schedule?.characters ?? []).length) list.push({ id: 'arcs', title: '角色弧光' })
-  if ((p.foreshadow_blueprint?.threads ?? []).length) list.push({ id: 'foreshadow', title: `伏笔线（${p.foreshadow_blueprint.threads.length} 条）` })
-  if ((p.pacing_curve?.key_tension_points ?? []).length) list.push({ id: 'pacing', title: '节奏曲线' })
-  return list
-})
-
 function skipMacro() {
   macroPlan.value = null
   requestConfirm()
@@ -346,61 +329,6 @@ function skipMacro() {
 function confirmMacro() {
   requestConfirm()
 }
-
-/* macro_plan 摘要计算属性 */
-
-// 枚举值中文映射（beat name / story_type / pacing / foreshadow type / arc phase / purpose）
-const BEAT_CN = {
-  opening_image: '开场意象', setup: '建置', theme_stated: '点题', inciting_incident: '触发事件',
-  debate: '犹豫辩论', break_into_two: '进入第二幕', b_story: '副线开启', fun_and_games: '施展才华',
-  midpoint: '中点转折', bad_guys_close_in: '危机逼近', all_is_lost: '全线溃败',
-  dark_night: '灵魂黑夜', break_into_three: '进入第三幕', finale: '终局对决', final_image: '终场意象',
-  gathering_team: '集结队伍', executing_plan: '执行计划', high_tower_surprise: '高塔惊变',
-  dig_down_deep: '深层挖掘', selection_of_natural_law: '天道选择', prologue: '序章',
-  first_meeting: '初遇', misunderstanding: '误会', sweet_moments: '甜蜜日常',
-  jealousy: '吃醋', reconciliation: '和解', confession: '告白', crisis: '危机',
-  choice: '抉择', epilogue: '尾声'
-}
-const STORY_TYPE_CN = { redemption:'救赎型', revenge:'复仇型', growth:'成长型', forbidden_love:'禁忌之恋型', mystery:'悬疑型', coming_of_age:'成长觉醒型', quest:'征途型' }
-const PACE_CN = { fast_escalation:'快速升级', slow_burn:'慢热铺垫', wave:'波浪起伏', wave_escalation:'波浪上升', dtg_staircase:'阶梯攀升', linear:'线性递进', custom:'自定义' }
-const FS_TYPE_CN = { main_mystery:'主线悬念', subplot:'副线', character_secret:'角色秘密', world_rule:'世界规则', callback:'回调伏笔' }
-const ARC_PHASE_CN = { setup:'建置', crack:'裂痕', midpoint_shift:'中点转变', relapse:'倒退', awakening:'觉醒', truth_embrace:'拥抱真相', new_equilibrium:'新均衡', tested:'受考验', strained:'紧绷', vindicated:'被证明', steadfast_positive:'坚定正向' }
-const FLEX_CN = { rigid:'严格', flexible:'灵活', free:'自由', medium:'灵活', high:'自由', low:'严格' }
-function beatCn(name) { return BEAT_CN[name] || name }
-function storyTypeCn(t) { return STORY_TYPE_CN[t] || t }
-function paceCn(t) { return PACE_CN[t] || t }
-function fsTypeCn(t) { return FS_TYPE_CN[t] || t }
-function arcPhaseCn(t) { return ARC_PHASE_CN[t] || t }
-function flexCn(t) { return FLEX_CN[t] || t }
-
-const macroSummary = computed(() => {
-  if (!macroPlan.value) return null
-  const p = macroPlan.value
-  return {
-    logline: p.blueprint?.logline || '—',
-    storyType: storyTypeCn(p.blueprint?.story_type || ''),
-    pace: paceCn(p.blueprint?.target_pace || ''),
-    template: p.act_structure?.template || '',
-    acts: (p.act_structure?.acts ?? []).map(a => ({
-      name: a.name, range: a.episode_range, beats: a.beats?.length ?? 0,
-    })),
-    episodes: (p.episode_outlines ?? []).map(e => ({
-      ep: e.episode, synopsis: e.synopsis || '—', purpose: beatCn(e.purpose || ''),
-    })),
-    arcs: (p.arc_schedule?.characters ?? []).map(c => ({
-      name: c.name, arc: arcPhaseCn(c.archetype_arc || ''),
-      milestones: c.milestones?.map(m => ({phase: arcPhaseCn(m.phase||''), state: m.state||'', behavior: m.behavior||''})) ?? [],
-    })),
-    foreshadows: (p.foreshadow_blueprint?.threads ?? []).map(f => ({
-      id: f.id, name: f.name, type: fsTypeCn(f.type || ''),
-      plants: f.plant_episodes, harvest: f.harvest_episode,
-    })),
-    tensionPoints: (p.pacing_curve?.key_tension_points ?? []).map(t => ({
-      ep: t.episode, tension: t.tension, reason: t.reason || '',
-    })),
-    totalEpisodes: p.blueprint?.total_episodes ?? 0,
-  }
-})
 
 /* ===== 段 4：人物原型向导（多角色管理） ===== */
 const castCards = ref([])         // [{name, role, persona: {key: value}}]
@@ -1136,7 +1064,7 @@ async function doConfirm() {
           </button>
         </div>
 
-        <!-- P18.2: 六组件折叠审阅面板 -->
+        <!-- 审阅面板：复用 MacroDashboard（compact + 重摇） -->
         <div v-if="macroPlan" class="wv-macro-review">
           <!-- 冲突约束提示 -->
           <div v-if="conflictAccepted && crossCheckWarnings.length > 0" class="wv-macro-conflict-note">
@@ -1144,195 +1072,13 @@ async function doConfirm() {
             <span class="wv-macro-conflict-count">{{ crossCheckWarnings.length }} 条</span>
           </div>
 
-          <!-- 组件标签栏 -->
-          <div class="wv-macro-tabs" role="tablist">
-            <button v-for="s in macroSections" :key="s.id"
-                    class="wv-macro-tab"
-                    :class="{ active: expandedMacroSection === s.id }"
-                    role="tab"
-                    :aria-selected="expandedMacroSection === s.id"
-                    @click="toggleMacroSection(s.id)">
-              {{ s.title }}
-            </button>
-          </div>
-
-          <!-- 组件内容 + 单组件重摇 -->
-          <div class="wv-macro-panel">
-            <!-- 故事蓝图 -->
-            <div v-if="expandedMacroSection === 'blueprint'" class="wv-macro-comp">
-              <p class="wv-macro-logline">{{ macroSummary.logline }}</p>
-              <div class="wv-macro-meta">
-                {{ macroSummary.storyType }} · {{ macroSummary.pace }} · 共 {{ macroSummary.totalEpisodes }} 集
-              </div>
-              <button class="btn-line btn-line-xs wv-macro-regen-btn"
-                      :disabled="!!regeneratingComponent"
-                      @click="regenerateComponent('blueprint')">
-                {{ regeneratingComponent === 'blueprint' ? '重摇中…' : '↻ 重摇此组件' }}
-              </button>
-            </div>
-
-            <!-- 幕结构 -->
-            <div v-if="expandedMacroSection === 'acts'" class="wv-macro-comp">
-              <div class="wv-macro-acts-bar">
-                <div v-for="(a, i) in macroSummary.acts" :key="i" class="wv-macro-act-seg"
-                     :style="{ flexGrow: (a.range[1] - a.range[0] + 1) }">
-                  <span class="wv-macro-act-name">{{ a.name }}</span>
-                  <span class="wv-macro-act-range">{{ a.range[0] }}-{{ a.range[1] }}</span>
-                  <span class="wv-macro-act-beats">{{ a.beats }}拍</span>
-                </div>
-              </div>
-              <button class="btn-line btn-line-xs wv-macro-regen-btn"
-                      :disabled="!!regeneratingComponent"
-                      @click="regenerateComponent('acts')">
-                {{ regeneratingComponent === 'acts' ? '重摇中…' : '↻ 重摇此组件' }}
-              </button>
-            </div>
-
-            <!-- 分集梗概 -->
-            <div v-if="expandedMacroSection === 'episodes'" class="wv-macro-comp">
-              <div class="wv-macro-ep-list">
-                <div v-for="e in macroSummary.episodes" :key="e.ep" class="wv-macro-ep-item">
-                  <span class="wv-macro-ep-num">第{{ e.ep }}集</span>
-                  <span class="wv-macro-ep-syn">{{ e.synopsis }}</span>
-                  <span v-if="e.purpose" class="wv-macro-ep-purpose">{{ e.purpose }}</span>
-                </div>
-              </div>
-              <button class="btn-line btn-line-xs wv-macro-regen-btn"
-                      :disabled="!!regeneratingComponent"
-                      @click="regenerateComponent('episodes')">
-                {{ regeneratingComponent === 'episodes' ? '重摇中…' : '↻ 重摇此组件' }}
-              </button>
-            </div>
-
-            <!-- 角色弧光 -->
-            <div v-if="expandedMacroSection === 'arcs'" class="wv-macro-comp">
-              <div class="wv-macro-arcs">
-                <div v-for="c in macroSummary.arcs" :key="c.name" class="wv-macro-arc-entry">
-                  <span class="wv-macro-arc-name">{{ c.name }}（{{ c.arc }}）</span>
-                  <div v-if="c.milestones?.length" class="wv-macro-milestones">
-                    <span v-for="(m, mi) in c.milestones" :key="mi" class="wv-macro-ms-chip">
-                      {{ m.phase }}：{{ m.state }}
-                    </span>
-                  </div>
-                </div>
-              </div>
-              <button class="btn-line btn-line-xs wv-macro-regen-btn"
-                      :disabled="!!regeneratingComponent"
-                      @click="regenerateComponent('arcs')">
-                {{ regeneratingComponent === 'arcs' ? '重摇中…' : '↻ 重摇此组件' }}
-              </button>
-            </div>
-
-            <!-- 伏笔 -->
-            <div v-if="expandedMacroSection === 'foreshadow'" class="wv-macro-comp">
-              <div class="wv-macro-fs-list">
-                <span v-for="f in macroSummary.foreshadows" :key="f.id" class="wv-macro-fs-chip">
-                  {{ f.name }}（埋{{ f.plants?.join(',') }}→收{{ f.harvest }}）
-                </span>
-              </div>
-              <button class="btn-line btn-line-xs wv-macro-regen-btn"
-                      :disabled="!!regeneratingComponent"
-                      @click="regenerateComponent('foreshadow')">
-                {{ regeneratingComponent === 'foreshadow' ? '重摇中…' : '↻ 重摇此组件' }}
-              </button>
-            </div>
-
-            <!-- 节奏 -->
-            <div v-if="expandedMacroSection === 'pacing'" class="wv-macro-comp">
-              <div class="wv-macro-sparkline">
-                <svg :viewBox="`0 0 ${macroSummary.tensionPoints.length * 20} 40`"
-                     preserveAspectRatio="none" class="wv-macro-spark">
-                  <polyline :points="macroSummary.tensionPoints.map((t, i) => `${i * 20},${40 - t.tension * 35}`).join(' ')"
-                            fill="none" stroke="var(--accent, #6c8)" stroke-width="2" />
-                  <circle v-for="(t, i) in macroSummary.tensionPoints" :key="i"
-                          :cx="i * 20" :cy="40 - t.tension * 35" r="2"
-                          fill="var(--accent, #6c8)" />
-                </svg>
-              </div>
-              <button class="btn-line btn-line-xs wv-macro-regen-btn"
-                      :disabled="!!regeneratingComponent"
-                      @click="regenerateComponent('pacing')">
-                {{ regeneratingComponent === 'pacing' ? '重摇中…' : '↻ 重摇此组件' }}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <!-- 无计划时的摘要（保持兼容） -->
-        <div v-if="!macroPlan && macroSummary" class="wv-macro-summary">
-          <!-- Blueprint logline -->
-          <div class="wv-macro-card">
-            <div class="wv-macro-card-title">故事蓝图</div>
-            <p class="wv-macro-logline">{{ macroSummary.logline }}</p>
-            <div class="wv-macro-meta">
-              {{ macroSummary.storyType }} · {{ macroSummary.pace }} · 共 {{ macroSummary.totalEpisodes }} 集
-            </div>
-          </div>
-
-          <!-- Act beats position bar -->
-          <div class="wv-macro-card">
-            <div class="wv-macro-card-title">幕结构</div>
-            <div class="wv-macro-acts-bar">
-              <div v-for="(a, i) in macroSummary.acts" :key="i" class="wv-macro-act-seg"
-                   :style="{ flexGrow: (a.range[1] - a.range[0] + 1) }">
-                <span class="wv-macro-act-name">{{ a.name }}</span>
-                <span class="wv-macro-act-range">{{ a.range[0] }}-{{ a.range[1] }}</span>
-                <span class="wv-macro-act-beats">{{ a.beats }}拍</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Episode outlines -->
-          <div class="wv-macro-card">
-            <div class="wv-macro-card-title">分集梗概（{{ macroSummary.episodes.length }} 集）</div>
-            <div class="wv-macro-ep-list">
-              <div v-for="e in macroSummary.episodes" :key="e.ep" class="wv-macro-ep-item">
-                <span class="wv-macro-ep-num">第{{ e.ep }}集</span>
-                <span class="wv-macro-ep-syn">{{ e.synopsis }}</span>
-                <span v-if="e.purpose" class="wv-macro-ep-purpose">{{ e.purpose }}</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Arc milestones -->
-          <div v-if="macroSummary.arcs.length" class="wv-macro-card">
-            <div class="wv-macro-card-title">角色弧光</div>
-            <div class="wv-macro-arcs">
-              <div v-for="c in macroSummary.arcs" :key="c.name" class="wv-macro-arc-entry">
-                <span class="wv-macro-arc-name">{{ c.name }}（{{ c.arc }}）</span>
-                <div v-if="c.milestones?.length" class="wv-macro-milestones">
-                  <span v-for="(m, mi) in c.milestones" :key="mi" class="wv-macro-ms-chip">
-                    {{ m.phase }}：{{ m.state }}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Foreshadow threads -->
-          <div v-if="macroSummary.foreshadows.length" class="wv-macro-card">
-            <div class="wv-macro-card-title">伏笔线（{{ macroSummary.foreshadows.length }} 条）</div>
-            <div class="wv-macro-fs-list">
-              <span v-for="f in macroSummary.foreshadows" :key="f.id" class="wv-macro-fs-chip">
-                {{ f.name }}（埋{{ f.plants?.join(',') }}→收{{ f.harvest }}）
-              </span>
-            </div>
-          </div>
-
-          <!-- Pacing sparkline -->
-          <div v-if="macroSummary.tensionPoints.length" class="wv-macro-card">
-            <div class="wv-macro-card-title">节奏曲线</div>
-            <div class="wv-macro-sparkline">
-              <svg :viewBox="`0 0 ${macroSummary.tensionPoints.length * 20} 40`"
-                   preserveAspectRatio="none" class="wv-macro-spark">
-                <polyline :points="macroSummary.tensionPoints.map((t, i) => `${i * 20},${40 - t.tension * 35}`).join(' ')"
-                          fill="none" stroke="var(--accent, #6c8)" stroke-width="2" />
-                <circle v-for="(t, i) in macroSummary.tensionPoints" :key="i"
-                        :cx="i * 20" :cy="40 - t.tension * 35" r="2"
-                        fill="var(--accent, #6c8)" />
-              </svg>
-            </div>
-          </div>
+          <MacroDashboard
+            :plan="macroPlan"
+            compact
+            show-regen
+            :regenerating="regeneratingComponent"
+            @regenerate="regenerateComponent"
+          />
         </div>
 
         <footer class="gacha-foot">
