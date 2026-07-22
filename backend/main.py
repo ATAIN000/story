@@ -1144,6 +1144,17 @@ def gacha_confirm(card: dict):
 
 
 # ---------- 宏观规划（P17.3：宏观叙事规划层端点） ----------
+TEMPLATES_META = {
+    "save_the_cat_15": ("救猫十五拍", "Snyder 经典影视结构，15 个固定节拍点"),
+    "truby_22": ("Truby 22 步", "有机故事结构，22 个关键转折"),
+    "three_act_classic": ("经典三幕", "亚里士多德三幕，简洁有力"),
+    "dtg_50_30": ("短剧 50+30", "80 集短剧节奏（前 50 爽感+后 30 收线）"),
+    "wuxia_classic": ("武侠章回", "金圣叹评书体，武侠/公案专用"),
+    "romance_beat": ("言情节拍", "言情/甜宠标准结构"),
+    "custom": ("自定义", "用户自定义幕结构"),
+}
+
+
 @app.get("/api/macro/templates")
 def macro_templates():
     """【P17.3】返回 7 个幕结构模板列表（name + description + beat_count）。
@@ -1153,10 +1164,11 @@ def macro_templates():
     items = []
     for name, acts in MACRO_TEMPLATES.items():
         beat_count = sum(len(beats) for _, _, _, _, beats in acts)
-        first_act = acts[0][1] if acts else ""
+        meta = TEMPLATES_META.get(name, (name, ""))
         items.append({
             "name": name,
-            "description": first_act,
+            "title": meta[0],
+            "description": meta[1],
             "beat_count": beat_count,
         })
     return {"templates": items}

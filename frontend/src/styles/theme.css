@@ -701,7 +701,8 @@ button { font: inherit; cursor: pointer; border: none; background: none; color: 
   background: var(--surface, #fafafa); cursor: pointer; text-align: center; transition: border-color .15s;
 }
 .wv-macro-tmpl-card.selected { border-color: var(--accent, #6366f1); border-width: 2px; }
-.wv-macro-tmpl-name { font-weight: 600; font-size: 13px; word-break: break-all; }
+.wv-macro-tmpl-name { font-weight: 600; font-size: 13px; }
+.wv-macro-tmpl-desc { font-size: 10px; color: var(--text-sec, #888); margin-top: 2px; line-height: 1.4; }
 .wv-macro-tmpl-beats { font-size: 11px; color: var(--text-sec, #888); margin-top: 4px; }
 .wv-macro-gen-row { text-align: center; }
 .wv-macro-summary { display: flex; flex-direction: column; gap: 14px; }

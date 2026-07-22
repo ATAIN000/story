@@ -987,9 +987,10 @@ async function doConfirm() {
                   class="wv-macro-tmpl-card"
                   :class="{ selected: selectedTemplate === t.name }"
                   :aria-pressed="selectedTemplate === t.name"
-                  :aria-label="`选择模板：${t.name}（${t.beat_count} 拍）`"
+                  :aria-label="`选择模板：${t.title || t.name}（${t.beat_count} 拍）`"
                   @click="selectedTemplate = t.name">
-            <div class="wv-macro-tmpl-name">{{ t.name }}</div>
+            <div class="wv-macro-tmpl-name">{{ t.title || t.name }}</div>
+            <div v-if="t.description" class="wv-macro-tmpl-desc">{{ t.description }}</div>
             <div class="wv-macro-tmpl-beats">{{ t.beat_count }} 拍</div>
           </button>
         </div>
