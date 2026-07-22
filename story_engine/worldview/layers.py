@@ -12,6 +12,10 @@ LANGUAGE_LAYERS（LANG1-LANG5）覆盖语言 7 层中的前 5 层（本体论/�
 视角/修辞），共 15 个参数。
 L6 质感参数 / L7 跨语言对齐 已由 TextureParams / SubtextInterlingua 实现，
 故不在此重复。
+
+CHARACTER_LAYERS（CHAR1-CHAR5）覆盖人物原型 5 层（叙事功能/心理原型/性格类型/
+弧光设计/中文人设），共 14 个参数。
+素材来源：docs/角色原型与性格分类_完整调研v2.md。
 """
 from __future__ import annotations
 
@@ -2201,9 +2205,427 @@ _LANG5 = {
 
 LANGUAGE_LAYERS = [_LANG1, _LANG2, _LANG3, _LANG4, _LANG5]
 
-ALL_PARAMS = {p["key"]: p for layer in LAYERS + LANGUAGE_LAYERS for p in layer["params"]}
+# ============================================================================
+# 人物原型 5 层数据化（CHAR1-CHAR5）
+# 素材唯一来源：docs/角色原型与性格分类_完整调研v2.md（逐条录入，不臆造）。
+# 覆盖：叙事功能（Propp/Greimas/Vogler）/ 心理原型（Pearson/Schmidt）/
+#       性格类型（Enneagram/McKee）/ 弧光设计 / 中文人设标签。
+# 文本参数（mckee_contradiction / arc_lie / arc_want / arc_need / arc_truth）
+# 使用 type="text_input"，options 仅含占位项 {value:"__text__"}。
+# ============================================================================
 
-LAYER_BY_ID = {layer["id"]: layer for layer in LAYERS + LANGUAGE_LAYERS}
+# ----------------------------------------------------------------------------
+# CHAR1 · 叙事功能 (Narrative Function)
+# 素材：Propp 7角色（行 254-268）/ Greimas 6行动元（行 270-291）/
+#       Vogler 7英雄旅程原型（行 293-306）
+# ----------------------------------------------------------------------------
+_CHAR1 = {
+    "id": "CHAR1",
+    "name": "叙事功能",
+    "desc": "角色在故事中承担什么功能？功能面具可随场景切换。"
+            "来源：Propp 7角色 / Greimas 6行动元 / Vogler 7英雄旅程原型。",
+    "params": [
+        {
+            "key": "narrative_function",
+            "label": "叙事功能（可多选）",
+            "options": [
+                {"value": "hero", "label": "英雄",
+                 "hint": "主体/观众代入/推动行动",
+                 "chain": "→ 弧光是故事核心 → Vogler 英雄"},
+                {"value": "donor", "label": "捐赠者",
+                 "hint": "给英雄关键道具/信息",
+                 "chain": "→ 推动剧情转折 → Propp 捐赠者"},
+                {"value": "mentor", "label": "导师",
+                 "hint": "指引/教导/给予",
+                 "chain": "→ 引导英雄成长 → Vogler 导师 / Schmidt Magi"},
+                {"value": "trickster", "label": "骗子",
+                 "hint": "打破规则/提供喜剧/突变",
+                 "chain": "→ 制造意外转折 → Vogler 骗子"},
+                {"value": "shapeshifter", "label": "变形者",
+                 "hint": "立场不明/制造悬念",
+                 "chain": "→ 真假行动元 → Greimas 真假行动元"},
+                {"value": "herald", "label": "信使",
+                 "hint": "带来改变的信息/启动冒险",
+                 "chain": "→ 触发英雄旅程 → Vogler 信使"},
+                {"value": "ally", "label": "盟友",
+                 "hint": "协助英雄/忠诚支持",
+                 "chain": "→ 补充英雄短板 → Propp 帮助者 / Schmidt 挚友"},
+                {"value": "threshold_guardian", "label": "门槛守卫",
+                 "hint": "阻挡/考验英雄",
+                 "chain": "→ 制造挑战关卡 → Vogler 门槛守卫"},
+            ],
+        },
+    ],
+}
+
+# ----------------------------------------------------------------------------
+# CHAR2 · 心理原型 (Psychological Archetype)
+# 素材：Pearson 12原型（行 69-98）/ Schmidt 45原型（行 100-171）
+# ----------------------------------------------------------------------------
+_CHAR2 = {
+    "id": "CHAR2",
+    "name": "心理原型",
+    "desc": "角色的荣格/Pearson 心理原型 + Schmidt 神话模型。"
+            "Pearson 每个原型含核心欲望/恐惧/目标/暗面。",
+    "params": [
+        {
+            "key": "pearson_primary",
+            "label": "Pearson 主原型",
+            "options": [
+                {"value": "innocent", "label": "天真者",
+                 "hint": "欲望=体验天堂/恐惧=被惩罚/暗面=否认现实",
+                 "chain": "→ 准备期第1阶段"},
+                {"value": "orphan", "label": "孤儿/平民",
+                 "hint": "欲望=归属感/恐惧=独自被排斥/暗面=受害者心态",
+                 "chain": "→ 准备期第2阶段"},
+                {"value": "caregiver", "label": "照顾者",
+                 "hint": "欲望=帮助他人/恐惧=自私/暗面=病态牺牲",
+                 "chain": "→ 准备期第3阶段"},
+                {"value": "warrior", "label": "战士",
+                 "hint": "欲望=证明价值/恐惧=软弱/暗面=暴力成性",
+                 "chain": "→ 准备期第4阶段"},
+                {"value": "seeker", "label": "探索者",
+                 "hint": "欲望=自由/发现/恐惧=被困住/暗面=永远流浪",
+                 "chain": "→ 探索期第1阶段"},
+                {"value": "revolutionary", "label": "反叛者",
+                 "hint": "欲望=颠覆/恐惧=无力被同化/暗面=为反叛而反叛",
+                 "chain": "→ 探索期第2阶段"},
+                {"value": "lover", "label": "爱人",
+                 "hint": "欲望=亲密/连接/恐惧=失去所爱/暗面=为爱迷失自我",
+                 "chain": "→ 探索期第3阶段"},
+                {"value": "creator", "label": "创造者",
+                 "hint": "欲望=创造永恒/恐惧=不完美的愿景/暗面=傲慢完美主义",
+                 "chain": "→ 探索期第4阶段"},
+                {"value": "ruler", "label": "统治者",
+                 "hint": "欲望=控制/秩序/恐惧=混乱失控/暗面=独裁",
+                 "chain": "→ 回归期第1阶段"},
+                {"value": "magician", "label": "魔术师",
+                 "hint": "欲望=理解宇宙运作/恐惧=意外负面后果/暗面=操纵他人",
+                 "chain": "→ 回归期第2阶段"},
+                {"value": "sage", "label": "智者",
+                 "hint": "欲望=追求真理/恐惧=被欺骗无知/暗面=学而不行",
+                 "chain": "→ 回归期第3阶段"},
+                {"value": "jester", "label": "弄臣",
+                 "hint": "欲望=享受当下/恐惧=无聊悲伤/暗面=享乐主义不负责",
+                 "chain": "→ 回归期第4阶段"},
+            ],
+        },
+        {
+            "key": "pearson_secondary",
+            "label": "Pearson 副原型",
+            "options": [
+                {"value": "none", "label": "无明确副原型",
+                 "hint": "仅主原型主导", "chain": ""},
+                {"value": "innocent", "label": "天真者",
+                 "hint": "副原型：天真者", "chain": ""},
+                {"value": "orphan", "label": "孤儿/平民",
+                 "hint": "副原型：孤儿/平民", "chain": ""},
+                {"value": "caregiver", "label": "照顾者",
+                 "hint": "副原型：照顾者", "chain": ""},
+                {"value": "warrior", "label": "战士",
+                 "hint": "副原型：战士", "chain": ""},
+                {"value": "seeker", "label": "探索者",
+                 "hint": "副原型：探索者", "chain": ""},
+                {"value": "revolutionary", "label": "反叛者",
+                 "hint": "副原型：反叛者", "chain": ""},
+                {"value": "lover", "label": "爱人",
+                 "hint": "副原型：爱人", "chain": ""},
+                {"value": "creator", "label": "创造者",
+                 "hint": "副原型：创造者", "chain": ""},
+                {"value": "ruler", "label": "统治者",
+                 "hint": "副原型：统治者", "chain": ""},
+                {"value": "magician", "label": "魔术师",
+                 "hint": "副原型：魔术师", "chain": ""},
+                {"value": "sage", "label": "智者",
+                 "hint": "副原型：智者", "chain": ""},
+                {"value": "jester", "label": "弄臣",
+                 "hint": "副原型：弄臣", "chain": ""},
+            ],
+        },
+        {
+            "key": "schmidt_goddess",
+            "label": "Schmidt 神话模型",
+            "options": [
+                {"value": "none", "label": "无明确神话对应",
+                 "hint": "不映射 Schmidt 神话模型", "chain": ""},
+                # 8 女性主角原型（行 108-117）
+                {"value": "aphrodite", "label": "阿芙洛狄忒",
+                 "hint": "正面=诱人缪斯（创造力/亲密）/反面=蛇蝎美人（利用性）",
+                 "chain": ""},
+                {"value": "artemis", "label": "阿尔忒弥斯",
+                 "hint": "正面=亚马逊女子（独立/竞争）/反面=蛇发女妖（复仇暴怒）",
+                 "chain": ""},
+                {"value": "athena", "label": "雅典娜",
+                 "hint": "正面=父亲的女儿（聪明/掌控）/反面=背后中伤者（不择手段）",
+                 "chain": ""},
+                {"value": "demeter", "label": "得墨忒耳",
+                 "hint": "正面=养育者（同情/牺牲）/反面=过度控制的母亲",
+                 "chain": ""},
+                {"value": "hera", "label": "赫拉",
+                 "hint": "正面=女族长（坚强/忠诚）/反面=被嘲笑的女人（不容背叛）",
+                 "chain": ""},
+                {"value": "hestia", "label": "赫斯提亚",
+                 "hint": "正面=神秘主义者（平静/独处）/反面=背叛者（面具/操纵）",
+                 "chain": ""},
+                {"value": "isis", "label": "伊西斯",
+                 "hint": "正面=女救世主（无私/使命）/反面=毁灭者（黑白思维）",
+                 "chain": ""},
+                {"value": "persephone", "label": "珀耳塞福涅",
+                 "hint": "正面=少女（无忧无虑/孩子气）/反面=问题少女（自私/沉溺）",
+                 "chain": ""},
+                # 9 男性主角原型（行 128-138）
+                {"value": "apollo", "label": "阿波罗",
+                 "hint": "正面=商人（逻辑/计划/职责）/反面=背叛者（幻灭捅刀）",
+                 "chain": ""},
+                {"value": "ares", "label": "阿瑞斯",
+                 "hint": "正面=保护者（身体导向战士/保护亲人）/反面=角斗士（只关心战斗）",
+                 "chain": ""},
+                {"value": "dionysus", "label": "狄奥尼索斯",
+                 "hint": "正面=妇女之友（爱玩/感性）/反面=引诱者（利用女性）",
+                 "chain": ""},
+                {"value": "hades", "label": "哈迪斯",
+                 "hint": "正面=隐士（内向/内心丰富）/反面=巫师（社交差/怨恨）",
+                 "chain": ""},
+                {"value": "hephaestus", "label": "赫菲斯托斯",
+                 "hint": "正面=发明家（天才/支持世人）/反面=疯狂科学家（危险发明）",
+                 "chain": ""},
+                {"value": "hermes", "label": "赫尔墨斯",
+                 "hint": "正面=愚者（爱玩/自由/不伤害他人）/反面=无业游民（偷窃为生）",
+                 "chain": ""},
+                {"value": "osiris", "label": "欧西里斯",
+                 "hint": "正面=男救世主（精神领袖/牺牲）/反面=惩罚者（无慈悲/地狱训练）",
+                 "chain": ""},
+                {"value": "poseidon", "label": "波塞冬",
+                 "hint": "正面=艺术家（创造力/情绪波动）/反面=虐待者（精神病态/复仇）",
+                 "chain": ""},
+                {"value": "zeus", "label": "宙斯",
+                 "hint": "正面=国王（强大领导/供养家庭）/反面=独裁者（痴迷控制）",
+                 "chain": ""},
+            ],
+        },
+        {
+            "key": "schmidt_polarity",
+            "label": "Schmidt 正反极性",
+            "options": [
+                {"value": "positive", "label": "正面形态",
+                 "hint": "原型积极面主导（如保护者/养育者）",
+                 "chain": "→ 倾向正向弧光"},
+                {"value": "villain", "label": "反面形态",
+                 "hint": "原型阴暗面主导（如角斗士/蛇蝎美人）",
+                 "chain": "→ 倾向堕落/腐败弧"},
+                {"value": "shifting", "label": "正反转化",
+                 "hint": "故事中从正面转向反面或反之",
+                 "chain": "→ 弧光为核心驱动力"},
+                {"value": "ambiguous", "label": "模糊/未明",
+                 "hint": "读者无法确定正反归属",
+                 "chain": "→ 悬念/不可靠叙事"},
+            ],
+        },
+    ],
+}
+
+# ----------------------------------------------------------------------------
+# CHAR3 · 性格类型 (Personality Type)
+# 素材：Enneagram 九型人格（行 173-191）/ McKee 矛盾维度（行 220-248）
+# ----------------------------------------------------------------------------
+_CHAR3 = {
+    "id": "CHAR3",
+    "name": "性格类型",
+    "desc": "Enneagram 九型人格（核心恐惧/欲望驱动行为一致性）+ McKee 矛盾维度"
+            "（角色塑造 vs 真实性格的矛盾揭示）。",
+    "params": [
+        {
+            "key": "enneagram_type",
+            "label": "九型人格类型",
+            "options": [
+                {"value": "1", "label": "1·完美型",
+                 "hint": "恐惧=道德败坏/欲望=完美/常用语：应该不应该",
+                 "chain": "→ 霸道总裁常设此型"},
+                {"value": "2", "label": "2·助人型",
+                 "hint": "恐惧=不被爱/欲望=被爱被需要/常用语：好不好",
+                 "chain": ""},
+                {"value": "3", "label": "3·成就型",
+                 "hint": "恐惧=毫无价值/欲望=有价值成功/常用语：我可以",
+                 "chain": "→ 致命吸引力/适合男性角色"},
+                {"value": "4", "label": "4·自我型",
+                 "hint": "恐惧=平庸/欲望=独特/常用语：我觉得",
+                 "chain": "→ 适合二号配角"},
+                {"value": "5", "label": "5·理智型",
+                 "hint": "恐惧=无能/欲望=理解有能力/少言分析",
+                 "chain": "→ 很多小说男主此型"},
+                {"value": "6", "label": "6·疑惑型",
+                 "hint": "恐惧=没有支持/欲望=安全/常用语：万一我担心",
+                 "chain": "→ 曹操/司马懿型"},
+                {"value": "7", "label": "7·活跃型",
+                 "hint": "恐惧=痛苦匮乏/欲望=满足自由/常用语：新鲜很闷",
+                 "chain": "→ 适合初入社会新手/范闲型"},
+                {"value": "8", "label": "8·领袖型",
+                 "hint": "恐惧=被控制/欲望=自主掌控/常用语：干掉就这么定了",
+                 "chain": "→ 大女主最受欢迎/又飒又美"},
+                {"value": "9", "label": "9·和平型",
+                 "hint": "恐惧=冲突分离/欲望=内心平静/常用语：都可以无所谓",
+                 "chain": "→ 经历历练后需要改变"},
+            ],
+        },
+        {
+            "key": "enneagram_wing",
+            "label": "九型人格侧翼",
+            "options": [
+                {"value": "none", "label": "无明确侧翼",
+                 "hint": "纯类型主导", "chain": ""},
+                {"value": "1", "label": "1翼（完美型影响）",
+                 "hint": "邻型1的特质渗透", "chain": ""},
+                {"value": "2", "label": "2翼（助人型影响）",
+                 "hint": "邻型2的特质渗透", "chain": ""},
+                {"value": "3", "label": "3翼（成就型影响）",
+                 "hint": "邻型3的特质渗透", "chain": ""},
+                {"value": "4", "label": "4翼（自我型影响）",
+                 "hint": "邻型4的特质渗透", "chain": ""},
+                {"value": "5", "label": "5翼（理智型影响）",
+                 "hint": "邻型5的特质渗透", "chain": ""},
+                {"value": "6", "label": "6翼（疑惑型影响）",
+                 "hint": "邻型6的特质渗透", "chain": ""},
+                {"value": "7", "label": "7翼（活跃型影响）",
+                 "hint": "邻型7的特质渗透", "chain": ""},
+                {"value": "8", "label": "8翼（领袖型影响）",
+                 "hint": "邻型8的特质渗透", "chain": ""},
+                {"value": "9", "label": "9翼（和平型影响）",
+                 "hint": "邻型9的特质渗透", "chain": ""},
+            ],
+        },
+        {
+            "key": "mckee_contradiction_text",
+            "label": "McKee 矛盾维度（自定义）",
+            "type": "text_input",
+            "options": [
+                {"value": "__text__", "label": "自定义输入"},
+            ],
+        },
+    ],
+}
+
+# ----------------------------------------------------------------------------
+# CHAR4 · 弧光设计 (Character Arc)
+# 素材：September C. Fawkes 4种弧光+3变体（行 332-361）
+# ----------------------------------------------------------------------------
+_CHAR4 = {
+    "id": "CHAR4",
+    "name": "弧光设计",
+    "desc": "角色弧光类型与内部结构。来源：September C. Fawkes / Helping Writers "
+            "Become Authors。弧光内部结构：Ghost/Wound → Lie → Want → Need → Truth。",
+    "params": [
+        {
+            "key": "arc_type",
+            "label": "弧光类型",
+            "options": [
+                {"value": "positive_change", "label": "正向变化弧",
+                 "hint": "起始=错误信念(Lie)→放弃Lie→拥抱真相→变好。代表：格林奇/Elsa",
+                 "chain": "→ 需定义 Lie/Want/Need/Truth"},
+                {"value": "fall", "label": "堕落弧",
+                 "hint": "起始=道德完好→拥抱错误→堕落。代表：夜神月/1984温斯顿",
+                 "chain": "→ 从高位因缺陷跌落（安纳金→黑武士）"},
+                {"value": "flat_positive", "label": "正向坚持弧",
+                 "hint": "起始=正确信念(Truth)→受考验→坚持→证明给世界。代表：神奇女侠",
+                 "chain": "→ 角色不变但改变周围世界"},
+                {"value": "corruption", "label": "腐败弧",
+                 "hint": "从善良→逐渐被腐蚀。代表：戈伦",
+                 "chain": "→ 缓慢的道德退化"},
+                {"value": "disillusionment", "label": "幻灭弧",
+                 "hint": "从天真→认识残酷真相（痛苦但正确）。代表：汉密尔顿",
+                 "chain": "→ Lie 被粉碎但 Truth 令人痛苦"},
+            ],
+        },
+        {
+            "key": "arc_lie_text",
+            "label": "错误信念（Lie）",
+            "type": "text_input",
+            "options": [
+                {"value": "__text__", "label": "自定义输入"},
+            ],
+        },
+        {
+            "key": "arc_want_text",
+            "label": "表面想要（Want）",
+            "type": "text_input",
+            "options": [
+                {"value": "__text__", "label": "自定义输入"},
+            ],
+        },
+        {
+            "key": "arc_need_text",
+            "label": "真实需要（Need）",
+            "type": "text_input",
+            "options": [
+                {"value": "__text__", "label": "自定义输入"},
+            ],
+        },
+        {
+            "key": "arc_truth_text",
+            "label": "真相（Truth）",
+            "type": "text_input",
+            "options": [
+                {"value": "__text__", "label": "自定义输入"},
+            ],
+        },
+    ],
+}
+
+# ----------------------------------------------------------------------------
+# CHAR5 · 中文人设 (Chinese Web-Novel Tropes)
+# 素材：短剧/网文常见人设（行 390-405）
+# ----------------------------------------------------------------------------
+_CHAR5 = {
+    "id": "CHAR5",
+    "name": "中文人设",
+    "desc": "中文网文/短剧常见人设标签。来源：豆瓣/搜狐/知乎/马良写作。",
+    "params": [
+        {
+            "key": "tropes",
+            "label": "人设标签（可多选）",
+            "options": [
+                {"value": "none", "label": "无特定人设标签",
+                 "hint": "不使用网文标签体系", "chain": ""},
+                {"value": "bazong", "label": "霸总",
+                 "hint": "冷酷/强大/控制欲/对女主独宠",
+                 "chain": "→ 契约婚姻/误会→打脸"},
+                {"value": "lvcha", "label": "绿茶",
+                 "hint": "表面柔弱/实则腹黑",
+                 "chain": "→ 装病装穷→激发保护欲→反转"},
+                {"value": "xiaobaihua", "label": "小白花",
+                 "hint": "天真/善良/总被欺负/坚韧不认输",
+                 "chain": "→ 被虐→逆袭"},
+                {"value": "hidden_master", "label": "隐藏大佬",
+                 "hint": "扮猪吃虎",
+                 "chain": "→ 被嘲笑→实力暴露→打脸"},
+                {"value": "zhongquan", "label": "忠犬",
+                 "hint": "无条件忠诚",
+                 "chain": "→ 默默付出→终于被发现"},
+                {"value": "fengpi_meiren", "label": "疯批美人",
+                 "hint": "美丽+不可预测+危险",
+                 "chain": "→ 又爱又怕"},
+                {"value": "baiyueguang", "label": "白月光",
+                 "hint": "心中完美/不可及",
+                 "chain": "→ 回归→打破幻象"},
+                {"value": "chongsheng_chuanyue", "label": "重生/穿越者",
+                 "hint": "带前世记忆重来",
+                 "chain": "→ 避开前世错误/复仇"},
+                {"value": "nvqiangren", "label": "女强人",
+                 "hint": "独立/能力超群/感情空白",
+                 "chain": "→ 遇挑战者→软化"},
+                {"value": "zhuiqi_huozangchang", "label": "追妻火葬场",
+                 "hint": "男主前期渣→后期追悔",
+                 "chain": "→ 追悔→赎罪"},
+            ],
+        },
+    ],
+}
+
+CHARACTER_LAYERS = [_CHAR1, _CHAR2, _CHAR3, _CHAR4, _CHAR5]
+
+ALL_PARAMS = {p["key"]: p for layer in LAYERS + LANGUAGE_LAYERS + CHARACTER_LAYERS
+              for p in layer["params"]}
+
+LAYER_BY_ID = {layer["id"]: layer for layer in LAYERS + LANGUAGE_LAYERS + CHARACTER_LAYERS}
 
 
 def param_values(key: str) -> list[str]:

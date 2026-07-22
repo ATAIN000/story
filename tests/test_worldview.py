@@ -8,7 +8,7 @@
 from __future__ import annotations
 
 from story_engine.worldview import (
-    ALL_PARAMS, LAYERS, LANGUAGE_LAYERS, PREDICATES, WorldviewProfile, evaluate,
+    ALL_PARAMS, LAYERS, LANGUAGE_LAYERS, CHARACTER_LAYERS, PREDICATES, WorldviewProfile, evaluate,
 )
 
 
@@ -68,9 +68,16 @@ def test_layers_data_integrity():
     # 语言 5 层齐全（LANG1-LANG5）
     assert [l["id"] for l in LANGUAGE_LAYERS] == [
         "LANG1", "LANG2", "LANG3", "LANG4", "LANG5"]
+    # 人物原型 5 层齐全（CHAR1-CHAR5）
+    assert [l["id"] for l in CHARACTER_LAYERS] == [
+        "CHAR1", "CHAR2", "CHAR3", "CHAR4", "CHAR5"]
     # 每参数至少 4 个枚举值，每值含 value/label
-    for layer in LAYERS + LANGUAGE_LAYERS:
+    # （text_input 类型除外——它只有一个占位项 __text__）
+    for layer in LAYERS + LANGUAGE_LAYERS + CHARACTER_LAYERS:
         for p in layer["params"]:
+            if p.get("type") == "text_input":
+                assert len(p["options"]) >= 1, f"{p['key']} text_input 选项过少"
+                continue
             assert len(p["options"]) >= 4, f"{p['key']} 选项过少"
             for o in p["options"]:
                 assert "value" in o and "label" in o, f"{p['key']} 选项缺字段"
@@ -94,10 +101,18 @@ def test_layers_data_integrity():
     assert "unreliable_by_design" in [o["value"] for o in ALL_PARAMS["narrative_reliability"]["options"]]
     assert "prophecy_first" in [o["value"] for o in ALL_PARAMS["temporal_narrative"]["options"]]
     assert "ineffable_negation" in [o["value"] for o in ALL_PARAMS["preferred_rhetoric"]["options"]]
-    # 参数总数：71（L0-L9 世界观）+ 15（LANG1-LANG5 语言）= 86
-    assert len(ALL_PARAMS) == 86
-    # 谓词条数符合预期（批1-3 ≥55，批4 语言交叉追加 >70）
-    assert len(PREDICATES) > 70
+    # CHAR1-CHAR5 关键枚举值抽检（素材原文）
+    assert "hero" in [o["value"] for o in ALL_PARAMS["narrative_function"]["options"]]
+    assert "magician" in [o["value"] for o in ALL_PARAMS["pearson_primary"]["options"]]
+    assert "athena" in [o["value"] for o in ALL_PARAMS["schmidt_goddess"]["options"]]
+    assert "villain" in [o["value"] for o in ALL_PARAMS["schmidt_polarity"]["options"]]
+    assert "5" in [o["value"] for o in ALL_PARAMS["enneagram_type"]["options"]]
+    assert "positive_change" in [o["value"] for o in ALL_PARAMS["arc_type"]["options"]]
+    assert "bazong" in [o["value"] for o in ALL_PARAMS["tropes"]["options"]]
+    # 参数总数：71（L0-L9 世界观）+ 15（LANG1-LANG5 语言）+ 14（CHAR1-CHAR5 人物原型）= 100
+    assert len(ALL_PARAMS) == 100
+    # 谓词条数符合预期（批1-3 ≥55，批4 语言交叉追加 >70，批5 人物原型追加 >80）
+    assert len(PREDICATES) > 80
 
 
 # ---------- P12.2 端点测试（3 核心） ----------
@@ -111,9 +126,10 @@ def test_schema_endpoint_layers_and_param_count():
     assert r.status_code == 200, r.text
     body = r.json()
     expected = ["L0", "L1", "L2", "L3", "L4", "L5", "L6", "L7", "L8", "L9",
-                "LANG1", "LANG2", "LANG3", "LANG4", "LANG5"]
+                "LANG1", "LANG2", "LANG3", "LANG4", "LANG5",
+                "CHAR1", "CHAR2", "CHAR3", "CHAR4", "CHAR5"]
     assert [l["id"] for l in body["layers"]] == expected
-    assert body["param_count"] == len(ALL_PARAMS)  # 86（71 世界观 + 15 语言）
+    assert body["param_count"] == len(ALL_PARAMS)  # 100（71 世界观 + 15 语言 + 14 人物原型）
     assert body["layers_covered"] == expected
 
 

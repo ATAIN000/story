@@ -68,6 +68,7 @@ from story_engine.types import StoryEngineError  # noqa: E402
 from story_engine.worldview import (  # noqa: E402
     ALL_PARAMS as WV_ALL_PARAMS, LAYERS as WV_LAYERS,
     LANGUAGE_LAYERS as WV_LANGUAGE_LAYERS,
+    CHARACTER_LAYERS as WV_CHARACTER_LAYERS,
     WorldviewProfile, evaluate as wv_evaluate,
     param_values as wv_param_values,
     preset_summaries as wv_preset_summaries,
@@ -841,7 +842,7 @@ def worldview_schema():
     ``layers_covered`` 为当前已数据化层（L0-L9 + LANG1-LANG5）。
     ``param_count`` 为当前已数据化参数总数（L0-L9 合计 71 + LANG1-LANG5 合计 15 = 86）。
     """
-    all_layers = WV_LAYERS + WV_LANGUAGE_LAYERS
+    all_layers = WV_LAYERS + WV_LANGUAGE_LAYERS + WV_CHARACTER_LAYERS
     return {
         "layers": all_layers,
         "param_count": len(WV_ALL_PARAMS),

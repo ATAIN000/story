@@ -724,6 +724,79 @@ PREDICATES: list[dict] = [
         "message": "集体第一人称叙事要求意识本质为集体意识",
         "source": "L4 4.1 collective_first / 行 166",
     },
+
+    # ====================================================================
+    # 人物原型交叉谓词（批5：CHAR1-CHAR5）
+    # 素材：docs/角色原型与性格分类_完整调研v2.md
+    #   - Pearson 12原型核心欲望/恐惧 ↔ Enneagram 9型核心恐惧/欲望（行 69-191）
+    #   - Schmidt 正反配对 ↔ 角色弧光（行 100-171 / 行 332-361）
+    # 映射逻辑：Pearson 原型核心欲望与 Enneagram 核心欲望重合度高的类型
+    # 列入 require；不重合的排除。Schmidt 反面形态倾向负面弧光。
+    # ====================================================================
+
+    # ---- CHAR2 → CHAR3：Pearson 原型 ↔ Enneagram 九型 ----
+    {
+        "when": {"pearson_primary": "sage"},
+        "then": {"enneagram_type": {"require": ["5", "6", "1"]}},
+        "message": "智者原型追求真理，匹配5型理智/6型疑惑/1型完美（核心欲望=理解/安全/完美）",
+        "source": "Pearson智者核心欲望=追求真理（行95）↔ Enneagram 5型核心欲望=理解有能力（行182）",
+    },
+    {
+        "when": {"pearson_primary": "caregiver"},
+        "then": {"enneagram_type": {"require": ["2", "9"]}},
+        "message": "照顾者原型核心欲望=帮助他人，匹配2型助人/9型和平",
+        "source": "Pearson照顾者核心欲望=帮助他人（行77）↔ Enneagram 2型核心欲望=被爱被需要（行179）",
+    },
+    {
+        "when": {"pearson_primary": "warrior"},
+        "then": {"enneagram_type": {"require": ["8", "3", "6"]}},
+        "message": "战士原型核心欲望=证明价值，匹配8型领袖/3型成就/6型疑惑",
+        "source": "Pearson战士核心欲望=证明价值（行78）↔ Enneagram 8型核心欲望=自主掌控（行185）",
+    },
+    {
+        "when": {"pearson_primary": "jester"},
+        "then": {"enneagram_type": {"require": ["7", "9"]}},
+        "message": "弄臣原型核心欲望=享受当下，匹配7型活跃/9型和平",
+        "source": "Pearson弄臣核心欲望=享受当下（行96）↔ Enneagram 7型核心欲望=满足自由（行184）",
+    },
+    {
+        "when": {"pearson_primary": "ruler"},
+        "then": {"enneagram_type": {"require": ["8", "1", "3"]}},
+        "message": "统治者原型核心欲望=控制/秩序，匹配8型领袖/1型完美/3型成就",
+        "source": "Pearson统治者核心欲望=控制秩序（行93）↔ Enneagram 8型核心欲望=自主掌控（行185）",
+    },
+    {
+        "when": {"pearson_primary": "innocent"},
+        "then": {"enneagram_type": {"require": ["9", "2", "7"]}},
+        "message": "天真者原型核心欲望=体验天堂，匹配9型和平/2型助人/7型活跃",
+        "source": "Pearson天真者核心欲望=体验天堂（行75）↔ Enneagram 9型核心欲望=内心平静（行186）",
+    },
+    {
+        "when": {"pearson_primary": "seeker"},
+        "then": {"enneagram_type": {"require": ["5", "7", "4"]}},
+        "message": "探索者原型核心欲望=自由/发现，匹配5型理智/7型活跃/4型自我",
+        "source": "Pearson探索者核心欲望=自由发现（行84）↔ Enneagram 7型核心欲望=满足自由（行184）",
+    },
+    {
+        "when": {"pearson_primary": "revolutionary"},
+        "then": {"enneagram_type": {"require": ["8", "4", "6"]}},
+        "message": "反叛者原型核心欲望=颠覆，匹配8型领袖/4型自我/6型疑惑",
+        "source": "Pearson反叛者核心欲望=颠覆（行85）↔ Enneagram 8型核心恐惧=被控制（行185）",
+    },
+
+    # ---- CHAR2 → CHAR4：Schmidt 极性 ↔ 角色弧光 ----
+    {
+        "when": {"schmidt_polarity": "villain"},
+        "then": {"arc_type": {"require": ["fall", "corruption"]}},
+        "message": "Schmidt反面形态角色倾向负面弧光（堕落弧/腐败弧）",
+        "source": "Schmidt正反配对（行104-138）+ 弧光系统（行337-361）：反面形态=堕落/腐败",
+    },
+    {
+        "when": {"schmidt_polarity": "positive"},
+        "then": {"arc_type": {"disallow": ["fall"]}},
+        "message": "Schmidt正面形态角色不应走纯粹堕落弧",
+        "source": "Schmidt正反配对（行104-138）：正面形态不匹配堕落弧",
+    },
 ]
 
 
