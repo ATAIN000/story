@@ -52,6 +52,7 @@ const busy = computed(() => listLoading.value || confirmBusy.value)
 const NAME_RE = /^[\p{L}\p{N} _-]+$/u
 const RESERVED_RE = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i
 const selectedGenreVM = computed(() => genres.value.find(g => g.name === selectedGenre.value) ?? null)
+const currentGenreName = computed(() => selectedGenre.value || synthCard.value?.genre?.name || null)
 const suggestedName = computed(() => {
   const g = selectedGenre.value || synthCard.value?.genre?.name || 'story'
   const d = new Date()
@@ -226,7 +227,7 @@ async function runCrossCheck() {
     const wvPayload = Object.keys(wvProfile.value).length > 0
       ? { layers: wvProfile.value } : null
     const castPayload = buildCastPayload()
-    const res = await api.crossCheck(wvPayload, castPayload)
+    const res = await api.crossCheck(wvPayload, castPayload, currentGenreName.value)
     crossCheckWarnings.value = res.warnings ?? []
   } catch (e) {
     /* 跨层检测失败不阻塞流程 */
@@ -399,7 +400,7 @@ async function autoDeriveCast() {
       if (layerId.startsWith('LANG')) langLayers[layerId] = params
       else if (!layerId.startsWith('CHAR')) wvLayers[layerId] = params
     }
-    const res = await api.deriveCast(wvLayers, langLayers)
+    const res = await api.deriveCast(wvLayers, langLayers, currentGenreName.value)
     const suggested = res.cast ?? []
     if (suggested.length > 0) {
       castCards.value = suggested.map((c, i) => ({

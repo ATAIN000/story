@@ -89,8 +89,8 @@ export const api = {
   worldviewSchema: () => req('/api/worldview/schema'),
   worldviewEvaluate: (profile) => post('/api/worldview/evaluate', { profile }),
   /* P15.2：人物原型推导 — worldview+language profile → 建议阵容（含 persona） */
-  deriveCast: (worldview = {}, language = {}) =>
-    post('/api/worldview/derive_cast', { worldview, language }),
+  deriveCast: (worldview = {}, language = {}, genreName = null) =>
+    post('/api/worldview/derive_cast', { worldview, language, genre_name: genreName }),
 
   /* --- 宏观规划（P17.5：开局向导第⑤段） ---
      templates() → {templates[{name, description, beat_count}]}
@@ -101,8 +101,8 @@ export const api = {
   macroPlanGet: () => req('/api/macro/plan'),
 
   /* P18.1: 跨层冲突检测 */
-  crossCheck: (worldview = null, cast = null) =>
-    post('/api/worldview/cross_check', { worldview, cast }),
+  crossCheck: (worldview = null, cast = null, genreName = null) =>
+    post('/api/worldview/cross_check', { worldview, cast, genre_name: genreName }),
 
   /* P18.3: 宏观进度 + 偏差检测 */
   macroProgress: () => req('/api/macro/progress'),

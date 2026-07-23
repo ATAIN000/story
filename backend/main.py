@@ -921,6 +921,7 @@ class DeriveCastReq(BaseModel):
     均可选（容忍空/部分填写）。"""
     worldview: dict[str, dict[str, str]] = {}
     language: dict[str, dict[str, str]] = {}
+    genre_name: str | None = None               # P19: 前端传入选中的题材名
 
 
 @app.post("/api/worldview/derive_cast")
@@ -930,13 +931,23 @@ def derive_cast_endpoint(req: DeriveCastReq):
     纯规则映射（无 LLM）：物理偏离度/形而上学 → Pearson/Schmidt/Enneagram；
     冲突类型 → 弧光类型；语言文化 → 中文人设标签。返回 ``{cast: [...]}``，
     每个 cast 条目含 ``name/role/persona``（persona 覆盖 CHAR1-CHAR5 全字段）。
+
+    P19: genre_name 传入时从 registry 取题材 params 做名字解析。
     """
-    return {"cast": wv_derive_cast(req.worldview, req.language)}
+    genre_params = None
+    if req.genre_name:
+        try:
+            m = engine.kernel.registry.get_manifest("story.genre", req.genre_name)
+            genre_params = m.params if hasattr(m, 'params') else {}
+        except Exception:
+            pass
+    return {"cast": wv_derive_cast(req.worldview, req.language, genre_params)}
 
 
 class CrossCheckReq(BaseModel):
     worldview: dict | None = None
     cast: list | None = None
+    genre_name: str | None = None               # P19: 前端传入选中的题材名
 
 
 @app.post("/api/worldview/cross_check")
@@ -950,6 +961,14 @@ def worldview_cross_check_endpoint(req: CrossCheckReq):
     """
     genre_params = getattr(engine.bundle, "genre_params", None) or {}
     genre_name = getattr(engine.bundle, "genre", "")
+    # P19: 前端传入了题材名 → 从 registry 取该题材的 params（而非当前 engine.bundle）
+    if req.genre_name:
+        try:
+            m = engine.kernel.registry.get_manifest("story.genre", req.genre_name)
+            genre_params = m.params if hasattr(m, 'params') else {}
+            genre_name = req.genre_name
+        except Exception:
+            pass
     wv_profile = None
     if req.worldview and isinstance(req.worldview.get("layers"), dict):
         wv_profile = WorldviewProfile(layers=req.worldview["layers"])
