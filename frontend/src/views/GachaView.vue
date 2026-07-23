@@ -1,12 +1,10 @@
 <script setup>
-/* 抽卡开局页（P14 四段式：题材 + 世界观+语言 + 人物原型占位 + 确认）
- *   段 1 题材选择（单栏卡片网格，全量 registry 题材列表）→ 段 2 骨架选择
- *   （10 卡+随机+空白）→ 段 3 世界观+语言文化向导（L0-L9 + LANG1-LANG5）
- *   → 段 4 人物原型占位 → 确认开工
- *
- * P14 变更：向导左栏分区（世界观 L0-L9 / 语言文化 LANG1-LANG5）；
- *   人物原型为占位页（即将上线）；文化默认 confucian_officialdom（不再推导）。
- * synth 模式（让 AI 自由发挥）保留不变。
+/* 抽卡开局页（P20 临时工作区 session 模式）
+ *   段 1 题材选择 → POST /api/gacha/begin 获取 session_id
+ *   → 段 2-4 世界观/人物/冲突检测全部走 session 端点
+ *   → 段 5 宏观规划用 WebSocket 流式生成
+ *   → 确认开工 POST /api/gacha/{sid}/confirm
+ *   → 离开时 POST /api/gacha/{sid}/cancel 清理
  *
  * a11y：层/卡 aria-label、chips role="group"、键盘可达、对话框焦点圈保留。
  */
@@ -27,7 +25,7 @@ defineEmits(['refresh', 'navigate'])
 const { toast, toastError } = useToast()
 const dn = (id) => displayName(props.config, id)
 
-/* ===== 段 1：题材选择（P13 简化） ===== */
+/* ===== 段 1：题材选择（P20 session 模式） ===== */
 const genreList = ref(null)                // toGenreListVM 输出
 const genres = computed(() => genreList.value?.genres ?? [])
 const listLoading = ref(false)
@@ -41,6 +39,9 @@ const projectName = ref('')
 const confirmBusy = ref(false)
 /* synth 模式产出的精简卡（source=synth 时存 genre yaml） */
 const synthCard = ref(null)
+
+/* P20: gacha session_id（进入题材后创建，离开时清理） */
+const sessionId = ref(null)
 
 const startBtn = ref(null)
 const dialogEl = ref(null)
@@ -97,6 +98,11 @@ onMounted(() => {
 onBeforeUnmount(() => {
   clearInterval(synthTimer)
   clearTimeout(evalTimer)
+  /* P20: 离开时清理未完成的 gacha session */
+  if (sessionId.value) {
+    api.gachaCancel(sessionId.value).catch(() => {})
+    sessionId.value = null
+  }
 })
 
 /* ---- 段 1 题材列表 ---- */
@@ -104,7 +110,7 @@ async function loadGenres() {
   if (listLoading.value) return
   listLoading.value = true
   try {
-    const d = await api.gachaDraw('library')
+    const d = await api.gachaGenres()
     genreList.value = toGenreListVM(d)
     if (d.note) toast(d.note)
   } catch (e) {
@@ -125,7 +131,7 @@ async function synthGenre() {
   synthElapsed.value = 0
   synthTimer = setInterval(() => { synthElapsed.value += 1 }, 1000)
   try {
-    const d = await api.gachaDraw('synth')
+    const d = await api.gachaSynth()
     /* synth 返回精简卡 {mode, genre:{name,source,desc,yaml?}, note} */
     synthCard.value = d
     selectedGenre.value = null   // synth 选中态与列表互斥
@@ -141,9 +147,21 @@ async function synthGenre() {
 
 const hasSelection = computed(() => !!selectedGenre.value || !!synthCard.value)
 
-/* ---- 段 1 → 段 2 ---- */
-function goSkeleton() {
+/* ---- 段 1 → 段 2（选中题材后创建 session） ---- */
+async function goSkeleton() {
   if (!hasSelection.value || busy.value) return
+  /* P20: 创建临时工作区 session */
+  if (!sessionId.value) {
+    const genreName = synthCard.value?.genre?.name || selectedGenre.value
+    if (!genreName) return
+    try {
+      const res = await api.gachaBegin(genreName)
+      sessionId.value = res.session_id
+    } catch (e) {
+      toastError(`创建开局会话失败：${e.message}`)
+      return
+    }
+  }
   stage.value = 'skeleton'
 }
 
@@ -227,7 +245,7 @@ async function runCrossCheck() {
     const wvPayload = Object.keys(wvProfile.value).length > 0
       ? { layers: wvProfile.value } : null
     const castPayload = buildCastPayload()
-    const res = await api.crossCheck(wvPayload, castPayload, currentGenreName.value)
+    const res = await api.gachaSessionCrossCheck(sessionId.value, wvPayload, castPayload)
     crossCheckWarnings.value = res.warnings ?? []
   } catch (e) {
     /* 跨层检测失败不阻塞流程 */
@@ -269,11 +287,17 @@ async function loadMacroTemplates() {
 
 const macroElapsed = ref(0)
 let macroTimer = null
+const macroStreamText = ref('')   // P20: WebSocket 流式文本累积
 
 async function generateMacro() {
   if (macroGenerating.value) return
+  if (!sessionId.value) {
+    toastError('会话已过期，请重新选择题材')
+    return
+  }
   macroGenerating.value = true
   macroElapsed.value = 0
+  macroStreamText.value = ''
   macroTimer = setInterval(() => { macroElapsed.value += 1 }, 1000)
   try {
     const wvPayload = Object.keys(wvProfile.value).length > 0
@@ -281,7 +305,6 @@ async function generateMacro() {
     const castPayload = buildCastPayload()
     const body = {
       template_name: selectedTemplate.value || 'save_the_cat_15',
-      genre_name: currentGenreName.value || undefined,
     }
     if (wvPayload) body.worldview = wvPayload
     if (castPayload) body.cast = castPayload
@@ -289,7 +312,36 @@ async function generateMacro() {
     if (conflictAccepted.value && crossCheckWarnings.value.length > 0) {
       body.conflict_warnings = crossCheckWarnings.value
     }
-    macroPlan.value = await api.macroPlanGenerate(body)
+    /* P20: WebSocket 流式生成 */
+    macroPlan.value = await new Promise((resolve, reject) => {
+      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
+      const wsUrl = `${proto}//${location.host}/api/gacha/${sessionId.value}/macro/stream`
+      const ws = new WebSocket(wsUrl)
+      ws.onopen = () => {
+        ws.send(JSON.stringify(body))
+      }
+      ws.onmessage = (ev) => {
+        try {
+          const msg = JSON.parse(ev.data)
+          if (msg.type === 'delta') {
+            macroStreamText.value += msg.text
+          } else if (msg.type === 'complete') {
+            macroStreamText.value = ''
+            resolve(msg.plan)
+          } else if (msg.type === 'error') {
+            /* 错误但可能有 mock 兜底（complete 会跟随） */
+            toastError(msg.msg || '宏观生成出错')
+          }
+        } catch { /* ignore parse errors */ }
+      }
+      ws.onerror = () => reject(new Error('WebSocket 连接失败'))
+      ws.onclose = () => {
+        if (macroStreamText.value) {
+          /* 流文本未清空说明未收到 complete */
+          reject(new Error('流式生成未完成'))
+        }
+      }
+    })
     expandedMacroSection.value = 'blueprint'
     toast('宏观计划已生成')
   } catch (e) {
@@ -301,33 +353,16 @@ async function generateMacro() {
   }
 }
 
-/* P18.2: 单组件重摇 */
+/* P18.2: 单组件重摇（P20: 改用 WebSocket 全局重生成，单组件级别后续支持） */
 const regeneratingComponent = ref('')
 async function regenerateComponent(component) {
   if (regeneratingComponent.value) return
   if (!macroPlan.value) return
   regeneratingComponent.value = component
-  try {
-    const wvPayload = Object.keys(wvProfile.value).length > 0
-      ? { layers: wvProfile.value } : null
-    const castPayload = buildCastPayload()
-    const body = {
-      template_name: selectedTemplate.value || 'save_the_cat_15',
-      regenerate_component: component,
-      existing_plan: macroPlan.value,
-    }
-    if (wvPayload) body.worldview = wvPayload
-    if (castPayload) body.cast = castPayload
-    if (conflictAccepted.value && crossCheckWarnings.value.length > 0) {
-      body.conflict_warnings = crossCheckWarnings.value
-    }
-    macroPlan.value = await api.macroPlanGenerate(body)
-    toast(`「${component}」已重新生成`)
-  } catch (e) {
-    toastError(`重摇失败：${e.message}`)
-  } finally {
-    regeneratingComponent.value = ''
-  }
+  /* P20: 单组件重摇暂走全局重新生成（WebSocket 不支持单组件路径） */
+  await generateMacro()
+  if (macroPlan.value) toast(`「${component}」已重新生成`)
+  regeneratingComponent.value = ''
 }
 
 function skipMacro() {
@@ -398,6 +433,10 @@ function clearPersonaParam(card, paramKey) {
 
 async function autoDeriveCast() {
   if (deriveLoading.value) return
+  if (!sessionId.value) {
+    toastError('会话已过期，请重新选择题材')
+    return
+  }
   deriveLoading.value = true
   try {
     /* 从当前 wvProfile 拆分 worldview / language layers */
@@ -407,7 +446,7 @@ async function autoDeriveCast() {
       if (layerId.startsWith('LANG')) langLayers[layerId] = params
       else if (!layerId.startsWith('CHAR')) wvLayers[layerId] = params
     }
-    const res = await api.deriveCast(wvLayers, langLayers, currentGenreName.value)
+    const res = await api.gachaSessionDeriveCast(sessionId.value, wvLayers, langLayers)
     const suggested = res.cast ?? []
     if (suggested.length > 0) {
       castCards.value = suggested.map((c, i) => ({
@@ -603,6 +642,10 @@ function onDialogKeydown(e) {
 
 async function doConfirm() {
   if (!confirmPayload.value || confirmBusy.value) return
+  if (!sessionId.value) {
+    toastError('会话已过期，请重新选择题材')
+    return
+  }
   const name = projectName.value.trim()
   if (!nameValid.value) return
   if (Object.keys(wvProfile.value).length > 0) {
@@ -624,16 +667,16 @@ async function doConfirm() {
       ? { layers: wvProfile.value, preset: chosenPresetKey.value === 'blank' ? null : chosenPresetKey.value }
       : null
     const castPayload = buildCastPayload()
-    let payload = { ...confirmPayload.value }
-    if (wvPayload) payload.worldview = wvPayload
-    if (castPayload) payload.cast = castPayload
-    if (macroPlan.value) payload.macro_plan = macroPlan.value
-    const res = await api.gachaConfirm(payload, name)
+    const extras = {}
+    if (wvPayload) extras.worldview = wvPayload
+    if (castPayload) extras.cast = castPayload
+    if (macroPlan.value) extras.macro_plan = macroPlan.value
+    const res = await api.gachaSessionConfirm(sessionId.value, name, extras)
+    sessionId.value = null   /* confirm 后 session 已被后端清理 */
     startOpen.value = false
-    const finalGenre = res.genre ?? ''
+    const finalGenre = res.project?.genre ?? ''
     const culture = res.project?.culture ?? ''
-    const suffix = res.persisted ? '（新题材已入库）' : ''
-    toast(`新项目《${res.project?.name ?? name}》已开工：${dn(finalGenre)} × ${dn(culture)}${suffix}`)
+    toast(`新项目《${res.project?.name ?? name}》已开工：${dn(finalGenre)} × ${dn(culture)}`)
     try {
       await api.plan()
     } catch (e) {
@@ -1093,6 +1136,11 @@ async function doConfirm() {
           </div>
         </div>
 
+        <!-- P20: 流式文本实时显示区 -->
+        <div v-if="macroStreamText" class="wv-macro-stream" role="status" aria-label="LLM 流式输出">
+          <pre class="wv-macro-stream-pre">{{ macroStreamText }}</pre>
+        </div>
+
         <!-- 审阅面板：复用 MacroDashboard（compact + 重摇） -->
         <div v-if="macroPlan" class="wv-macro-review">
           <!-- 冲突约束提示 -->
@@ -1157,3 +1205,23 @@ async function doConfirm() {
     </div>
   </div>
 </template>
+
+<style scoped>
+.wv-macro-stream {
+  margin: 12px 0;
+  max-height: 400px;
+  overflow: auto;
+  border: 1px solid var(--border, #ddd);
+  border-radius: 8px;
+  background: var(--bg-code, #f6f8fa);
+  padding: 12px;
+}
+.wv-macro-stream-pre {
+  margin: 0;
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 13px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  line-height: 1.5;
+}
+</style>

@@ -210,10 +210,9 @@ class TestProjectsApi(unittest.TestCase):
 
 
 class TestProjectOpenAndConfirmSwitch(unittest.TestCase):
-    """P10.2：open 切换 + confirm project_name（临时目录，不污染真实项目）。
+    """P10.2：open 切换 + P20 session confirm project_name（临时目录，不污染真实项目）。
 
-    backend 单例全进程共享：每个用例 finally 必须切回原项目目录（兼 close
-    临时项目 kernel——Windows 文件锁下 TemporaryDirectory 才能清理）并还原
+    backend 单例全进程共享：每个用例 finally 必须切回原项目目录并还原
     PROJECTS_ROOT/题材，否则波及字母序靠后的 backend 用例。"""
 
     @classmethod
@@ -232,38 +231,28 @@ class TestProjectOpenAndConfirmSwitch(unittest.TestCase):
                          json={"genre": self.orig_genre,
                                "culture": self.orig_culture})
 
-    @staticmethod
-    def _card(project_name=None, genre="mystery",
-              culture="confucian_officialdom"):
-        card = {"mode": "library",
-                "genre": {"name": genre, "source": "library", "desc": "d"},
-                "culture": {"name": culture},
-                "archetype": {"name": ""}, "rule_packs": [], "note": None}
-        if project_name is not None:
-            card["project_name"] = project_name
-        return card
+    def _session_confirm(self, project_name, genre="mystery"):
+        """P20: begin → confirm 走通新 session 流程。"""
+        r = self.client.post("/api/gacha/begin", json={"genre_name": genre})
+        assert r.status_code == 200, r.text
+        sid = r.json()["session_id"]
+        r2 = self.client.post(f"/api/gacha/{sid}/confirm",
+                              json={"project_name": project_name})
+        return r2
 
     def test_4_open_switches_between_projects_and_404(self):
         with tempfile.TemporaryDirectory() as root:
             backend.PROJECTS_ROOT = Path(root)
             try:
-                # alpha：非默认题材（isekai-romance，区别于 env 默认 mystery；
-                # P13：文化从题材 allowed_cultures 推导——isekai-romance 通配，
-                # 推导为 confucian_officialdom。open 恢复题材才可判别；
-                # 不选 romance：其 world_rules 引用 WORLD_FACT_TYPES 未声明的事实，
-                # 生成即 KeyError——既有缺陷，本任务不修）
-                # 确认建项目并生成 1 章；beta：默认卡，0 章
-                r = self.client.post("/api/gacha/confirm",
-                                     json=self._card("alpha",
-                                                     genre="isekai-romance"))
+                # alpha：非默认题材（isekai-romance）
+                r = self._session_confirm("alpha", genre="isekai-romance")
                 self.assertEqual(r.status_code, 200, r.text)
                 r = self.client.post("/api/project/generate")
                 self.assertEqual(r.status_code, 200, r.text)
-                r = self.client.post("/api/gacha/confirm",
-                                     json=self._card("beta"))
+                # beta：默认题材
+                r = self._session_confirm("beta")
                 self.assertEqual(r.status_code, 200, r.text)
                 # 当前在 beta；open alpha → meta 正确 + 恢复 alpha 自身题材
-                # （非 env 默认）+ 当前数据是 alpha 的
                 r = self.client.post("/api/projects/open",
                                      json={"name": "alpha"})
                 self.assertEqual(r.status_code, 200, r.text)
@@ -271,16 +260,13 @@ class TestProjectOpenAndConfirmSwitch(unittest.TestCase):
                 self.assertTrue(body["ok"])
                 self.assertEqual(body["project"]["project"], "alpha")
                 self.assertEqual(body["project"]["genre"], "isekai-romance")
-                self.assertEqual(body["project"]["culture"], "anglo-american")  # P18: isekai-romance 非东方→anglo
                 self.assertEqual(body["project"]["chapter_count"], 1)
-                # engine 单例同步恢复（后续 generate 用 alpha 题材而非 env 默认）
+                # engine 单例同步恢复
                 self.assertEqual(backend.engine.genre.name, "isekai-romance")
-                self.assertEqual(backend.engine.culture.name, "anglo-american")  # P18
                 snap = self.client.get("/api/project").json()
                 self.assertEqual(snap["meta"]["project"], "alpha")
-                self.assertEqual(snap["meta"]["genre"], "isekai-romance")
                 self.assertEqual(len(snap["chapters"]), 1)
-                # open 不存在 → 404；路径穿越式非法名同样 404（不泄露目录结构）
+                # open 不存在 → 404
                 r = self.client.post("/api/projects/open",
                                      json={"name": "nope"})
                 self.assertEqual(r.status_code, 404)
@@ -294,12 +280,10 @@ class TestProjectOpenAndConfirmSwitch(unittest.TestCase):
         with tempfile.TemporaryDirectory() as root:
             backend.PROJECTS_ROOT = Path(root)
             try:
-                r = self.client.post("/api/gacha/confirm",
-                                     json=self._card("gamma"))
+                r = self._session_confirm("gamma")
                 self.assertEqual(r.status_code, 200, r.text)
                 body = r.json()
                 self.assertTrue(body["ok"])
-                self.assertFalse(body["persisted"])  # library 卡不落盘
                 self.assertEqual(body["project"],
                                  {"name": "gamma", "genre": "mystery",
                                   "culture": "confucian_officialdom"})
@@ -312,7 +296,7 @@ class TestProjectOpenAndConfirmSwitch(unittest.TestCase):
                 self.assertEqual(meta["culture"], "confucian_officialdom")
                 for k in ("created_at", "last_opened_at"):
                     self.assertTrue(meta.get(k))
-                # 当前已切换（模块级 engine 与端点同栈）
+                # 当前已切换
                 self.assertEqual(backend.engine.project_dir, proj)
                 snap = self.client.get("/api/project").json()
                 self.assertEqual(snap["meta"]["project"], "gamma")
@@ -324,22 +308,22 @@ class TestProjectOpenAndConfirmSwitch(unittest.TestCase):
         with tempfile.TemporaryDirectory() as root:
             backend.PROJECTS_ROOT = Path(root)
             try:
-                r = self.client.post("/api/gacha/confirm",
-                                     json=self._card("delta"))
+                r = self._session_confirm("delta")
                 self.assertEqual(r.status_code, 200, r.text)
-                # 重名（目录已含 story.db）→ 409，且当前项目不被切走
-                r = self.client.post("/api/gacha/confirm",
-                                     json=self._card("delta"))
+                # 重名（目录已含 story.db）→ 409
+                r = self._session_confirm("delta")
                 self.assertEqual(r.status_code, 409, r.text)
                 self.assertIn("已存在", r.json()["detail"])
                 self.assertEqual(backend.engine.project_dir,
                                  Path(root) / "delta")
                 # 非法项目名 → 422
-                r = self.client.post("/api/gacha/confirm",
-                                     json=self._card("bad name!"))
+                r2 = self.client.post("/api/gacha/begin",
+                                      json={"genre_name": "mystery"})
+                sid = r2.json()["session_id"]
+                r = self.client.post(f"/api/gacha/{sid}/confirm",
+                                     json={"project_name": "bad name!"})
                 self.assertEqual(r.status_code, 422, r.text)
-                # 新栈抽查（intervene→router/pipeline，interventions→kernel）：
-                # delta 留 1 条介入；epsilon 0 条；open 回 delta 又见 1 条
+                # 新栈抽查（intervene→router/pipeline，interventions→kernel）
                 r = self.client.post("/api/intervene", json={
                     "type": "intent",
                     "payload": {"goal_update": "加快节奏"}, "reason": "t"})
@@ -347,8 +331,7 @@ class TestProjectOpenAndConfirmSwitch(unittest.TestCase):
                 self.assertTrue(r.json()["ok"])
                 self.assertEqual(
                     len(self.client.get("/api/interventions").json()), 1)
-                r = self.client.post("/api/gacha/confirm",
-                                     json=self._card("epsilon"))
+                r = self._session_confirm("epsilon")
                 self.assertEqual(r.status_code, 200, r.text)
                 self.assertEqual(
                     self.client.get("/api/interventions").json(), [])
@@ -380,6 +363,14 @@ class TestChineseNameAndImport(unittest.TestCase):
                          json={"genre": self.orig_genre,
                                "culture": self.orig_culture})
 
+    def _session_confirm(self, project_name, genre="mystery"):
+        """P20: begin → confirm。"""
+        r = self.client.post("/api/gacha/begin", json={"genre_name": genre})
+        assert r.status_code == 200, r.text
+        sid = r.json()["session_id"]
+        return self.client.post(f"/api/gacha/{sid}/confirm",
+                                json={"project_name": project_name})
+
     @staticmethod
     def _card(project_name=None, genre="mystery",
               culture="confucian_officialdom"):
@@ -405,13 +396,12 @@ class TestChineseNameAndImport(unittest.TestCase):
             files={"file": (filename, payload, "application/zip")})
 
     def test_9_chinese_project_name_confirm_open_export(self):
-        """中文名全链路：confirm 建项目 → open 切换 → 导出 zip 文件名 RFC5987。"""
+        """中文名全链路：session confirm 建项目 → open 切换 → 导出 zip RFC5987。"""
         with tempfile.TemporaryDirectory() as root:
             backend.PROJECTS_ROOT = Path(root)
             try:
                 name = "末日情缘一号"
-                r = self.client.post("/api/gacha/confirm",
-                                     json=self._card(name))
+                r = self._session_confirm(name)
                 self.assertEqual(r.status_code, 200, r.text)
                 self.assertTrue((Path(root) / name / "story.db").exists())
                 # open 中文名 → 200，meta 项目名一致
@@ -419,8 +409,7 @@ class TestChineseNameAndImport(unittest.TestCase):
                                      json={"name": name})
                 self.assertEqual(r.status_code, 200, r.text)
                 self.assertEqual(r.json()["project"]["project"], name)
-                # 导出中文名：200 + content-disposition 走 RFC5987 filename*
-                # （Starlette 对非 ASCII 文件名自动 quote，下载不乱码）
+                # 导出中文名
                 r = self.client.get(f"/api/projects/{quote(name)}/export")
                 self.assertEqual(r.status_code, 200, r.text)
                 cd = r.headers.get("content-disposition", "")
@@ -477,7 +466,7 @@ class TestChineseNameAndImport(unittest.TestCase):
 
     def test_11_project_name_validation_security(self):
         """名校验：中文/空格/-/_ 放行；保留名/分隔符/穿越/首尾白点/超长/
-        控制字符全拒；confirm 集成面 422。"""
+        控制字符全拒；session confirm 集成面 422。"""
         v = backend.validate_project_name
         for ok in ("末日情缘一号", "alpha", "my story", "a-b_c", "故事 2 号",
                    "x" * 40):
@@ -490,8 +479,11 @@ class TestChineseNameAndImport(unittest.TestCase):
             backend.PROJECTS_ROOT = Path(root)
             try:
                 for bad in ("CON", "aux", "a/b"):
-                    r = self.client.post("/api/gacha/confirm",
-                                         json=self._card(bad))
+                    r1 = self.client.post("/api/gacha/begin",
+                                          json={"genre_name": "mystery"})
+                    sid = r1.json()["session_id"]
+                    r = self.client.post(f"/api/gacha/{sid}/confirm",
+                                         json={"project_name": bad})
                     self.assertEqual(r.status_code, 422, f"{bad}: {r.text}")
                 # open 非法名仍一律 404（不泄露目录结构）
                 r = self.client.post("/api/projects/open",

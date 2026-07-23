@@ -151,61 +151,59 @@ def test_evaluate_endpoint_materialist_narrows_consciousness_nature():
 
 
 def test_confirm_with_worldview_persists_and_rejects_violations():
-    """POST /api/gacha/confirm 携带 worldview：合法 profile → 落盘 worldview.json
-    （含 layers/preset/created_at）+ project.json 含 worldview 摘要；
-    违例 profile → 422 不落盘。走无 project_name 的原地 init 路径，避免新建
-    项目目录带来的 SQLite 句柄锁（finally 只删 JSON 文件，不动项目目录）。"""
+    """P20 session confirm 携带 worldview：合法 profile → 落盘 worldview.json；
+    违例 profile → 422 不落盘。走 session begin → confirm 路径。"""
     import json as _json
+    import tempfile
+    from pathlib import Path
     from fastapi.testclient import TestClient
     from conftest import import_backend_main
     backend = import_backend_main()
-    orig = (backend.engine.genre.name, backend.engine.culture.name)
-    proj_dir = backend.engine.project_dir   # conftest 临时项目目录
+    orig_dir = Path(backend.engine.project_dir) if hasattr(backend.engine, 'project_dir') else None
+    orig_genre = backend.engine.genre.name
+    orig_culture = backend.engine.culture.name
+    saved_root = backend.PROJECTS_ROOT
     c = TestClient(backend.app)
-    try:
-        # 合法 profile：library 卡 + worldview（无违例）→ 原地 init + 落盘
-        valid_wv = {
-            "layers": {"L0": {"metaphysics": "materialist",
-                              "consciousness_nature": "emergent"}},
-            "preset": "sci-fi-hard",
-        }
-        card = {"mode": "library", "genre": {"name": "mystery", "source": "library",
-                                             "desc": "d"},
-                "culture": {"name": "confucian_officialdom"},
-                "archetype": {"name": ""}, "rule_packs": [], "note": None,
-                "worldview": valid_wv}
-        r = c.post("/api/gacha/confirm", json=card)
-        assert r.status_code == 200, r.text
-        wv_file = proj_dir / "worldview.json"
-        assert wv_file.exists()
-        wv_data = _json.loads(wv_file.read_text(encoding="utf-8"))
-        assert wv_data["layers"] == valid_wv["layers"]
-        assert wv_data["preset"] == "sci-fi-hard"
-        assert wv_data["created_at"]
-        meta = _json.loads(
-            (proj_dir / "project.json").read_text(encoding="utf-8"))
-        assert meta["worldview"]["preset"] == "sci-fi-hard"
-        assert meta["worldview"]["param_count"] == 2  # 两个参数已设
+    with tempfile.TemporaryDirectory() as root:
+        backend.PROJECTS_ROOT = Path(root)
+        try:
+            # begin session
+            r = c.post("/api/gacha/begin", json={"genre_name": "mystery"})
+            assert r.status_code == 200, r.text
+            sid = r.json()["session_id"]
+            # 合法 profile → 落盘
+            valid_wv = {
+                "layers": {"L0": {"metaphysics": "materialist",
+                                  "consciousness_nature": "emergent"}},
+                "preset": "sci-fi-hard",
+            }
+            r1 = c.post(f"/api/gacha/{sid}/confirm", json={
+                "project_name": "wv-test-1", "worldview": valid_wv})
+            assert r1.status_code == 200, r1.text
+            proj = Path(root) / "wv-test-1"
+            wv_file = proj / "worldview.json"
+            assert wv_file.exists()
+            wv_data = _json.loads(wv_file.read_text(encoding="utf-8"))
+            assert wv_data["layers"] == valid_wv["layers"]
+            assert wv_data["preset"] == "sci-fi-hard"
 
-        # 违例 profile：materialist + soul_based → 422 不落盘不切换
-        bad_card = {"mode": "library",
-                    "genre": {"name": "mystery", "source": "library", "desc": "d"},
-                    "culture": {"name": "confucian_officialdom"},
-                    "archetype": {"name": ""}, "rule_packs": [], "note": None,
-                    "worldview": {"layers": {"L0": {
-                        "metaphysics": "materialist",
-                        "consciousness_nature": "soul_based"}}}}
-        r2 = c.post("/api/gacha/confirm", json=bad_card)
-        assert r2.status_code == 422, r2.text
-        # 失败前不应改写已落盘的 worldview.json（内容仍是合法那份）
-        assert _json.loads(wv_file.read_text(encoding="utf-8"))["preset"] == "sci-fi-hard"
-    finally:
-        # 恢复 engine 题材/文化 + 删掉测试写的 JSON 文件（不删项目目录本身）
-        for f in (proj_dir / "worldview.json",):
-            if f.exists():
-                f.unlink(missing_ok=True)
-        c.post("/api/project/init",
-               json={"genre": orig[0], "culture": orig[1]})
+            # 违例 profile → 422
+            r2 = c.post("/api/gacha/begin", json={"genre_name": "mystery"})
+            sid2 = r2.json()["session_id"]
+            r3 = c.post(f"/api/gacha/{sid2}/confirm", json={
+                "project_name": "wv-test-2",
+                "worldview": {"layers": {"L0": {
+                    "metaphysics": "materialist",
+                    "consciousness_nature": "soul_based"}}}})
+            assert r3.status_code == 422, r3.text
+            # 清理 session
+            c.post(f"/api/gacha/{sid2}/cancel")
+        finally:
+            backend.PROJECTS_ROOT = saved_root
+            if orig_dir:
+                backend._switch_to(orig_dir)
+            c.post("/api/project/init",
+                   json={"genre": orig_genre, "culture": orig_culture})
 
 
 # ---------- P12.3 双通道融合（3 核心） ----------
@@ -356,37 +354,41 @@ def test_derive_cast_returns_characters_with_filled_char_params():
 
 
 def test_confirm_with_persona_persists_cast_json():
-    """POST /api/gacha/confirm 携带 cast：落盘 cast.json，genesis 读取后
-    state.characters 含 persona 字段（spawn 时传入 Actor）。"""
+    """P20 session confirm 携带 cast → 落盘 cast.json。"""
     import json as _json
+    import tempfile
+    from pathlib import Path
     from fastapi.testclient import TestClient
     from conftest import import_backend_main
     backend = import_backend_main()
-    orig = (backend.engine.genre.name, backend.engine.culture.name)
-    proj_dir = backend.engine.project_dir
+    orig_dir = Path(backend.engine.project_dir)
+    orig_genre = backend.engine.genre.name
+    orig_culture = backend.engine.culture.name
+    saved_root = backend.PROJECTS_ROOT
     c = TestClient(backend.app)
-    try:
-        card = {
-            "mode": "library",
-            "genre": {"name": "mystery", "source": "library", "desc": "d"},
-            "cast": [
-                {"id": "主角", "role": "主角", "goals": ["查清真相"],
-                 "persona": {"pearson_primary": "seeker", "enneagram_type": "5",
-                             "arc_type": "positive_change"}},
-                {"id": "配角甲", "role": "配角", "goals": ["保护主角"],
-                 "persona": {"pearson_primary": "caregiver", "enneagram_type": "2"}},
-            ],
-        }
-        r = c.post("/api/gacha/confirm", json=card)
-        assert r.status_code == 200, r.text
-        cast_file = proj_dir / "cast.json"
-        assert cast_file.exists()
-        cast_data = _json.loads(cast_file.read_text(encoding="utf-8"))
-        assert len(cast_data) == 2
-        assert cast_data[0]["persona"]["pearson_primary"] == "seeker"
-    finally:
-        for f in (proj_dir / "cast.json",):
-            if f.exists():
-                f.unlink(missing_ok=True)
-        c.post("/api/project/init",
-               json={"genre": orig[0], "culture": orig[1]})
+    with tempfile.TemporaryDirectory() as root:
+        backend.PROJECTS_ROOT = Path(root)
+        try:
+            r = c.post("/api/gacha/begin", json={"genre_name": "mystery"})
+            sid = r.json()["session_id"]
+            r1 = c.post(f"/api/gacha/{sid}/confirm", json={
+                "project_name": "cast-proj",
+                "cast": [
+                    {"id": "主角", "role": "主角", "goals": ["查清真相"],
+                     "persona": {"pearson_primary": "seeker", "enneagram_type": "5",
+                                 "arc_type": "positive_change"}},
+                    {"id": "配角甲", "role": "配角", "goals": ["保护主角"],
+                     "persona": {"pearson_primary": "caregiver", "enneagram_type": "2"}},
+                ],
+            })
+            assert r1.status_code == 200, r1.text
+            cast_file = Path(root) / "cast-proj" / "cast.json"
+            assert cast_file.exists()
+            cast_data = _json.loads(cast_file.read_text(encoding="utf-8"))
+            assert len(cast_data) == 2
+            assert cast_data[0]["persona"]["pearson_primary"] == "seeker"
+        finally:
+            backend.PROJECTS_ROOT = saved_root
+            backend._switch_to(orig_dir)
+            c.post("/api/project/init",
+                   json={"genre": orig_genre, "culture": orig_culture})

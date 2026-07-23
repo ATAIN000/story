@@ -45,9 +45,10 @@ from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal
+from uuid import uuid4
 
 import yaml
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -67,7 +68,6 @@ from story_engine.llm import LLMError  # noqa: E402
 from story_engine.logging_config import setup_logging  # noqa: E402
 from story_engine.meta import MetaGenerator, UserIntent  # noqa: E402
 from story_engine.meta.gacha import draw_card_async, derive_culture  # noqa: E402
-from story_engine.meta.genre_validator import validate_genre_pack  # noqa: E402
 from story_engine.macro import (  # noqa: E402
     TEMPLATES as MACRO_TEMPLATES, compute_acts as macro_compute_acts,
     generate_macro_plan, macro_plan_to_dict, check_cross_layer)
@@ -281,12 +281,6 @@ class SettingsReq(BaseModel):
     eval_max_rounds: int | None = None
 
 
-class GachaDrawReq(BaseModel):
-    """抽卡 body（P13 简化）：mode=library 返回题材列表（单栏点选）；
-    mode=synth 走 LLM 合成。lock 不再需要（单栏无锁）。"""
-    mode: Literal["library", "synth"] = "library"
-
-
 class TestLlmReq(BaseModel):
     """P6.10 B10：LLM 测试连接 body；只接受可选 model 覆盖。
     base_url/key 永不取自前端（防 SSRF + 系统密钥外泄）——始终用当前
@@ -420,33 +414,6 @@ def _write_json_atomic(path: Path, data: dict) -> None:
     except OSError:
         tmp.unlink(missing_ok=True)
         raise
-
-
-def _auto_derive_cast(wv_layers: dict | None) -> list[dict] | None:
-    """P19.1：无用户 cast 时，从当前 engine 的题材 params + worldview 自动推导
-    阵容（含真实人物名 + persona）。返回 cast.json 格式 list[dict]，
-    推导失败（无题材/无引擎）→ None（不写 cast.json，退回旧行为）。
-
-    真名来源：genre params 的 cast 段 → prompt.characters（derive_cast 内部
-    复用 meta.cast.parse_cast 三级兜底前两级）。persona 由世界观参数推导。
-    """
-    try:
-        params = engine.bundle.genre_params
-    except Exception:
-        return None
-    if not params:
-        return None
-    try:
-        derived = wv_derive_cast(wv_layers, None, params)
-    except Exception:
-        return None
-    if not derived:
-        return None
-    return [
-        {"id": c.get("name", ""), "role": c.get("role", ""),
-         "persona": c.get("persona", {})}
-        for c in derived if c.get("name")
-    ]
 
 
 def _list_projects(root: Path) -> list[dict]:
@@ -917,65 +884,298 @@ def worldview_evaluate_endpoint(req: WorldviewEvaluateReq):
 
 
 class DeriveCastReq(BaseModel):
-    """POST /api/worldview/derive_cast body：worldview 与 language 的分层 profile，
+    """POST /api/gacha/{sid}/derive_cast body：worldview 与 language 的分层 profile，
     均可选（容忍空/部分填写）。"""
     worldview: dict[str, dict[str, str]] = {}
     language: dict[str, dict[str, str]] = {}
-    genre_name: str | None = None               # P19: 前端传入选中的题材名
 
 
 @app.post("/api/worldview/derive_cast")
-def derive_cast_endpoint(req: DeriveCastReq):
-    """【P15.2】从世界观 + 语言 profile 推导建议阵容（2-4 角色，含 CHAR 原型参数）。
-
-    纯规则映射（无 LLM）：物理偏离度/形而上学 → Pearson/Schmidt/Enneagram；
-    冲突类型 → 弧光类型；语言文化 → 中文人设标签。返回 ``{cast: [...]}``，
-    每个 cast 条目含 ``name/role/persona``（persona 覆盖 CHAR1-CHAR5 全字段）。
-
-    P19: genre_name 传入时从 registry 取题材 params 做名字解析。
-    """
-    genre_params = None
-    if req.genre_name:
-        try:
-            m = engine.kernel.registry.get_manifest("story.genre", req.genre_name)
-            genre_params = m.params if hasattr(m, 'params') else {}
-        except Exception:
-            pass
-    return {"cast": wv_derive_cast(req.worldview, req.language, genre_params)}
+def derive_cast_endpoint_legacy(req: DeriveCastReq):
+    """已废弃：P20 起改用 /api/gacha/{sid}/derive_cast。保留 410 告知前端升级。"""
+    raise HTTPException(status_code=410, detail="此端点已废弃，请使用 /api/gacha/{sid}/derive_cast")
 
 
 class CrossCheckReq(BaseModel):
     worldview: dict | None = None
     cast: list | None = None
-    genre_name: str | None = None               # P19: 前端传入选中的题材名
 
 
 @app.post("/api/worldview/cross_check")
-def worldview_cross_check_endpoint(req: CrossCheckReq):
-    """【P18.1】跨层冲突检测（③.5 Patch A）：规则化扫描 5 类跨层冲突。
+def worldview_cross_check_endpoint_legacy(req: CrossCheckReq):
+    """已废弃：P20 起改用 /api/gacha/{sid}/cross_check。保留 410 告知前端升级。"""
+    raise HTTPException(status_code=410, detail="此端点已废弃，请使用 /api/gacha/{sid}/cross_check")
 
-    从当前 engine bundle 取 genre_params + genre_name，从 body 取 worldview/cast；
-    返回 {warnings: [{type, severity, title, description, suggestion}]}。
 
-    纯规则匹配，零 LLM 调用。
+# ---------- 抽卡开局（P20：临时工作区 session 管理） ----------
+_gacha_sessions: dict[str, dict] = {}
+_GACHA_SESSION_TTL = 1800  # 30 分钟
+
+
+def _derive_culture_for_genre(kernel, genre_name: str) -> str:
+    """从题材 allowed_cultures 推导最匹配的文化（P20 session engine 构造用）。"""
+    try:
+        m = kernel.registry.get_manifest("story.genre", genre_name)
+        return derive_culture(m.allowed_cultures, genre_name=genre_name)
+    except Exception:
+        return "confucian_officialdom"
+
+
+def _create_session_engine(genre_name: str, culture: str | None = None):
+    """P20：为抽卡向导创建临时工作区 Kernel + StoryEngine（用用户选的题材）。
+
+    返回 (engine, kernel, tmp_dir)。临时目录在 data/projects/.tmp_gacha_<uuid>/，
+    由调用方在 cancel/confirm/expire 时清理。
     """
-    genre_params = getattr(engine.bundle, "genre_params", None) or {}
-    genre_name = getattr(engine.bundle, "genre", "")
-    # P19: 前端传入了题材名 → 从 registry 取该题材的 params（而非当前 engine.bundle）
-    if req.genre_name:
+    tmp_dir = PROJECTS_ROOT / f".tmp_gacha_{uuid4().hex[:8]}"
+    tmp_dir.mkdir(parents=True, exist_ok=True)
+    stack: dict = {}
+    kernel = Kernel(
+        tmp_dir, plugin_dir=ROOT / "story_engine" / "plugins",
+        initial_state_factory=_make_lazy_genesis(stack))
+    culture = culture or _derive_culture_for_genre(kernel, genre_name)
+    sess_engine = StoryEngine(kernel, genre_name=genre_name,
+                              culture_name=culture)
+    stack.update({"kernel": kernel, "engine": sess_engine})
+    return sess_engine, kernel, tmp_dir
+
+
+def _cleanup_session(sid: str) -> None:
+    """清理 session 关联的临时目录 + kernel 句柄（cancel/confirm/expire 调用）。"""
+    session = _gacha_sessions.pop(sid, None)
+    if not session:
+        return
+    try:
+        session["kernel"].close()
+    except Exception:
+        logger.warning("gacha session kernel close 失败（尽力继续）",
+                       exc_info=True)
+    tmp_dir = session.get("tmp_dir")
+    if tmp_dir and Path(tmp_dir).exists():
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
+def _expire_old_sessions() -> None:
+    """清理超过 TTL 的过期 session（begin 时顺带调用）。"""
+    now = datetime.now().timestamp()
+    expired = [sid for sid, s in _gacha_sessions.items()
+               if now - s.get("created_ts", now) > _GACHA_SESSION_TTL]
+    for sid in expired:
+        _cleanup_session(sid)
+
+
+import atexit
+
+
+def _cleanup_all_sessions() -> None:
+    for sid in list(_gacha_sessions):
+        _cleanup_session(sid)
+
+
+atexit.register(_cleanup_all_sessions)
+
+
+class GachaBeginReq(BaseModel):
+    """P20：开局向导入口 body"""
+    genre_name: str
+    culture: str | None = None
+
+
+class GachaConfirmReq(BaseModel):
+    """P20：开局确认 body"""
+    project_name: str
+    worldview: dict | None = None
+    cast: list | None = None
+    macro_plan: dict | None = None
+
+
+@app.post("/api/gacha/begin")
+def gacha_begin(req: GachaBeginReq):
+    """P20：进入抽卡向导 → 创建临时工作区 engine（用用户选的题材）。
+
+    返回 {session_id, genre_title}。后续 derive_cast / cross_check /
+    macro stream 全用 session_id 路由到正确的临时 engine。
+    """
+    _expire_old_sessions()
+    genre_name = req.genre_name
+    try:
+        engine.kernel.registry.get_manifest("story.genre", genre_name)
+    except Exception:
+        raise HTTPException(status_code=422,
+                            detail=f"未知题材：{genre_name}")
+    sess_engine, sess_kernel, tmp_dir = _create_session_engine(
+        genre_name, req.culture)
+    sid = uuid4().hex[:12]
+    _gacha_sessions[sid] = {
+        "engine": sess_engine, "kernel": sess_kernel,
+        "tmp_dir": str(tmp_dir), "genre_name": genre_name,
+        "culture": sess_engine.culture.name,
+        "created_ts": datetime.now().timestamp(),
+    }
+    genre_title = ""
+    try:
+        genre_title = sess_engine.bundle.genre_params.get("title", genre_name)
+    except Exception:
+        genre_title = genre_name
+    return {"session_id": sid, "genre_title": genre_title,
+            "genre": genre_name, "culture": sess_engine.culture.name}
+
+
+@app.post("/api/gacha/{sid}/cancel")
+def gacha_cancel(sid: str):
+    """P20：取消 session → 清理临时目录 + kernel 句柄。"""
+    if sid not in _gacha_sessions:
+        raise HTTPException(status_code=404, detail="会话不存在或已过期")
+    _cleanup_session(sid)
+    return {"ok": True}
+
+
+@app.post("/api/gacha/{sid}/confirm")
+def gacha_session_confirm(sid: str, req: GachaConfirmReq):
+    """P20：确认开工 → rename 临时目录 → 写落盘文件 → _switch_to 新项目。
+
+    流程：
+    1. 校验 project_name
+    2. worldview 校验（如有）
+    3. rename tmp_dir → data/projects/<project_name>/
+    4. 写 worldview.json / cast.json / macro_plan.json / project.json
+    5. _switch_to 切换到新项目（用 session 的 genre/culture）
+    6. 清理 session
+    """
+    global engine
+    session = _gacha_sessions.get(sid)
+    if not session:
+        raise HTTPException(status_code=404, detail="会话不存在或已过期")
+
+    def _fail(detail, code=422):
+        """验证失败时先清理 session（释放 SQLite 句柄）再抛异常。"""
+        _cleanup_session(sid)
+        raise HTTPException(status_code=code, detail=detail)
+
+    if not validate_project_name(req.project_name):
+        _fail(f"项目名非法：{req.project_name!r}（允许中文/字母/数字/空格/-/_，"
+              "1-40 字符；不含路径分隔符/.. /Windows 保留名）")
+    target_dir = PROJECTS_ROOT / req.project_name
+    if target_dir.exists() and any(target_dir.iterdir()):
+        _fail(f"项目已存在：{req.project_name}", code=409)
+    # worldview 校验
+    wv_layers: dict | None = None
+    wv_preset: str | None = None
+    wv_param_count = 0
+    if req.worldview is not None:
+        wv = req.worldview
+        if not isinstance(wv, dict):
+            _fail("worldview 必须是对象")
+        wv_layers = wv.get("layers") or {}
+        if not isinstance(wv_layers, dict):
+            _fail("worldview.layers 必须是对象")
+        wv_preset = wv.get("preset")
+        flat = WorldviewProfile(layers=wv_layers).as_flat()
+        wv_param_count = len(flat)
+        result = wv_evaluate(flat)
+        if result["violations"]:
+            _fail({"message": "世界观存在跨层一致性违例",
+                   "violations": result["violations"]})
+    # rename tmp_dir → target_dir
+    tmp_dir = Path(session["tmp_dir"])
+    genre_name = session["genre_name"]
+    culture = session["culture"]
+    try:
+        engine.kernel.registry.validate_combo(genre_name, culture)
+    except StoryEngineError as e:
+        _cleanup_session(sid)
+        raise HTTPException(status_code=422, detail=str(e))
+    # 先关 session kernel（释放 SQLite 句柄），再 rename
+    try:
+        session["kernel"].close()
+    except Exception:
+        logger.warning("confirm: session kernel close 失败（尽力继续）",
+                       exc_info=True)
+    try:
+        tmp_dir.rename(target_dir)
+    except OSError:
+        # rename 失败（跨盘符等），用 shutil.move
+        shutil.move(str(tmp_dir), str(target_dir))
+    _gacha_sessions.pop(sid, None)
+    # 整栈切换到新项目（用 session 的 genre/culture）
+    _switch_to(target_dir, genre_name=genre_name, culture_name=culture)
+    now = datetime.now().isoformat(timespec="seconds")
+    _write_project_meta(target_dir, name=req.project_name, genre=genre_name,
+                        culture=culture, created_at=now, last_opened_at=now)
+    # worldview 落盘
+    if wv_layers is not None:
+        _write_json_atomic(
+            target_dir / "worldview.json",
+            {"layers": wv_layers, "preset": wv_preset,
+             "created_at": datetime.now().isoformat(timespec="seconds")})
+        _write_project_meta(
+            target_dir,
+            worldview={"preset": wv_preset,
+                       "param_count": wv_param_count})
+    # cast 落盘
+    cast_data = req.cast
+    if cast_data is not None and isinstance(cast_data, list):
+        _write_json_atomic(target_dir / "cast.json", cast_data)
+    elif not cast_data:
+        # 自动推导阵容
         try:
-            m = engine.kernel.registry.get_manifest("story.genre", req.genre_name)
-            genre_params = m.params if hasattr(m, 'params') else {}
-            genre_name = req.genre_name
+            derived = wv_derive_cast(
+                wv_layers, None, engine.bundle.genre_params)
         except Exception:
-            pass
+            derived = None
+        if derived:
+            cast_data = [
+                {"id": c.get("name", ""), "role": c.get("role", ""),
+                 "persona": c.get("persona", {})}
+                for c in derived if c.get("name")]
+            _write_json_atomic(target_dir / "cast.json", cast_data)
+    # macro_plan 落盘
+    macro_plan_data = req.macro_plan
+    if macro_plan_data is not None and isinstance(macro_plan_data, dict):
+        _write_json_atomic(target_dir / "macro_plan.json", macro_plan_data)
+        _write_project_meta(
+            target_dir,
+            macro={"template": macro_plan_data.get("act_structure", {})
+                                      .get("template", ""),
+                   "total_episodes": macro_plan_data.get("blueprint", {})
+                                      .get("total_episodes", 0),
+                   "has_plan": True})
+    # project_init 重置世界（新 kernel 已由 _switch_to 构造，这里清状态）
+    engine.reset()
+    engine.discard_plan()
+    return {"ok": True, "project": {"name": req.project_name,
+                                     "genre": genre_name,
+                                     "culture": culture}}
+
+
+# ---------- P20 session-based derive_cast / cross_check ----------
+@app.post("/api/gacha/{sid}/derive_cast")
+def gacha_session_derive_cast(sid: str, req: DeriveCastReq):
+    """P20：从世界观推导阵容，用 session engine 的题材 params。"""
+    session = _gacha_sessions.get(sid)
+    if not session:
+        raise HTTPException(status_code=404, detail="会话不存在或已过期")
+    genre_params = getattr(session["engine"].bundle, "genre_params", None)
+    return {"cast": wv_derive_cast(req.worldview, req.language, genre_params)}
+
+
+@app.post("/api/gacha/{sid}/cross_check")
+def gacha_session_cross_check(sid: str, req: CrossCheckReq):
+    """P20：跨层冲突检测，用 session engine 的题材 params。"""
+    session = _gacha_sessions.get(sid)
+    if not session:
+        raise HTTPException(status_code=404, detail="会话不存在或已过期")
+    bundle = session["engine"].bundle
+    genre_params = getattr(bundle, "genre_params", None) or {}
+    genre_name = getattr(bundle, "genre", "")
     wv_profile = None
     if req.worldview and isinstance(req.worldview.get("layers"), dict):
         wv_profile = WorldviewProfile(layers=req.worldview["layers"])
     elif req.worldview:
         wv_profile = req.worldview
     cast_profile = req.cast if isinstance(req.cast, list) else None
-    warnings = check_cross_layer(genre_params, wv_profile, cast_profile, genre_name)
+    warnings = check_cross_layer(
+        genre_params, wv_profile, cast_profile, genre_name)
     return {"warnings": [
         {"type": w.type, "severity": w.severity, "title": w.title,
          "description": w.description, "suggestion": w.suggestion}
@@ -983,250 +1183,147 @@ def worldview_cross_check_endpoint(req: CrossCheckReq):
     ]}
 
 
-# ---------- 抽卡开局（P8.3 library / P8.4 synth，独立开局页：题材×文化×原型×规则） ----------
-@app.post("/api/gacha/draw")
-async def gacha_draw(req: GachaDrawReq):
-    """【P13 简化】library 模式返回全量题材列表（单栏点选，零 LLM）；
-    synth 注入 kernel.llm.call 走 LLM 合成 + 校验 + 重试 + 降级——
-    mock 短路在 meta.gacha 内部、LLM 调用之前（is_mock 判据），
-    mock 部署下恒降级精简卡，本端点不做真实 LLM 调用。"""
+# ---------- P20 WebSocket 宏观计划流式生成 ----------
+@app.websocket("/api/gacha/{sid}/macro/stream")
+async def macro_stream(ws: WebSocket, sid: str):
+    """P20：WebSocket 宏观计划流式生成。
+
+    前端发 {template_name, worldview?, cast?, conflict_warnings?}；
+    后端逐 chunk send_json({"type":"delta","text":"..."})；
+    完成后 send_json({"type":"complete","plan":{...}})。
+    """
+    await ws.accept()
+    session = _gacha_sessions.get(sid)
+    if not session:
+        await ws.send_json({"type": "error",
+                            "msg": "会话不存在或已过期"})
+        await ws.close()
+        return
+    try:
+        req_data = await ws.receive_json()
+    except WebSocketDisconnect:
+        await ws.close()
+        return
+    except Exception:
+        await ws.send_json({"type": "error", "msg": "需发送 JSON 请求体"})
+        await ws.close()
+        return
+    template = req_data.get("template_name", "save_the_cat_15")
+    if template not in MACRO_TEMPLATES:
+        await ws.send_json({"type": "error",
+                            "msg": f"未知幕结构模板：{template}"})
+        await ws.close()
+        return
+    bundle = session["engine"].bundle
+    sess_kernel = session["kernel"]
+    wv_profile = None
+    wv_data = req_data.get("worldview")
+    if wv_data and isinstance(wv_data, dict) \
+            and isinstance(wv_data.get("layers"), dict):
+        wv_profile = WorldviewProfile(layers=wv_data["layers"])
+    cast_profile = req_data.get("cast")
+    if not isinstance(cast_profile, list):
+        cast_profile = None
+    conflict_warnings = req_data.get("conflict_warnings")
+    if not isinstance(conflict_warnings, list):
+        conflict_warnings = None
+    total_episodes = getattr(bundle, "target_length", 12)
+    # mock 模式：直接骨架兜底，不流式（mock 也模拟流式体验）
+    if sess_kernel.llm.is_mock:
+        plan = _generate_skeleton_macro(
+            bundle, wv_profile, cast_profile, template, total_episodes)
+        # 模拟流式：把 YAML 文本切块推送
+        plan_dict = macro_plan_to_dict(plan)
+        import json as _json
+        plan_text = _json.dumps(plan_dict, ensure_ascii=False, indent=2)
+        for i in range(0, len(plan_text), 80):
+            await ws.send_json({"type": "delta",
+                                "text": plan_text[i:i + 80]})
+            await asyncio.sleep(0.03)
+        await ws.send_json({"type": "complete", "plan": plan_dict})
+        await ws.close()
+        return
+    # real 模式：LLM 流式
+    prompt = _build_macro_prompt(
+        bundle, wv_profile, cast_profile, template, total_episodes,
+        conflict_warnings)
+    full_text = ""
+    try:
+        async for chunk in sess_kernel.llm.call_stream(
+                prompt, purpose="macro_plan", temperature=0.7,
+                max_tokens=8192):
+            full_text += chunk
+            await ws.send_json({"type": "delta", "text": chunk})
+    except Exception as e:
+        await ws.send_json({"type": "error",
+                            "msg": f"LLM 流式调用失败：{e}"})
+        # mock 兜底
+        plan = _generate_skeleton_macro(
+            bundle, wv_profile, cast_profile, template, total_episodes)
+        await ws.send_json({"type": "complete",
+                            "plan": macro_plan_to_dict(plan)})
+        await ws.close()
+        return
+    # 解析 + 校验
+    plan = _parse_and_validate_macro(full_text, template, total_episodes)
+    if plan is None:
+        # 解析失败 → mock 兜底
+        await ws.send_json({"type": "error",
+                            "msg": "LLM 输出解析失败，使用骨架兜底"})
+        plan = _generate_skeleton_macro(
+            bundle, wv_profile, cast_profile, template, total_episodes)
+    await ws.send_json({"type": "complete",
+                        "plan": macro_plan_to_dict(plan)})
+    await ws.close()
+
+
+def _build_macro_prompt(bundle, worldview_profile, cast_profile,
+                        template_name, total_episodes, conflict_warnings):
+    """复用 macro.generator._build_prompt 构建 LLM 提示词。"""
+    from story_engine.macro.generator import _build_prompt
+    return _build_prompt(bundle, worldview_profile, cast_profile,
+                         template_name, total_episodes, conflict_warnings)
+
+
+def _generate_skeleton_macro(bundle, worldview_profile, cast_profile,
+                             template_name, total_episodes):
+    """复用 macro.generator._generate_skeleton 生成骨架兜底。"""
+    from story_engine.macro.generator import _generate_skeleton
+    return _generate_skeleton(bundle, worldview_profile, cast_profile,
+                              template_name, total_episodes)
+
+
+def _parse_and_validate_macro(text, template_name, total_episodes):
+    """复用 macro.generator._parse_yaml + _validate + _build_plan。"""
+    from story_engine.macro.generator import (
+        _parse_yaml, _validate, _build_plan)
+    parsed = _parse_yaml(text)
+    if parsed and _validate(parsed, total_episodes):
+        return _build_plan(parsed, template_name, total_episodes)
+    return None
+
+
+# ---------- 题材列表（P20：前端 grid 读取；synth 模式保留但独立调用） ----------
+@app.get("/api/gacha/genres")
+def gacha_genres():
+    """P20：返回全量题材列表（前端 grid 点选用）。取代旧 POST /api/gacha/draw。"""
+    from story_engine.meta.gacha import _genre_list
+    return _genre_list(engine.kernel)
+
+
+@app.post("/api/gacha/synth")
+async def gacha_synth():
+    """P20：synth 合成新题材（保留旧能力，前端「让 AI 自由发挥」按钮调用）。
+    mock 模式下恒降级 library 卡。"""
     try:
         return await draw_card_async(engine.kernel, engine.kernel.llm.call,
-                                     req.mode)
+                                     "synth")
     except StoryEngineError as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ---------- 抽卡确认 + 开局切换（P8.5：落盘 → reload → engine 单例重建） ----------
-# 题材名白名单：落盘文件名直接由它构成，拒绝对路径/穿越字符（防路径逃逸）。
-# 只用于题材 id（slug）；项目目录名走 validate_project_name（P10.6，允许中文）。
+# 题材名白名单（synth 落盘用）
 GENRE_NAME_RE = re.compile(r"[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}")
-
-
-def _persist_genre_pack(pack: dict) -> str:
-    """合成 genre 包落盘到 plugins/genres/，返回最终题材名。
-
-    - 重名冲突：自动追加 -2/-3… 后缀（pack["name"] 同步改写，卡名与文件名一致）
-    - activation_events 对齐最终名（库内约定 on_genre:<name>）
-    - 原子写：先写同目录 .tmp 再 rename——最终路径要么不存在、要么完整，
-      不会留半写文件（同目录保证同文件系统，rename 才原子）；写失败清 tmp
-    """
-    genres_dir = ROOT / "story_engine" / "plugins" / "genres"
-    base = str(pack["name"])
-    name, i = base, 2
-    while (genres_dir / f"{name}.yaml").exists():
-        name = f"{base}-{i}"
-        i += 1
-    pack["name"] = name
-    pack["activation_events"] = [f"on_genre:{name}"]
-    path = genres_dir / f"{name}.yaml"
-    tmp = path.with_suffix(".tmp")
-    try:
-        tmp.write_text(yaml.safe_dump(pack, allow_unicode=True),
-                       encoding="utf-8")
-        tmp.rename(path)
-    except OSError:
-        tmp.unlink(missing_ok=True)
-        raise
-    return name
-
-
-@app.post("/api/gacha/confirm")
-def gacha_confirm(card: dict):
-    """【P8.5】确认抽卡：synth 卡复核 + 落盘 + registry 重扫，然后统一走 init 切换。
-
-    synth 卡不信任前端携带的校验结论：confirm 时先复核 manifest 层
-    （name 非空字符串、extension_point 必为 story.genre —— 坏包落盘会让
-    registry 加载路径 KeyError，卡死本次 reload 及之后每次重启），再 rerun
-    validate_genre_pack 复核 params 子树；culture_bound 包另须卡文化命中
-    allowed_cultures（口径同 registry.validate_combo），否则落盘即注册、
-    init 却 422 的不一致态。任一项不过 → 422 且不落盘不切换；过了才落盘
-    （重名自动后缀，原子写）并 registry.reload() 让新题材立即可用。
-    library 卡跳过落盘（persisted=false）直接 init。
-    响应 = init 响应 + {persisted, genre(最终名)}。
-
-    【P10.2】body 可选 project_name（卡对象平铺的额外键，不给则现状语义）：
-    给了则开新项目——validate_project_name 校验（P10.6 起支持中文名）→ 目标
-    目录已含 story.db
-    → 409「项目已存在」（在 synth 落盘之前检查，失败零副作用）；否则
-    _switch_to 整栈切换到新目录（Kernel 构造自建目录/库）→ init 应用卡的
-    genre/culture → 写 project.json（name/genre/culture/created_at/
-    last_opened_at）→ 响应 project 键扩为 {name, genre, culture}。
-    组合合法性在切换前用当前 registry 预校验（插件同源），避免切完才 422
-    的半切换态。synth 落盘逻辑不变，与项目切换正交。
-
-    【P12.2】card 可选携带 ``worldview: {layers: {L0: {param: value}, ...},
-    preset?: str}``：confirm 时先扁平化 + evaluate 校验跨层一致性，
-    violations 非空 → 422（带明细，不落盘不切换，与 synth 复核同口径）；
-    violations 空 → init/switch 之后把 ``{layers, preset?, created_at}``
-    原子写入目标项目目录的 worldview.json，并在 project.json 合并写
-    ``worldview: {preset?, param_count: N}`` 摘要（列表页用）。无 worldview
-    键 → 现状逐字不变。落盘目标目录：project_name 给了则新项目目录，否则
-    当前 engine.project_dir（init 原地切换后的当前项目）。
-    """
-    project_name = card.get("project_name")
-    if project_name is not None:
-        if not validate_project_name(project_name):
-            raise HTTPException(
-                status_code=422,
-                detail=f"项目名非法：{project_name!r}（允许中文/字母/数字/空格/-/_，"
-                       "1-40 字符；不含路径分隔符/.. /Windows 保留名）")
-        if (PROJECTS_ROOT / project_name / "story.db").exists():
-            raise HTTPException(status_code=409,
-                                detail=f"项目已存在：{project_name}")
-    # 【P12.2】worldview 可选：先校验（violations 非空 → 422 不落盘不切换）；
-    # 通过则保留扁平 profile + preset 供 init/switch 后落盘使用。
-    wv = card.get("worldview")
-    wv_layers: dict | None = None
-    wv_preset: str | None = None
-    wv_param_count = 0
-    wv_validated = False
-    if wv is not None:
-        if not isinstance(wv, dict):
-            raise HTTPException(status_code=422,
-                                detail="worldview 必须是对象")
-        wv_layers = wv.get("layers") or {}
-        if not isinstance(wv_layers, dict):
-            raise HTTPException(
-                status_code=422,
-                detail="worldview.layers 必须是对象（层 id → {param: value}）")
-        wv_preset = wv.get("preset")
-        flat = WorldviewProfile(layers=wv_layers).as_flat()
-        wv_param_count = len(flat)
-        result = wv_evaluate(flat)
-        if result["violations"]:
-            raise HTTPException(
-                status_code=422,
-                detail={"message": "世界观存在跨层一致性违例",
-                        "violations": result["violations"]})
-        wv_validated = True
-    # 【P15.2】cast 可选：用户自定义阵容（含 persona）。结构为 list[entry]，
-    # entry = {id, role?, goals?, voice_hint?, persona?}。提取后供 init/switch
-    # 后落盘到项目目录 cast.json（genesis 工厂读取覆盖 bundle 自带阵容）。
-    cast_data = card.get("cast")
-    if cast_data is not None and not isinstance(cast_data, list):
-        raise HTTPException(status_code=422, detail="cast 必须是数组")
-    # P19.1：无用户 cast 时自动从题材 params + worldview 推导阵容（含真名 + persona），
-    # 确保所有项目都有 cast.json（不再只有选了 CHAR 层向导才生成）
-    if not cast_data:
-        cast_data = _auto_derive_cast(wv_layers if wv_validated else None)
-    # P17.3：宏观计划（可选；card.macro_plan 携带已生成的计划 dict → confirm 时落盘）
-    macro_plan_data = card.get("macro_plan")
-    g = card.get("genre") or {}
-    persisted = False
-    name = g.get("name")
-    if g.get("source") == "synth":
-        pack = g.get("yaml")
-        if not isinstance(pack, dict) \
-                or not isinstance(pack.get("name"), str) \
-                or not pack["name"].strip():
-            raise HTTPException(status_code=422,
-                                detail="合成卡缺 genre.yaml 或 name 键（非空字符串）")
-        if pack.get("extension_point") != "story.genre":
-            raise HTTPException(
-                status_code=422,
-                detail=f"合成包 extension_point 须为 story.genre"
-                       f"（当前：{pack.get('extension_point')!r}）")
-        if not GENRE_NAME_RE.fullmatch(pack["name"]):
-            raise HTTPException(
-                status_code=422,
-                detail=f"题材名非法：{pack['name']}（仅限字母/数字/-/_）")
-        errs = validate_genre_pack(pack)
-        if errs:
-            raise HTTPException(status_code=422,
-                                detail=f"合成包未过校验：{'；'.join(errs)}")
-        allowed = pack.get("allowed_cultures") or ["*"]
-        culture = derive_culture(allowed, genre_name=pack["name"])
-        # （allowed_cultures 引用不存在的文化 → 422 不落盘，口径同 init）
-        if "*" not in allowed:
-            reg_cultures = engine.kernel.registry.list_plugins(
-                "story.culture")["story.culture"]
-            if culture not in reg_cultures:
-                raise HTTPException(
-                    status_code=422,
-                    detail=f"题材 {pack['name']} 的 allowed_cultures "
-                           f"{allowed} 中无已注册文化（首条 {culture} 不在 registry）")
-        name = _persist_genre_pack(pack)
-        engine.kernel.registry.reload()
-        persisted = True
-    else:
-        # P14：文化默认 confucian_officialdom（不再从 card.culture 读取）
-        try:
-            m = engine.kernel.registry.get_manifest("story.genre", name)
-            culture = derive_culture(m.allowed_cultures, genre_name=name)
-        except Exception:
-            culture = "anglo-american"
-    if not name:
-        raise HTTPException(status_code=422, detail="卡缺 genre.name")
-    if project_name is not None:
-        # 开新项目：组合合法性预校验（当前 registry 与新栈同源扫 plugins 目录，
-        # synth 包已落盘，两边都可见）→ 整栈切换 → init 应用卡题材/文化。
-        try:
-            engine.kernel.registry.validate_combo(name, culture)
-        except StoryEngineError as e:
-            raise HTTPException(status_code=422, detail=str(e))
-        project_dir = PROJECTS_ROOT / project_name
-        _switch_to(project_dir)
-        resp = project_init({"genre": name, "culture": culture})
-        now = datetime.now().isoformat(timespec="seconds")
-        _write_project_meta(project_dir, name=project_name, genre=name,
-                            culture=culture, created_at=now,
-                            last_opened_at=now)
-        # P12.2：worldview 落盘（已通过校验）到新项目目录 + project.json 摘要
-        if wv_validated:
-            _write_json_atomic(
-                project_dir / "worldview.json",
-                {"layers": wv_layers, "preset": wv_preset,
-                 "created_at": datetime.now().isoformat(timespec="seconds")})
-            _write_project_meta(
-                project_dir,
-                worldview={"preset": wv_preset,
-                           "param_count": wv_param_count})
-        # P15.2：cast 落盘（用户自定义阵容 + persona → genesis 覆盖）
-        if cast_data:
-            _write_json_atomic(project_dir / "cast.json", cast_data)
-        # P17.3：宏观计划落盘（新项目目录）
-        if macro_plan_data is not None and isinstance(macro_plan_data, dict):
-            _write_json_atomic(project_dir / "macro_plan.json", macro_plan_data)
-            _write_project_meta(
-                project_dir,
-                macro={"template": macro_plan_data.get("act_structure", {})
-                                          .get("template", ""),
-                       "total_episodes": macro_plan_data.get("blueprint", {})
-                                          .get("total_episodes", 0),
-                       "has_plan": True})
-        return {**resp, "persisted": persisted, "genre": name,
-                "project": {"name": project_name, "genre": name,
-                            "culture": culture}}
-    resp = {**project_init({"genre": name, "culture": culture}),
-            "persisted": persisted, "genre": name}
-    # P12.2：无 project_name 时落盘到当前 engine.project_dir（init 原地切换后）
-    if wv_validated:
-        target = Path(engine.project_dir)
-        _write_json_atomic(
-            target / "worldview.json",
-            {"layers": wv_layers, "preset": wv_preset,
-             "created_at": datetime.now().isoformat(timespec="seconds")})
-        _write_project_meta(
-            target,
-            worldview={"preset": wv_preset,
-                       "param_count": wv_param_count})
-    # P15.2：cast 落盘到当前 engine.project_dir
-    if cast_data:
-        _write_json_atomic(Path(engine.project_dir) / "cast.json", cast_data)
-    # P17.3：宏观计划落盘（card.macro_plan 携带已生成的计划 dict）
-    macro_plan_data = card.get("macro_plan")
-    if macro_plan_data is not None and isinstance(macro_plan_data, dict):
-        target = Path(engine.project_dir)
-        _write_json_atomic(target / "macro_plan.json", macro_plan_data)
-        _write_project_meta(
-            target,
-            macro={"template": macro_plan_data.get("act_structure", {})
-                                      .get("template", ""),
-                   "total_episodes": macro_plan_data.get("blueprint", {})
-                                      .get("total_episodes", 0),
-                   "has_plan": True})
-    return resp
 
 
 # ---------- 宏观规划（P17.3：宏观叙事规划层端点） ----------
@@ -1262,7 +1359,6 @@ def macro_templates():
 
 class MacroPlanReq(BaseModel):
     template_name: str = "save_the_cat_15"
-    genre_name: str | None = None               # P19: 前端传入选中的题材名（开局向导期间 engine 还没切）
     worldview: dict | None = None
     cast: list | None = None
     regenerate_component: str | None = None       # P18.2: 单组件重摇
@@ -1271,60 +1367,12 @@ class MacroPlanReq(BaseModel):
 
 
 @app.post("/api/macro/plan")
-async def macro_plan_generate(req: MacroPlanReq):
-    """【P17.3 / P18.2】生成宏观计划（AI / mock 兜底）→ 返回 MacroPlan dict。
-
-    从当前 engine 的 bundle 取题材上下文 + target_length；worldview/cast
-    可选（向导阶段还没落盘时从 body 传入）。生成后不落盘——由 gacha confirm
-    在用户确认时落盘到项目目录。
-
-    P18.2 新增：
-    - regenerate_component: 指定单组件重摇（blueprint/acts/episodes/arcs/
-      foreshadow/pacing），此时 existing_plan 必须提供（保留其余组件）
-    - conflict_warnings: ③.5 的冲突标记，注入宏观生成 prompt 作为约束
-    """
-    template = req.template_name
-    if template not in MACRO_TEMPLATES:
-        raise HTTPException(
-            status_code=422,
-            detail=f"未知幕结构模板：{template}（可选：{sorted(MACRO_TEMPLATES)}）")
-    wv_profile = None
-    if req.worldview and isinstance(req.worldview.get("layers"), dict):
-        wv_profile = WorldviewProfile(layers=req.worldview["layers"])
-    cast_profile = req.cast if isinstance(req.cast, list) else None
-
-    # P19: 用前端传入的 genre_name 取 bundle（开局向导期间 engine 还没切到新题材）
-    bundle = engine.bundle
-    if req.genre_name and req.genre_name != engine.bundle.genre:
-        try:
-            m = engine.kernel.registry.get_manifest("story.genre", req.genre_name)
-            from story_engine.types import GenreBundle
-            culture = engine.bundle.culture.name  # 文化暂用当前的（confirm 时才确定）
-            bundle = GenreBundle(
-                genre=m.name, culture=culture,
-                language=engine.bundle.language,
-                target_length=m.params.get("target_length", 12) if hasattr(m, 'params') else 12,
-                platform="novel",
-                genre_params=m.params if hasattr(m, 'params') else {},
-                culture_params=engine.bundle.culture_params)
-        except Exception:
-            pass  # 回退到 engine.bundle
-
-    # P18.2: 冲突标记注入
-    conflict_warnings = req.conflict_warnings if isinstance(req.conflict_warnings, list) else None
-
-    # P18.2: 单组件重摇
-    if req.regenerate_component and req.existing_plan:
-        from story_engine.macro.generator import regenerate_component as _regen
-        plan = await _regen(
-            engine.kernel, bundle, wv_profile, cast_profile, template,
-            req.regenerate_component, req.existing_plan, conflict_warnings)
-        return macro_plan_to_dict(plan)
-
-    plan = await generate_macro_plan(
-        engine.kernel, bundle, wv_profile, cast_profile, template,
-        conflict_warnings=conflict_warnings)
-    return macro_plan_to_dict(plan)
+async def macro_plan_generate_legacy(req: MacroPlanReq):
+    """已废弃：P20 起开局向导宏观生成改用 WebSocket /api/gacha/{sid}/macro/stream。
+    保留 410 告知前端升级。"""
+    raise HTTPException(
+        status_code=410,
+        detail="此端点已废弃，请使用 WebSocket /api/gacha/{sid}/macro/stream")
 
 
 @app.get("/api/macro/plan")

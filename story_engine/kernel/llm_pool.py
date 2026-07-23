@@ -15,9 +15,12 @@
 """
 from __future__ import annotations
 
+import asyncio
+import json
 import os
 import time
 from dataclasses import dataclass
+from typing import AsyncGenerator
 
 import httpx
 from loguru import logger
@@ -85,6 +88,64 @@ class LLMPool:
         })
         self.call_log = self.call_log[-200:]
         return resp
+
+    async def call_stream(
+        self, prompt: str, *, purpose: str = "generate",
+        temperature: float = 0.7, max_tokens: int = 8192,
+    ) -> AsyncGenerator[str, None]:
+        """流式调用 LLM，逐 chunk yield delta text（P20）。
+
+        real 模式：httpx stream POST + SSE 行解析 → yield delta content。
+        mock 模式：把 mock_script 的完整响应切成小块 yield + 小延迟。
+        """
+        tag = "[LLM-STREAM][MOCK]" if self.is_mock else "[LLM-STREAM]"
+        logger.debug("{} 调用 | purpose={} | model={} | prompt:\n{}", tag,
+                     purpose, self.model, prompt)
+        if self.is_mock:
+            from .. import mock_script
+            text = mock_script.respond(purpose, prompt)
+            for i in range(0, len(text), 50):
+                yield text[i:i + 50]
+                await asyncio.sleep(0.05)
+            return
+        # real mode: SSE stream
+        headers = {"Authorization": f"Bearer {self.api_key}"}
+        if self.user_agent:
+            headers["User-Agent"] = self.user_agent
+        body: dict = {
+            "model": self.model,
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": max_tokens,
+            "stream": True,
+        }
+        if self._is_kimi_code:
+            body["temperature"] = 0.6
+            body["thinking"] = {"type": "disabled"}
+        else:
+            body["temperature"] = temperature
+        async with httpx.AsyncClient(timeout=300) as client:
+            async with client.stream(
+                "POST", f"{self.base_url.rstrip('/')}/chat/completions",
+                headers=headers, json=body,
+            ) as r:
+                if r.status_code != 200:
+                    raw = await r.aread()
+                    raise LLMError(self._friendly_error(
+                        r.status_code, raw.decode("utf-8", "replace")))
+                async for line in r.aiter_lines():
+                    if not line.startswith("data: "):
+                        continue
+                    data_str = line[6:]
+                    if data_str.strip() == "[DONE]":
+                        break
+                    try:
+                        chunk = json.loads(data_str)
+                    except (json.JSONDecodeError, ValueError):
+                        continue
+                    delta = (chunk.get("choices", [{}])[0]
+                             .get("delta", {}).get("content", ""))
+                    if delta:
+                        yield delta
 
     async def _mock_call(self, prompt: str, purpose: str) -> LLMResponse:
         from .. import mock_script

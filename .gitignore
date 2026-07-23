@@ -24,6 +24,8 @@ data/projects/*/story.db-shm
 data/projects/*/chapters.json
 data/projects/*/project.json
 data/projects/*/training_data/
+# P20: gacha 临时工作区
+data/projects/.tmp_gacha_*/
 
 # IDE
 .vscode/

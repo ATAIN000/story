@@ -176,19 +176,36 @@ def test_macro_templates_endpoint():
 
 
 def test_macro_plan_generate_endpoint():
-    """POST /api/macro/plan → mock 兜底产出完整 MacroPlan dict"""
+    """POST /api/macro/plan → P20 起已废弃（410）；WebSocket 替代。
+    改测 session-based begin → WebSocket 不走 TestClient（需 ws），
+    故此处验证旧端点返回 410。"""
     backend = import_backend_main()
     from fastapi.testclient import TestClient
     with TestClient(backend.app) as c:
         resp = c.post("/api/macro/plan", json={
             "template_name": "save_the_cat_15",
         })
-    assert resp.status_code == 200
-    data = resp.json()
-    assert "blueprint" in data
-    assert "act_structure" in data
-    assert "episode_outlines" in data
-    assert data["act_structure"]["template"] == "save_the_cat_15"
+    assert resp.status_code == 410
+
+
+def test_llm_call_stream_mock_mode():
+    """P20: LLMPool.call_stream mock 模式 → 逐 chunk yield delta text。"""
+    import asyncio
+    from story_engine.kernel.llm_pool import LLMPool
+    pool = LLMPool(mode="mock")
+    assert pool.is_mock
+
+    async def collect():
+        chunks = []
+        async for chunk in pool.call_stream(
+                "【CHAPTER=1】test", purpose="generate_chapter"):
+            chunks.append(chunk)
+        return chunks
+
+    chunks = asyncio.run(collect())
+    assert len(chunks) > 0
+    full = "".join(chunks)
+    assert len(full) > 0  # mock 产出了非空文本
 
 
 def test_macro_plan_get_404_without_file():

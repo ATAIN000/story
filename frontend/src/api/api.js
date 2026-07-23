@@ -2,7 +2,7 @@
  * api.js —— 后端端点薄封装（只管传输，不管字段语义；字段语义见 adapters.js）。
  * P6 端点全量：plan / generate(mode) / deletePlan / intervene / interventions /
  * hitlRespond / trainingStats / paragraphRewrite / characters（backend/main.py）。
- * P8 抽卡开局：gachaDraw / gachaConfirm / projectInit。
+ * P20 抽卡开局：gachaBegin / gachaSessionConfirm / gachaCancel（session 模式）。
  */
 
 const BASE = ''
@@ -57,13 +57,25 @@ export const api = {
   /* --- Meta-Generator（题材配置，FE-4 用） --- */
   metaConfig: (intent) => post('/api/meta/config', intent),
 
-  /* --- 抽卡开局（P13 简化：library 返回题材列表，synth 走 LLM 合成） ---
-     confirm body = {mode, genre:{name,source,yaml?}, note}，worldview 可选；
-     projectName 给了则平铺 project_name 键开新项目（重名 → 409，失败零副作用） */
-  gachaDraw: (mode = 'library') => post('/api/gacha/draw', { mode }),
-  gachaConfirm: (card, projectName = null) =>
-    post('/api/gacha/confirm', projectName ? { ...card, project_name: projectName } : card),
-  projectInit: (genre, culture) => post('/api/project/init', { genre, culture }),
+  /* --- 抽卡开局（P20：临时工作区 session 模式） ---
+     begin(genre_name) → {session_id, genre_title, genre, culture}
+     sessionDeriveCast(sid, worldview, language) → {cast: [...]}
+     sessionCrossCheck(sid, worldview, cast) → {warnings: [...]}
+     sessionConfirm(sid, projectName, {worldview?, cast?, macro_plan?}) → {ok, project}
+     cancel(sid) → {ok}
+     genres() → 题材列表（GET）
+     synthGenre() → AI 合成题材卡 */
+  gachaGenres: () => req('/api/gacha/genres'),
+  gachaSynth: () => post('/api/gacha/synth'),
+  gachaBegin: (genreName, culture = null) =>
+    post('/api/gacha/begin', culture ? { genre_name: genreName, culture } : { genre_name: genreName }),
+  gachaSessionDeriveCast: (sid, worldview = {}, language = {}) =>
+    post(`/api/gacha/${sid}/derive_cast`, { worldview, language }),
+  gachaSessionCrossCheck: (sid, worldview = null, cast = null) =>
+    post(`/api/gacha/${sid}/cross_check`, { worldview, cast }),
+  gachaSessionConfirm: (sid, projectName, extras = {}) =>
+    post(`/api/gacha/${sid}/confirm`, { project_name: projectName, ...extras }),
+  gachaCancel: (sid) => post(`/api/gacha/${sid}/cancel`),
 
   /* --- 多项目（P10.4） --- */
   projects: () => req('/api/projects'),
@@ -88,21 +100,16 @@ export const api = {
      evaluate(profile) → profile: {L0:{param:value},...}，返回 {allowed, violations} */
   worldviewSchema: () => req('/api/worldview/schema'),
   worldviewEvaluate: (profile) => post('/api/worldview/evaluate', { profile }),
-  /* P15.2：人物原型推导 — worldview+language profile → 建议阵容（含 persona） */
-  deriveCast: (worldview = {}, language = {}, genreName = null) =>
-    post('/api/worldview/derive_cast', { worldview, language, genre_name: genreName }),
+  /* P15.2：人物原型推导 — 已迁移到 session 端点（gachaSessionDeriveCast） */
 
   /* --- 宏观规划（P17.5：开局向导第⑤段） ---
      templates() → {templates[{name, description, beat_count}]}
-     planGenerate(body) → {template_name, worldview?, cast?} → MacroPlan dict
-     planGet() → 当前项目 macro_plan.json（无 → 404） */
+     planGet() → 当前项目 macro_plan.json（无 → 404）
+     P20: 宏观生成改用 WebSocket（GachaView 内直连） */
   macroTemplates: () => req('/api/macro/templates'),
-  macroPlanGenerate: (body) => post('/api/macro/plan', body),
   macroPlanGet: () => req('/api/macro/plan'),
 
-  /* P18.1: 跨层冲突检测 */
-  crossCheck: (worldview = null, cast = null, genreName = null) =>
-    post('/api/worldview/cross_check', { worldview, cast, genre_name: genreName }),
+  /* P18.1: 跨层冲突检测 — 已迁移到 session 端点（gachaSessionCrossCheck） */
 
   /* P18.3: 宏观进度 + 偏差检测 */
   macroProgress: () => req('/api/macro/progress'),
