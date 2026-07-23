@@ -1102,12 +1102,18 @@ class StoryEngine:
         snapshot_id = self.kernel.snapshot()
         head = self.kernel.query_world("head_tick")
 
-        title = f"第{chapter_no}章·群像"
+        title = f"第{chapter_no}章"
         import re as _re
+        # 接受多种标题格式：标题：xxx / # 第N章 xxx / 第N章 xxx
         m = _re.match(r"\s*标题[:：]\s*(.+)", final_text)
+        if not m:
+            m = _re.match(r"\s*#\s*(第.+章[^\n]*)", final_text)
+        if not m:
+            m = _re.match(r"\s*(第.+章[^\n]*)", final_text)
         if m:
-            title = m.group(1).strip()[:12]
-            final_text = final_text[m.end():].lstrip("\n")
+            title = m.group(1).strip()[:30]
+            # 去掉已匹配的标题行（保留正文）
+            final_text = _re.sub(r"^\s*(?:标题[:：]|#\s*)?第.+章[^\n]*\n+", "", final_text, count=1)
 
         record = {
             "chapter": chapter_no,
@@ -1214,7 +1220,7 @@ class StoryEngine:
         self, chapter_no: int, card, actions: list[dict]
     ) -> str:
         """简化 Realizer：把各 Actor 行动摘要拼成章节正文"""
-        lines = [f"标题：第{chapter_no}章·群像", ""]
+        lines = [f"标题：第{chapter_no}章", ""]
         if not actions:
             lines.append("（本轮无人行动）")
         else:
