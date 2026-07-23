@@ -143,12 +143,15 @@ class TestGachaDraw(unittest.TestCase):
         r = c.get("/api/gacha/genres")
         self.assertEqual(r.status_code, 200, r.text)
         body = r.json()
-        self.assertEqual(body["mode"], "library")
-        self.assertIn("genres", body)
-        self.assertTrue(body["genres"])
+        # P22：浏览版端点——分页 items + facets（旧平铺 {mode, genres} 已废弃）
+        self.assertGreaterEqual(body["total"], 300)
+        self.assertIn("items", body)
+        self.assertTrue(body["items"])
+        self.assertIn("facets", body)
         # 每条题材卡结构完整
-        for item in body["genres"]:
-            for key in ("name", "title", "desc", "culture_title", "cast_summary"):
+        for item in body["items"]:
+            for key in ("id", "title", "vibe", "tier", "tags",
+                        "default_culture", "recommended_presets"):
                 self.assertIn(key, item)
 
 

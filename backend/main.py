@@ -1393,12 +1393,8 @@ def _parse_and_validate_macro(text, template_name, total_episodes):
     return None
 
 
-# ---------- 题材列表（P20：前端 grid 读取；synth 模式保留但独立调用） ----------
-@app.get("/api/gacha/genres")
-def gacha_genres():
-    """P20：返回全量题材列表（前端 grid 点选用）。取代旧 POST /api/gacha/draw。"""
-    from story_engine.meta.gacha import _genre_list
-    return _genre_list(engine.kernel)
+# ---------- 题材列表：P22 起由前部 /api/gacha/genres（搜索/筛选/分页）提供 ----------
+# （旧 P20 平铺版端点已删——同名路由先注册先匹配，平铺 315 卡不可用）
 
 
 @app.post("/api/gacha/synth")
