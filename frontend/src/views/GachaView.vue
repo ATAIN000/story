@@ -267,16 +267,21 @@ async function loadMacroTemplates() {
   }
 }
 
+const macroElapsed = ref(0)
+let macroTimer = null
+
 async function generateMacro() {
   if (macroGenerating.value) return
   macroGenerating.value = true
+  macroElapsed.value = 0
+  macroTimer = setInterval(() => { macroElapsed.value += 1 }, 1000)
   try {
     const wvPayload = Object.keys(wvProfile.value).length > 0
       ? { layers: wvProfile.value } : null
     const castPayload = buildCastPayload()
     const body = {
       template_name: selectedTemplate.value || 'save_the_cat_15',
-      genre_name: selectedGenre.value || synthCard.value?.genre?.name || undefined,
+      genre_name: currentGenreName.value || undefined,
     }
     if (wvPayload) body.worldview = wvPayload
     if (castPayload) body.cast = castPayload
@@ -290,6 +295,8 @@ async function generateMacro() {
   } catch (e) {
     toastError(`宏观计划生成失败：${e.message}`)
   } finally {
+    clearInterval(macroTimer)
+    macroTimer = null
     macroGenerating.value = false
   }
 }
@@ -1072,8 +1079,18 @@ async function doConfirm() {
           <button class="btn-main" :disabled="macroGenerating"
                   data-testid="macro-generate"
                   aria-label="AI 生成宏观计划" @click="generateMacro">
-            {{ macroGenerating ? '生成中…' : '✦ AI 生成宏观计划' }}
+            {{ macroGenerating ? `生成中…（${macroElapsed}s）` : '✦ AI 生成宏观计划' }}
           </button>
+          <div v-if="macroGenerating" class="wv-macro-progress">
+            <span class="gc-spin" aria-hidden="true"></span>
+            <span class="wv-macro-prog-text">
+              {{ macroElapsed < 30 ? 'AI 正在构思故事蓝图、幕结构、分集梗概…' :
+                 macroElapsed < 60 ? '正在细化角色弧光与伏笔布局…' :
+                 macroElapsed < 120 ? '正在生成节奏曲线，即将完成…' :
+                 '生成时间较长，请耐心等待（LLM 正在产出完整 YAML）…' }}
+              <br><span class="wv-macro-prog-hint">通常需要 30-90 秒，取决于 LLM 响应速度</span>
+            </span>
+          </div>
         </div>
 
         <!-- 审阅面板：复用 MacroDashboard（compact + 重摇） -->
