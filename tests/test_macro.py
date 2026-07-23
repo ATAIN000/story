@@ -188,6 +188,45 @@ def test_macro_plan_generate_endpoint():
     assert resp.status_code == 410
 
 
+def test_cast_summary_accepts_none_and_id_field():
+    """P20 修复：cast=None 不崩；前端 id 字段可当人名。"""
+    from story_engine.macro.generator import _cast_summary, _build_prompt
+    from story_engine.types import GenreBundle
+
+    assert _cast_summary(None) == ""
+    assert _cast_summary([]) == ""
+    text = _cast_summary([{"id": "沈昭", "role": "主角", "persona": {}}])
+    assert "沈昭" in text
+
+    bundle = GenreBundle(
+        genre="mystery", culture="test",
+        genre_params={"title": "测试"}, culture_params={},
+    )
+    prompt = _build_prompt(bundle, None, None, "save_the_cat_15", 12, None)
+    assert isinstance(prompt, str) and len(prompt) > 50
+
+
+def test_macro_stream_ws_without_cast_completes():
+    """WS macro/stream 无 cast 字段时不应 TypeError 断连，应收到 complete。"""
+    backend = import_backend_main()
+    from fastapi.testclient import TestClient
+    with TestClient(backend.app) as c:
+        r = c.post("/api/gacha/begin", json={"genre_name": "mystery"})
+        assert r.status_code == 200
+        sid = r.json()["session_id"]
+        with c.websocket_connect(f"/api/gacha/{sid}/macro/stream") as ws:
+            ws.send_json({"template_name": "save_the_cat_15"})
+            saw_complete = False
+            # mock 骨架 JSON 按 80 字切片，可能数百帧 delta
+            for _ in range(500):
+                msg = ws.receive_json()
+                if msg.get("type") == "complete":
+                    assert isinstance(msg.get("plan"), dict)
+                    saw_complete = True
+                    break
+            assert saw_complete, "未收到 complete（可能仍因 cast=None 崩溃）"
+
+
 def test_llm_call_stream_mock_mode():
     """P20: LLMPool.call_stream mock 模式 → 逐 chunk yield delta text。"""
     import asyncio

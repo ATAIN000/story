@@ -161,11 +161,15 @@ def _build_prompt(bundle, worldview_profile, cast_profile,
     if worldview_profile and hasattr(worldview_profile, "to_prompt_text"):
         wv_text = worldview_profile.to_prompt_text()
 
-    # 人物完整信息
+    # 人物完整信息（None → []；兼容前端 id/name 两种字段）
+    cast_profile = cast_profile or []
     cast_text = _cast_summary(cast_profile)
     # P19.1：提取人物名白名单（硬约束注入，防止 LLM 自创名字）
-    cast_names = [c.get("name", "") for c in cast_profile
-                  if isinstance(c, dict) and c.get("name")]
+    cast_names = [
+        (c.get("name") or c.get("id") or "")
+        for c in cast_profile
+        if isinstance(c, dict) and (c.get("name") or c.get("id"))
+    ]
     cast_name_list = "、".join(cast_names) if cast_names else ""
 
     # 模板 beat 结构
@@ -455,12 +459,16 @@ def _dict_summary(d: dict, keys: list[str]) -> str:
     return "; ".join(parts) if parts else str(d)[:200]
 
 
-def _cast_summary(cast: list[dict]) -> str:
+def _cast_summary(cast: list[dict] | None) -> str:
     lines = []
-    for c in cast:
-        name = c.get("name", "?")
+    for c in cast or []:
+        if not isinstance(c, dict):
+            continue
+        name = c.get("name") or c.get("id") or "?"
         role = c.get("role", "")
-        persona = c.get("persona", {})
+        persona = c.get("persona") or {}
+        if not isinstance(persona, dict):
+            persona = {}
         lie = persona.get("arc_lie", "")
         truth = persona.get("arc_truth", "")
         want = persona.get("arc_want", "")

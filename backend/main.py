@@ -1223,58 +1223,76 @@ async def macro_stream(ws: WebSocket, sid: str):
         wv_profile = WorldviewProfile(layers=wv_data["layers"])
     cast_profile = req_data.get("cast")
     if not isinstance(cast_profile, list):
-        cast_profile = None
+        cast_profile = []
     conflict_warnings = req_data.get("conflict_warnings")
     if not isinstance(conflict_warnings, list):
         conflict_warnings = None
     total_episodes = getattr(bundle, "target_length", 12)
-    # mock 模式：直接骨架兜底，不流式（mock 也模拟流式体验）
-    if sess_kernel.llm.is_mock:
-        plan = _generate_skeleton_macro(
-            bundle, wv_profile, cast_profile, template, total_episodes)
-        # 模拟流式：把 YAML 文本切块推送
-        plan_dict = macro_plan_to_dict(plan)
-        import json as _json
-        plan_text = _json.dumps(plan_dict, ensure_ascii=False, indent=2)
-        for i in range(0, len(plan_text), 80):
-            await ws.send_json({"type": "delta",
-                                "text": plan_text[i:i + 80]})
-            await asyncio.sleep(0.03)
-        await ws.send_json({"type": "complete", "plan": plan_dict})
-        await ws.close()
-        return
-    # real 模式：LLM 流式
-    prompt = _build_macro_prompt(
-        bundle, wv_profile, cast_profile, template, total_episodes,
-        conflict_warnings)
-    full_text = ""
     try:
-        async for chunk in sess_kernel.llm.call_stream(
-                prompt, purpose="macro_plan", temperature=0.7,
-                max_tokens=8192):
-            full_text += chunk
-            await ws.send_json({"type": "delta", "text": chunk})
-    except Exception as e:
-        await ws.send_json({"type": "error",
-                            "msg": f"LLM 流式调用失败：{e}"})
-        # mock 兜底
-        plan = _generate_skeleton_macro(
-            bundle, wv_profile, cast_profile, template, total_episodes)
+        # mock 模式：直接骨架兜底，不流式（mock 也模拟流式体验）
+        if sess_kernel.llm.is_mock:
+            plan = _generate_skeleton_macro(
+                bundle, wv_profile, cast_profile, template, total_episodes)
+            # 模拟流式：把 YAML 文本切块推送
+            plan_dict = macro_plan_to_dict(plan)
+            import json as _json
+            plan_text = _json.dumps(plan_dict, ensure_ascii=False, indent=2)
+            for i in range(0, len(plan_text), 80):
+                await ws.send_json({"type": "delta",
+                                    "text": plan_text[i:i + 80]})
+                await asyncio.sleep(0.03)
+            await ws.send_json({"type": "complete", "plan": plan_dict})
+            await ws.close()
+            return
+        # real 模式：LLM 流式
+        prompt = _build_macro_prompt(
+            bundle, wv_profile, cast_profile, template, total_episodes,
+            conflict_warnings)
+        full_text = ""
+        try:
+            async for chunk in sess_kernel.llm.call_stream(
+                    prompt, purpose="macro_plan", temperature=0.7,
+                    max_tokens=8192):
+                full_text += chunk
+                await ws.send_json({"type": "delta", "text": chunk})
+        except Exception as e:
+            await ws.send_json({"type": "error",
+                                "msg": f"LLM 流式调用失败：{e}"})
+            # mock 兜底
+            plan = _generate_skeleton_macro(
+                bundle, wv_profile, cast_profile, template, total_episodes)
+            await ws.send_json({"type": "complete",
+                                "plan": macro_plan_to_dict(plan)})
+            await ws.close()
+            return
+        # 解析 + 校验
+        plan = _parse_and_validate_macro(full_text, template, total_episodes)
+        if plan is None:
+            # 解析失败 → mock 兜底
+            await ws.send_json({"type": "error",
+                                "msg": "LLM 输出解析失败，使用骨架兜底"})
+            plan = _generate_skeleton_macro(
+                bundle, wv_profile, cast_profile, template, total_episodes)
         await ws.send_json({"type": "complete",
                             "plan": macro_plan_to_dict(plan)})
         await ws.close()
+    except WebSocketDisconnect:
         return
-    # 解析 + 校验
-    plan = _parse_and_validate_macro(full_text, template, total_episodes)
-    if plan is None:
-        # 解析失败 → mock 兜底
-        await ws.send_json({"type": "error",
-                            "msg": "LLM 输出解析失败，使用骨架兜底"})
-        plan = _generate_skeleton_macro(
-            bundle, wv_profile, cast_profile, template, total_episodes)
-    await ws.send_json({"type": "complete",
-                        "plan": macro_plan_to_dict(plan)})
-    await ws.close()
+    except Exception as e:
+        logger.exception("macro_stream 未捕获异常 | sid={}", sid)
+        try:
+            await ws.send_json({"type": "error",
+                                "msg": f"宏观生成失败：{e}"})
+            plan = _generate_skeleton_macro(
+                bundle, wv_profile, cast_profile, template, total_episodes)
+            await ws.send_json({"type": "complete",
+                                "plan": macro_plan_to_dict(plan)})
+            await ws.close()
+        except Exception:
+            try:
+                await ws.close()
+            except Exception:
+                pass
 
 
 def _build_macro_prompt(bundle, worldview_profile, cast_profile,

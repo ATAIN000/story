@@ -312,12 +312,24 @@ async function generateMacro() {
     if (conflictAccepted.value && crossCheckWarnings.value.length > 0) {
       body.conflict_warnings = crossCheckWarnings.value
     }
-    /* P20: WebSocket 流式生成 */
+    /* P20: WebSocket 流式生成（Vite 需 ws:true 代理；关闭/超时必须 settle Promise） */
     macroPlan.value = await new Promise((resolve, reject) => {
+      let settled = false
+      const finish = (fn, arg) => {
+        if (settled) return
+        settled = true
+        clearTimeout(connectTimer)
+        try { ws.close() } catch { /* ignore */ }
+        fn(arg)
+      }
       const proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
       const wsUrl = `${proto}//${location.host}/api/gacha/${sessionId.value}/macro/stream`
       const ws = new WebSocket(wsUrl)
+      const connectTimer = setTimeout(() => {
+        finish(reject, new Error('WebSocket 连接超时（检查 Vite 是否代理 ws）'))
+      }, 15000)
       ws.onopen = () => {
+        clearTimeout(connectTimer)
         ws.send(JSON.stringify(body))
       }
       ws.onmessage = (ev) => {
@@ -327,18 +339,18 @@ async function generateMacro() {
             macroStreamText.value += msg.text
           } else if (msg.type === 'complete') {
             macroStreamText.value = ''
-            resolve(msg.plan)
+            finish(resolve, msg.plan)
           } else if (msg.type === 'error') {
             /* 错误但可能有 mock 兜底（complete 会跟随） */
             toastError(msg.msg || '宏观生成出错')
           }
         } catch { /* ignore parse errors */ }
       }
-      ws.onerror = () => reject(new Error('WebSocket 连接失败'))
+      ws.onerror = () => finish(reject, new Error('WebSocket 连接失败'))
       ws.onclose = () => {
-        if (macroStreamText.value) {
-          /* 流文本未清空说明未收到 complete */
-          reject(new Error('流式生成未完成'))
+        if (!settled) {
+          finish(reject, new Error(
+            macroStreamText.value ? '流式生成未完成' : 'WebSocket 已断开'))
         }
       }
     })
@@ -465,13 +477,14 @@ async function autoDeriveCast() {
   }
 }
 
-/* 确认时将 castCards 组装成 cast payload */
+/* 确认时将 castCards 组装成 cast payload（name 与 id 双写，兼容后端摘要） */
 function buildCastPayload() {
   if (castCards.value.length === 0) return null
   return castCards.value
     .filter(c => c.name.trim())
     .map(c => ({
       id: c.name.trim(),
+      name: c.name.trim(),
       role: c.role,
       persona: c.persona,
     }))
