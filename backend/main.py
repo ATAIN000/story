@@ -213,6 +213,8 @@ def _switch_to(project_dir: Path, genre_name: str | None = None,
     new_stack = _build_stack(Path(project_dir), genre_name=genre_name,
                              culture_name=culture_name)
     old_kernel = kernel
+    # P19.2：保留旧引擎的 runtime_overrides（项目切换后恢复到新引擎）
+    old_engine_runtime = getattr(engine, "_runtime_overrides", {})
     try:
         old_kernel.close()
     except Exception:
@@ -222,6 +224,12 @@ def _switch_to(project_dir: Path, genre_name: str | None = None,
     kernel = _stack["kernel"]
     llm_client = kernel.llm
     engine = _stack["engine"]
+    # P19.2：保留旧引擎的 runtime_overrides（settings 端点写的进程内覆盖），
+    # 否则项目切换后 eval_enabled/ir_first 等设置丢失（测试2 evaluation=None 根因）
+    try:
+        engine._runtime_overrides = dict(old_engine_runtime)
+    except Exception:
+        pass
     meta_gen = _stack["meta_gen"]
     training_pipeline = _stack["pipeline"]
     intervention_router = _stack["router"]
@@ -412,6 +420,33 @@ def _write_json_atomic(path: Path, data: dict) -> None:
     except OSError:
         tmp.unlink(missing_ok=True)
         raise
+
+
+def _auto_derive_cast(wv_layers: dict | None) -> list[dict] | None:
+    """P19.1：无用户 cast 时，从当前 engine 的题材 params + worldview 自动推导
+    阵容（含真实人物名 + persona）。返回 cast.json 格式 list[dict]，
+    推导失败（无题材/无引擎）→ None（不写 cast.json，退回旧行为）。
+
+    真名来源：genre params 的 cast 段 → prompt.characters（derive_cast 内部
+    复用 meta.cast.parse_cast 三级兜底前两级）。persona 由世界观参数推导。
+    """
+    try:
+        params = engine.bundle.genre_params
+    except Exception:
+        return None
+    if not params:
+        return None
+    try:
+        derived = wv_derive_cast(wv_layers, None, params)
+    except Exception:
+        return None
+    if not derived:
+        return None
+    return [
+        {"id": c.get("name", ""), "role": c.get("role", ""),
+         "persona": c.get("persona", {})}
+        for c in derived if c.get("name")
+    ]
 
 
 def _list_projects(root: Path) -> list[dict]:
@@ -1052,6 +1087,10 @@ def gacha_confirm(card: dict):
     cast_data = card.get("cast")
     if cast_data is not None and not isinstance(cast_data, list):
         raise HTTPException(status_code=422, detail="cast 必须是数组")
+    # P19.1：无用户 cast 时自动从题材 params + worldview 推导阵容（含真名 + persona），
+    # 确保所有项目都有 cast.json（不再只有选了 CHAR 层向导才生成）
+    if not cast_data:
+        cast_data = _auto_derive_cast(wv_layers if wv_validated else None)
     # P17.3：宏观计划（可选；card.macro_plan 携带已生成的计划 dict → confirm 时落盘）
     macro_plan_data = card.get("macro_plan")
     g = card.get("genre") or {}

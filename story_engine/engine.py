@@ -496,6 +496,8 @@ class StoryEngine:
         macro_ctx = self._build_macro_context(chapter_no)
         if macro_ctx is not None:
             card.macro_context = macro_ctx
+            # P19.3：key_events / foreshadow 覆盖检查 → feedback 注入
+            self._check_macro_coverage(card)
         self._pending_plan = card
         return card.to_dict()
 
@@ -522,7 +524,70 @@ class StoryEngine:
         macro_ctx = self._build_macro_context(chapter_no)
         if macro_ctx is not None:
             card.macro_context = macro_ctx
+            # P19.3：key_events / foreshadow 覆盖检查 → feedback 注入
+            self._check_macro_coverage(card)
         return card
+
+    def _check_macro_coverage(self, card) -> None:
+        """P19.3：检查决策卡是否覆盖宏观计划的 key_events 和 foreshadow 指令。
+
+        未覆盖项 → 追加到 macro_context['feedback']（list[str]），供 Actor
+        propose prompt 和 Realizer prompt 注入（_macro_context_text 渲染）。
+        有 macro_context 但无 key_events/foreshadow 指令 → feedback 为空（零变化）。
+        """
+        ctx = getattr(card, "macro_context", None)
+        if not ctx or not isinstance(ctx, dict):
+            return
+        feedback: list[str] = []
+
+        # --- key_events 覆盖检查 ---
+        required_events = ctx.get("key_events_required") or []
+        if required_events:
+            # 收集决策卡所有文本内容用于覆盖判断
+            beat_texts = " ".join(
+                str(b.get("phase", "")) + str(b.get("track_name", ""))
+                + "".join(str(p) for p in b.get("primitives", []))
+                for b in getattr(card, "beats", []))
+            advance_txt = " ".join(getattr(card, "advance", []))
+            seed_txt = " ".join(getattr(card, "seed", []))
+            card_text = beat_texts + " " + advance_txt + " " + seed_txt
+            for event in required_events:
+                # 简单关键词匹配：event 文本的核心词是否在决策卡文本中出现
+                keywords = [w for w in str(event)
+                            if len(w.strip()) > 1 and w.strip()
+                            not in ("的", "了", "在", "和", "与", "是", "为")]
+                # 逐字检查：event 中 >= 2 个连续中文字符出现在 card_text 中
+                matched = False
+                event_str = str(event)
+                for i in range(len(event_str) - 1):
+                    if event_str[i:i+2] in card_text:
+                        matched = True
+                        break
+                if not matched:
+                    feedback.append(
+                        f"宏观要求的关键事件未在决策卡中体现：{event}")
+
+        # --- foreshadow 覆盖检查 ---
+        fs_directives = ctx.get("foreshadow_directives") or []
+        if fs_directives:
+            active_payoff_ids = {
+                p.get("foreshadow_id", "")
+                for p in getattr(card, "active_payoffs", [])}
+            new_fs_names = {
+                f.get("content", "")[:4]
+                for f in getattr(card, "new_foreshadows", [])}
+            for directive in fs_directives:
+                if directive.get("action") == "plant":
+                    # plant 指令：检查 new_foreshadows 是否有对应条目
+                    d_name = directive.get("name", "")
+                    d_id = directive.get("id", "")
+                    if d_id not in active_payoff_ids and not any(
+                            d_name[:3] in nf for nf in new_fs_names):
+                        feedback.append(
+                            f"宏观要求埋设伏笔但决策卡未安排：{d_name}")
+
+        if feedback:
+            ctx["feedback"] = feedback
 
     async def _generate_chapter_llm_path(
         self, chapter_no: int, state: WorldState, t0: float, *, scripted: bool,
@@ -2036,6 +2101,9 @@ class StoryEngine:
         pace = ctx.get("pacing_directive") or {}
         if pace.get("reason"):
             parts.append(f"张力目标={pace['reason']}")
+        # P19.3：key_events / foreshadow 覆盖反馈注入 prompt
+        for fb in ctx.get("feedback") or []:
+            parts.append(f"⚠{fb}")
         return "；".join(parts)
 
     def _read_chapters(self) -> list[dict]:

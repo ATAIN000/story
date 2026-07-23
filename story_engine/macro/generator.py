@@ -163,6 +163,10 @@ def _build_prompt(bundle, worldview_profile, cast_profile,
 
     # 人物完整信息
     cast_text = _cast_summary(cast_profile)
+    # P19.1：提取人物名白名单（硬约束注入，防止 LLM 自创名字）
+    cast_names = [c.get("name", "") for c in cast_profile
+                  if isinstance(c, dict) and c.get("name")]
+    cast_name_list = "、".join(cast_names) if cast_names else ""
 
     # 模板 beat 结构
     act_structure = compute_acts(template_name, total_episodes)
@@ -233,6 +237,7 @@ def _build_prompt(bundle, worldview_profile, cast_profile,
 - 每条梗概、beat 描述、弧光里程碑都必须提到具体人物名和具体事件
 - logline 必须包含人物名+处境+核心抉择，不能是「一个X在Y世界中Z」的模板句
 - foreshadow 的 form 字段必须描述具体的伏笔呈现方式（如「一封未拆的信」而非「线索」
+{f"- 【人物名硬约束】所有人物名必须使用以下列表：[{cast_name_list}]，不得自创名字、不得使用泛称" if cast_name_list else ""}
 
 只输出 YAML，不要解释、前言后语或 markdown 代码围栏。
 """

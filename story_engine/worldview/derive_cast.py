@@ -5,6 +5,10 @@
 
 返回 2-4 个角色（1 主角 + 1-3 配角），每个含 persona 字典。
 素材来源：docs/角色原型与性格分类_完整调研v2.md + docs/世界观架构_参数全表.md。
+
+P19.1：接受可选 genre_params，从中提取真实人物名（复用 meta.cast.parse_cast
+三级兜底：cast 段 → prompt.characters → 题材原型推导名）。无 genre_params
+时退回原行为（泛称「主角」「重要配角」），向后兼容。
 """
 from __future__ import annotations
 
@@ -12,20 +16,29 @@ from .layers import option_label
 
 
 def derive_cast(worldview_layers: dict | None = None,
-                language_layers: dict | None = None) -> list[dict]:
+                language_layers: dict | None = None,
+                genre_params: dict | None = None) -> list[dict]:
     """从世界观 + 语言 profile 推导建议阵容。
 
     参数：
       worldview_layers: {L0: {param: value}, ...}（WorldviewProfile.layers 同构）
       language_layers: {LANG1: {param: value}, ...}（可选，补充人设标签推导）
+      genre_params: 题材插件 params dict（可选，P19.1 提取真实人物名）
 
     返回：[{name, role, persona: {pearson_primary, pearson_secondary,
       schmidt_goddess, schmidt_polarity, enneagram_type, enneagram_wing,
       narrative_function, arc_type, arc_lie, arc_want, arc_need, arc_truth,
       tropes, mckee_contradiction_text}}]
+
+    P19.1：name 优先从 genre_params 的 cast 段 / prompt.characters 提取（复用
+    meta.cast.parse_cast），取不到时用题材 archetype 推导合理名，最后退回泛称。
     """
     wv = _flat(worldview_layers)
     lang = _flat(language_layers)
+
+    # P19.1：从题材提取真实人物名（parse_cast 三级兜底：cast 段 →
+    # prompt.characters → mock 种子；mock 种子是包青天，不适合，所以只用前两级）
+    real_names = _extract_genre_names(genre_params)
 
     # 主角原型：从物理偏离度 + 形而上学推导
     pearson_main = _pearson_from_worldview(wv)
@@ -36,7 +49,7 @@ def derive_cast(worldview_layers: dict | None = None,
     func_main = "hero"
 
     protagonist = _make_char(
-        name="主角", role="主角",
+        name=real_names[0] if real_names else "主角", role="主角",
         narrative_function=func_main,
         pearson_primary=pearson_main,
         schmidt_goddess=schmidt_main,
@@ -49,7 +62,7 @@ def derive_cast(worldview_layers: dict | None = None,
     # 配角 1：互补原型（探索者/智者/照顾者，视主角而定）
     support1_pearson = _complementary_pearson(pearson_main)
     support1 = _make_char(
-        name="重要配角", role="配角",
+        name=real_names[1] if len(real_names) > 1 else "重要配角", role="配角",
         narrative_function="ally",
         pearson_primary=support1_pearson,
         schmidt_goddess="none",
@@ -63,7 +76,7 @@ def derive_cast(worldview_layers: dict | None = None,
     conflict = wv.get("conflict_types", "")
     if conflict in ("cosmic", "ideological", "civilizational"):
         villain = _make_char(
-            name="对手", role="反派",
+            name=real_names[2] if len(real_names) > 2 else "对手", role="反派",
             narrative_function="threshold_guardian",
             pearson_primary=_shadow_pearson(pearson_main),
             schmidt_goddess="none",
@@ -78,7 +91,7 @@ def derive_cast(worldview_layers: dict | None = None,
     acquisition = wv.get("acquisition_method", "")
     if acquisition in ("cultivation", "study", "bestowal"):
         mentor = _make_char(
-            name="引路人", role="导师",
+            name=real_names[3] if len(real_names) > 3 else "引路人", role="导师",
             narrative_function="mentor",
             pearson_primary="sage",
             schmidt_goddess="none",
@@ -257,6 +270,26 @@ def _contradiction_text(pearson: str, enneagram: str) -> str:
         ("sage", "9"): "追求内心平静却被迫面对外界冲突",
     }
     return pairs.get((pearson, enneagram), "外表坚强内心渴望被理解")
+
+
+def _extract_genre_names(genre_params: dict | None) -> list[str]:
+    """P19.1：从题材 params 提取真实人物名。
+
+    复用 meta.cast.parse_cast 的前两级（cast 段 → prompt.characters）；
+    第三级 mock 种子（包青天）不适用于新题材，故不使用。无可用名 → 空列表
+    （调用方退回泛称「主角」「重要配角」等）。
+    """
+    if not genre_params or not isinstance(genre_params, dict):
+        return []
+    try:
+        from ..meta.cast import _parse_l1, _parse_l2
+    except ImportError:
+        return []
+    members = _parse_l1(genre_params.get("cast"), genre_params)
+    if not members:
+        prompt = genre_params.get("prompt") or {}
+        members = _parse_l2(prompt.get("characters"), genre_params)
+    return [m.id for m in members if m.id]
 
 
 def _flat(layers: dict | None) -> dict[str, str]:
