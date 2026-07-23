@@ -447,6 +447,37 @@ def _check_c5(genre_params: dict, genre_name: str, wv: dict[str, str]) -> list[C
 
 
 # ============================================================
+# C6: 题材 × 世界观骨架三轴亲和（P22：同源 taxonomy）
+# ============================================================
+
+def _check_c6_affinity(genre_name: str, wv_preset: str | None) -> list[ConflictWarning]:
+    """题材与所选世界观骨架不亲和 → MEDIUM（可继续，不阻塞）。
+
+    亲和表取 genre_taxonomy（primary + secondary presets）；未知题材 /
+    未选骨架 → 不出警。
+    """
+    if not genre_name or not wv_preset:
+        return []
+    from ..meta.genre_taxonomy import (
+        is_preset_compatible, presets_for_genre, taxon_by_id)
+    if is_preset_compatible(genre_name, wv_preset):
+        return []
+    taxon = taxon_by_id(genre_name)
+    if taxon is None:
+        return []
+    recommended = "、".join(presets_for_genre(genre_name))
+    return [ConflictWarning(
+        type="C6",
+        severity="MEDIUM",
+        title="题材与骨架亲和度低",
+        description=(
+            f"题材「{taxon.title}」的推荐世界观骨架是 {recommended}，"
+            f"当前选择的「{wv_preset}」不在亲和列表内——生成可继续，"
+            "但题材承诺与底层世界规则可能互相稀释。"),
+        suggestion=f"改用推荐骨架（{recommended}），或在创作中刻意经营这种错位感。")]
+
+
+# ============================================================
 # 公开入口
 # ============================================================
 
@@ -455,6 +486,7 @@ def check_cross_layer(
     worldview_profile=None,
     cast_profile: list[dict] | None = None,
     genre_name: str = "",
+    wv_preset: str | None = None,
 ) -> list[ConflictWarning]:
     """跨层冲突检测主入口。
 
@@ -463,6 +495,7 @@ def check_cross_layer(
       worldview_profile: WorldviewProfile 实例 / {"layers": {...}} / flat dict
       cast_profile: 人物阵容 list[{name, role, persona}]
       genre_name: 题材名（用于关键词匹配）
+      wv_preset: 世界观骨架 key（P22 C6 亲和检测；None 跳过）
 
     返回：list[ConflictWarning]，按 severity 排序（HIGH > MEDIUM > LOW）
     """
@@ -476,6 +509,7 @@ def check_cross_layer(
     warnings.extend(_check_c3(wv))
     warnings.extend(_check_c4(genre_params, genre_name, wv))
     warnings.extend(_check_c5(genre_params, genre_name, wv))
+    warnings.extend(_check_c6_affinity(genre_name, wv_preset))
 
     # 按严重性排序
     severity_order = {"HIGH": 0, "MEDIUM": 1, "LOW": 2}

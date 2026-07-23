@@ -68,6 +68,9 @@ from story_engine.llm import LLMError  # noqa: E402
 from story_engine.logging_config import setup_logging  # noqa: E402
 from story_engine.meta import MetaGenerator, UserIntent  # noqa: E402
 from story_engine.meta.gacha import draw_card_async, derive_culture  # noqa: E402
+from story_engine.meta.genre_taxonomy import (  # noqa: E402
+    all_taxa, culture_for_genre, list_taxa, macro_templates_for_genre,
+    presets_for_genre, taxon_by_id, taxonomy_stats)
 from story_engine.macro import (  # noqa: E402
     TEMPLATES as MACRO_TEMPLATES, compute_acts as macro_compute_acts,
     generate_macro_plan, macro_plan_to_dict, check_cross_layer)
@@ -856,11 +859,20 @@ def worldview_schema():
     ``param_count`` 为当前已数据化参数总数（L0-L9 合计 71 + LANG1-LANG5 合计 15 = 86）。
     """
     all_layers = WV_LAYERS + WV_LANGUAGE_LAYERS + WV_CHARACTER_LAYERS
+    # P22：每个骨架附 recommended_genres（taxonomy 同源，primary 优先，截断 5 + 总数）
+    by_preset: dict[str, list[str]] = {}
+    for t in all_taxa():
+        by_preset.setdefault(t.primary_preset, []).append(t.title)
+    presets = []
+    for p in wv_preset_summaries():
+        titles = by_preset.get(p["key"], [])
+        presets.append({**p, "recommended_genres": titles[:5],
+                        "recommended_genres_total": len(titles)})
     return {
         "layers": all_layers,
         "param_count": len(WV_ALL_PARAMS),
         "layers_covered": [layer["id"] for layer in all_layers],
-        "presets": wv_preset_summaries(),
+        "presets": presets,
     }
 
 
@@ -989,6 +1001,45 @@ class GachaConfirmReq(BaseModel):
     macro_plan: dict | None = None
 
 
+@app.get("/api/gacha/genres")
+def gacha_genres(q: str = "", tags: str = "", tier: str = "",
+                 family: str = "", offset: int = 0, limit: int = 24):
+    """【P22】题材浏览：搜索（title/id/tag/vibe）+ 多 tag（逗号分隔，AND）
+    + tier/family 筛选 + 分页；facets 供前端 tag 云与族分层。"""
+    tag_list = [t.strip() for t in tags.split(",") if t.strip()]
+    rows, total = list_taxa(q=q, tags=tag_list, tier=tier,
+                            family=family, offset=offset, limit=limit)
+    items = [{
+        "id": t.id, "title": t.title, "family": t.family,
+        "family_title": t.family_title, "tier": t.tier,
+        "tags": list(t.tags), "vibe": t.vibe,
+        "default_culture": t.default_culture,
+        "recommended_presets": [t.primary_preset, *t.secondary_presets],
+        "recommended_macro_templates": list(t.macro_templates),
+        "legacy": t.legacy,
+    } for t in rows]
+    fam_counts: dict[str, list] = {}
+    tag_counts: dict[str, int] = {}
+    for t in all_taxa():
+        fam = fam_counts.setdefault(t.family, [t.family_title, 0])
+        fam[1] += 1
+        for tag in t.tags:
+            tag_counts[tag] = tag_counts.get(tag, 0) + 1
+    return {
+        "total": total, "offset": offset, "limit": limit,
+        "items": items,
+        "facets": {
+            "families": [{"id": k, "title": v[0], "count": v[1]}
+                         for k, v in sorted(fam_counts.items(),
+                                            key=lambda kv: -kv[1][1])],
+            "tags": [{"id": k, "count": v} for k, v in
+                     sorted(tag_counts.items(), key=lambda kv: -kv[1])],
+            "tiers": ["base", "hot", "fusion", "legacy"],
+        },
+        "stats": taxonomy_stats(),
+    }
+
+
 @app.post("/api/gacha/begin")
 def gacha_begin(req: GachaBeginReq):
     """P20：进入抽卡向导 → 创建临时工作区 engine（用用户选的题材）。
@@ -1017,8 +1068,24 @@ def gacha_begin(req: GachaBeginReq):
         genre_title = sess_engine.bundle.genre_params.get("title", genre_name)
     except Exception:
         genre_title = genre_name
-    return {"session_id": sid, "genre_title": genre_title,
+    resp = {"session_id": sid, "genre_title": genre_title,
             "genre": genre_name, "culture": sess_engine.culture.name}
+    # P22：三轴摘要（taxonomy 同源）——推荐骨架/宏观模板/标签/文化显示名
+    taxon = taxon_by_id(genre_name)
+    if taxon is not None:
+        resp["recommended_presets"] = list(presets_for_genre(genre_name))
+        resp["recommended_macro_templates"] = list(
+            macro_templates_for_genre(genre_name))
+        resp["tags"] = list(taxon.tags)
+        resp["family_title"] = taxon.family_title
+        try:
+            cm = engine.kernel.registry.get_manifest(
+                "story.culture", sess_engine.culture.name)
+            resp["culture_title"] = cm.params.get(
+                "title", sess_engine.culture.name)
+        except Exception:
+            resp["culture_title"] = sess_engine.culture.name
+    return resp
 
 
 @app.post("/api/gacha/{sid}/cancel")
@@ -1169,13 +1236,18 @@ def gacha_session_cross_check(sid: str, req: CrossCheckReq):
     genre_params = getattr(bundle, "genre_params", None) or {}
     genre_name = getattr(bundle, "genre", "")
     wv_profile = None
+    wv_preset = None
     if req.worldview and isinstance(req.worldview.get("layers"), dict):
         wv_profile = WorldviewProfile(layers=req.worldview["layers"])
+        wv_preset = req.worldview.get("preset")
     elif req.worldview:
         wv_profile = req.worldview
+        wv_preset = req.worldview.get("preset") \
+            if isinstance(req.worldview, dict) else None
     cast_profile = req.cast if isinstance(req.cast, list) else None
     warnings = check_cross_layer(
-        genre_params, wv_profile, cast_profile, genre_name)
+        genre_params, wv_profile, cast_profile, genre_name,
+        wv_preset=wv_preset)
     return {"warnings": [
         {"type": w.type, "severity": w.severity, "title": w.title,
          "description": w.description, "suggestion": w.suggestion}
@@ -1357,11 +1429,13 @@ TEMPLATES_META = {
 
 
 @app.get("/api/macro/templates")
-def macro_templates():
+def macro_templates(genre: str = ""):
     """【P17.3】返回 7 个幕结构模板列表（name + description + beat_count）。
 
     beat_count 取模板定义的 beat 总数（不含 act 级别元数据），供前端展示卡面。
+    【P22】可选 ?genre= 时按 taxonomy 标记 recommended（前端据此置顶/高亮）。
     """
+    recommended = set(macro_templates_for_genre(genre)) if genre else set()
     items = []
     for name, acts in MACRO_TEMPLATES.items():
         beat_count = sum(len(beats) for _, _, _, _, beats in acts)
@@ -1371,6 +1445,7 @@ def macro_templates():
             "title": meta[0],
             "description": meta[1],
             "beat_count": beat_count,
+            "recommended": name in recommended,
         })
     return {"templates": items}
 
