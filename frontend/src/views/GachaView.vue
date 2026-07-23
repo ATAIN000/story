@@ -694,6 +694,7 @@ async function doConfirm() {
                 :class="{ selected: selectedGenre === g.name }"
                 :aria-label="`选择题材：${g.title}。${g.desc}`"
                 :aria-pressed="selectedGenre === g.name"
+                data-testid="genre-card"
                 @click="chooseGenre(g.name)">
           <div class="gacha-genre-name">{{ g.title }}</div>
           <div class="gacha-genre-desc">{{ g.desc || '—' }}</div>
@@ -712,10 +713,12 @@ async function doConfirm() {
 
       <footer class="gacha-foot">
         <button class="btn-line gacha-synth-btn" :disabled="busy"
+                data-testid="synth-genre"
                 aria-label="让 AI 自由发挥，现场合成新题材" @click="synthGenre">
           <AppIcon name="zap" :size="12" /> 让 AI 自由发挥
         </button>
         <button class="btn-main" :disabled="busy || !hasSelection"
+                data-testid="gacha-next-skeleton"
                 aria-label="下一步：选择世界观骨架" @click="goSkeleton">
           下一步：选择骨架
         </button>
@@ -736,6 +739,7 @@ async function doConfirm() {
                   :class="{ selected: chosenPresetKey === preset.key }"
                   :aria-label="`选择骨架：${preset.name}。${preset.vibe}`"
                   :aria-pressed="chosenPresetKey === preset.key"
+                  data-testid="skeleton-card"
                   @click="choosePreset(preset.key)">
             <div class="wv-skel-name">{{ preset.name }}</div>
             <div class="wv-skel-vibe">{{ preset.vibe }}</div>
@@ -769,9 +773,9 @@ async function doConfirm() {
         </div>
 
         <footer class="gacha-foot">
-          <button class="btn-line" aria-label="返回题材选择" @click="backToTheme">← 返回题材</button>
+          <button class="btn-line" aria-label="返回题材选择" data-testid="skeleton-back" @click="backToTheme">← 返回题材</button>
           <button class="btn-main" :disabled="chosenPresetKey === null"
-                  aria-label="下一步：进入世界观向导" @click="goWizard">
+                  aria-label="下一步：进入世界观向导" data-testid="skeleton-next" @click="goWizard">
             下一步：进入向导
           </button>
         </footer>
@@ -885,6 +889,7 @@ async function doConfirm() {
                         :disabled="optionDisabled(param.key, opt.value)"
                         :aria-pressed="selectedValue(param.key) === opt.value"
                         :aria-label="`${param.label}：${opt.label}`"
+                        data-testid="wizard-param-chip"
                         :title="optionDisabled(param.key, opt.value)
                           ? optionDisabledReason(param.key, opt.value)
                           : (opt.hint || opt.label)"
@@ -908,12 +913,12 @@ async function doConfirm() {
           <!-- 底部导航 -->
           <footer class="wv-nav">
             <button class="btn-line" :disabled="currentLayerIdx === 0"
-                    aria-label="返回上一层" @click="prevLayer">← 上一层</button>
+                    aria-label="返回上一层" data-testid="wizard-prev-layer" @click="prevLayer">← 上一层</button>
             <button v-if="!isLastLayer" class="btn-main"
                     :disabled="currentLayerIdx >= layers.length - 1"
-                    aria-label="进入下一层" @click="nextLayer">下一层 →</button>
+                    aria-label="进入下一层" data-testid="wizard-next-layer" @click="nextLayer">下一层 →</button>
             <button v-else class="btn-main"
-                    aria-label="下一步：人物原型" @click="goCast">
+                    aria-label="下一步：人物原型" data-testid="wizard-go-cast" @click="goCast">
               下一步：人物原型 →
             </button>
           </footer>
@@ -927,6 +932,7 @@ async function doConfirm() {
         <div class="wv-cast-head">
           <p class="wv-intro">为每个角色配置人物原型（CHAR1-CHAR5）。主角必填，配角可选。点击「AI 自动分配」从当前世界观推导合理原型。</p>
           <button class="btn-line" :disabled="deriveLoading"
+                  data-testid="cast-auto-derive"
                   aria-label="从世界观+语言自动推导人物原型" @click="autoDeriveCast">
             {{ deriveLoading ? '推导中…' : '✦ AI 自动分配' }}
           </button>
@@ -935,7 +941,8 @@ async function doConfirm() {
         <!-- 角色卡列表 -->
         <div class="wv-cast-cards">
           <div v-for="(card, idx) in castCards" :key="idx" class="wv-cast-card"
-               :class="{ main: idx === 0 }">
+               :class="{ main: idx === 0 }"
+               :data-testid="`cast-card-${idx}`">
             <div class="wv-cast-card-head">
               <span class="wv-cast-badge" :class="{ main: idx === 0 }">{{ idx === 0 ? '主角' : `配角 ${idx}` }}</span>
               <input v-model.trim="card.name" class="wv-cast-name-input"
@@ -976,13 +983,13 @@ async function doConfirm() {
         </div>
 
         <button v-if="castCards.length < MAX_SUPPORTING + 1" class="wv-cast-add btn-line"
-                aria-label="添加配角" @click="addCastCard">+ 添加配角</button>
+                aria-label="添加配角" data-testid="cast-add" @click="addCastCard">+ 添加配角</button>
 
         <footer class="gacha-foot">
-          <button class="btn-line" aria-label="返回世界观向导" @click="backToWizard">← 返回向导</button>
+          <button class="btn-line" aria-label="返回世界观向导" data-testid="cast-back" @click="backToWizard">← 返回向导</button>
           <button class="btn-main"
                   :disabled="busy"
-                  aria-label="下一步：跨层冲突检测" @click="goCrossCheck">
+                  aria-label="下一步：跨层冲突检测" data-testid="cast-next-crosscheck" @click="goCrossCheck">
             下一步：冲突检测 →
           </button>
         </footer>
@@ -1021,10 +1028,11 @@ async function doConfirm() {
         </div>
 
         <footer class="gacha-foot">
-          <button class="btn-line" aria-label="返回人物原型" @click="backToCastFromCross">← 返回人物</button>
-          <button class="btn-line" aria-label="返回世界观向导修改设定" @click="backToWizardFromCross">🔧 回③修改设定</button>
+          <button class="btn-line" aria-label="返回人物原型" data-testid="crosscheck-back" @click="backToCastFromCross">← 返回人物</button>
+          <button class="btn-line" aria-label="返回世界观向导修改设定" data-testid="crosscheck-back-wizard" @click="backToWizardFromCross">🔧 回③修改设定</button>
           <button class="btn-main"
                   :disabled="busy"
+                  data-testid="crosscheck-accept"
                   aria-label="接受并继续到宏观规划" @click="acceptConflicts">
             {{ crossCheckWarnings.length > 0 ? '✅ 接受继续' : '✅ 进入宏观规划' }} →
           </button>
@@ -1049,6 +1057,7 @@ async function doConfirm() {
                   :class="{ selected: selectedTemplate === t.name }"
                   :aria-pressed="selectedTemplate === t.name"
                   :aria-label="`选择模板：${t.title || t.name}（${t.beat_count} 拍）`"
+                  data-testid="macro-template-card"
                   @click="selectedTemplate = t.name">
             <div class="wv-macro-tmpl-name">{{ t.title || t.name }}</div>
             <div v-if="t.description" class="wv-macro-tmpl-desc">{{ t.description }}</div>
@@ -1059,6 +1068,7 @@ async function doConfirm() {
         <!-- 生成按钮 -->
         <div class="wv-macro-gen-row">
           <button class="btn-main" :disabled="macroGenerating"
+                  data-testid="macro-generate"
                   aria-label="AI 生成宏观计划" @click="generateMacro">
             {{ macroGenerating ? '生成中…' : '✦ AI 生成宏观计划' }}
           </button>
@@ -1082,14 +1092,16 @@ async function doConfirm() {
         </div>
 
         <footer class="gacha-foot">
-          <button class="btn-line" aria-label="返回冲突检测" @click="stage = 'crosscheck'">← 返回冲突检测</button>
+          <button class="btn-line" aria-label="返回冲突检测" data-testid="macro-back" @click="stage = 'crosscheck'">← 返回冲突检测</button>
           <button v-if="macroPlan" class="btn-line" :disabled="macroGenerating"
+                  data-testid="macro-regenerate"
                   aria-label="重新生成宏观计划" @click="generateMacro">
             {{ macroGenerating ? '生成中…' : '↻ 全局重摇' }}
           </button>
-          <button class="btn-line" aria-label="跳过宏观计划，直接开工" @click="skipMacro">跳过</button>
+          <button class="btn-line" aria-label="跳过宏观计划，直接开工" data-testid="macro-skip" @click="skipMacro">跳过</button>
           <button ref="startBtn" class="btn-main"
                   :disabled="busy"
+                  data-testid="confirm-start"
                   aria-label="确认开工" @click="confirmMacro">
             {{ confirmBusy ? '开工中…' : '确认开工' }}
           </button>
@@ -1107,6 +1119,7 @@ async function doConfirm() {
         <div class="gd-name-row">
           <label class="gd-opt"><span>项目名称</span></label>
           <input v-model.trim="projectName" class="gd-input" :disabled="confirmBusy" maxlength="40"
+                 data-testid="project-name-input"
                  aria-label="新项目名，可用中文、字母、数字、空格、连字符和下划线" :placeholder="suggestedName">
           <div class="gd-hint" :class="{ bad: projectName && !nameValid }">
             可用中文/字母/数字/空格/-/_，≤40 字符，不能以空格或点开头结尾
@@ -1115,8 +1128,9 @@ async function doConfirm() {
 
         <div class="gd-act">
           <button ref="cancelBtn" class="btn-line" :disabled="confirmBusy" aria-label="取消，不开工"
-                  @click="cancelConfirm">取消</button>
+                  data-testid="confirm-cancel" @click="cancelConfirm">取消</button>
           <button class="btn-main" :disabled="confirmBusy || !nameValid"
+                  data-testid="confirm-ok"
                   :aria-label="`以新项目 ${projectName} 开工`"
                   @click="doConfirm">{{ confirmBusy ? '开工中…' : '确认开工' }}</button>
         </div>

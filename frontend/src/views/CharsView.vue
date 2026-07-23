@@ -191,6 +191,7 @@ async function submitIv() {
       <button v-for="c in vm.characters" :key="c.id" class="cl-item"
               :class="{ active: c.id === selected?.id }"
               :aria-current="c.id === selected?.id ? 'true' : undefined"
+              :data-testid="`char-item-${c.id}`"
               @click="selectedId = c.id">
         <span class="avatar" :style="{ background: colorOf(c.id) }">{{ c.id[0] }}</span>
         <span class="cl-meta">
@@ -224,6 +225,7 @@ async function submitIv() {
         <!-- 节点 -->
         <g v-for="n in nodes" :key="`n${n.id}`" class="g-node"
            :tabindex="0" role="button" :aria-label="`${n.id} · ${n.role}`"
+           :data-testid="`graph-node-${n.id}`"
            @click="selectedId = n.id"
            @mouseenter="onNodeEnter(n, $event)"
            @mouseleave="onNodeLeave"
@@ -262,7 +264,7 @@ async function submitIv() {
       </div>
 
       <!-- 角色介入按钮 -->
-      <button class="iv-fab" @click="openIv" title="角色介入" aria-label="角色介入">✋ 角色介入</button>
+      <button class="iv-fab" @click="openIv" title="角色介入" aria-label="角色介入" data-testid="char-intervene-fab">✋ 角色介入</button>
     </section>
 
     <!-- 右：详情 -->
@@ -313,7 +315,7 @@ async function submitIv() {
         </div>
       </div>
 
-      <button class="iv-btn" @click="openIv">✋ 角色介入：直改心智/弧线</button>
+      <button class="iv-btn" @click="openIv" data-testid="char-intervene-btn">✋ 角色介入：直改心智/弧线</button>
     </aside>
   </div>
 

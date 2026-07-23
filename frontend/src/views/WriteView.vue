@@ -259,9 +259,9 @@ function onParagraphTextUpdated() {
     <EmptyState icon="pen" title="开始你的第一章"
       desc="新项目从第 1 章开始。系统先给本章方案（轨道调度 + 节拍 + 钩子），你批准后才真正成稿。">
       <div class="es-cta">
-        <button class="btn-main" :disabled="busy || generating" @click="startPlan">看第 1 章方案</button>
+        <button class="btn-main" :disabled="busy || generating" data-testid="write-empty-plan" @click="startPlan">看第 1 章方案</button>
         <button class="btn-line" aria-label="抽卡开局，换一组题材文化配置再开工"
-                @click="emit('navigate', 'gacha')">抽卡开局</button>
+                data-testid="write-empty-gacha" @click="emit('navigate', 'gacha')">抽卡开局</button>
       </div>
     </EmptyState>
   </div>

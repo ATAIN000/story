@@ -90,9 +90,9 @@ async function openProject(p) {
       <h2>项目</h2>
       <span class="projects-sub">每个项目独立成书：章节、世界状态与题材配置互不干扰。</span>
       <button class="btn-line" :disabled="importing" aria-label="导入项目 zip 包"
-              @click="pickImport">{{ importing ? '导入中…' : '导入 zip' }}</button>
+              data-testid="import-zip" @click="pickImport">{{ importing ? '导入中…' : '导入 zip' }}</button>
       <button class="btn-main" aria-label="开新项目，去抽一组开局配置"
-              @click="emit('navigate', 'gacha')">开新项目</button>
+              data-testid="new-project" @click="emit('navigate', 'gacha')">开新项目</button>
       <input ref="fileInput" type="file" accept=".zip" hidden tabindex="-1"
              aria-hidden="true" @change="onImportFile">
     </header>
@@ -102,7 +102,8 @@ async function openProject(p) {
     </div>
 
     <div v-else-if="projects.length" class="proj-grid" role="region" aria-label="项目卡片区">
-      <article v-for="p in projects" :key="p.name" class="proj-card" :class="{ current: p.current }">
+      <article v-for="p in projects" :key="p.name" class="proj-card" :class="{ current: p.current }"
+               :data-testid="`project-card-${p.name}`">
         <div class="proj-top">
           <div class="proj-name">{{ p.name }}</div>
           <span v-if="p.current" class="proj-badge">当前</span>
@@ -114,11 +115,13 @@ async function openProject(p) {
         <div class="proj-time">最后打开 {{ p.lastOpened || '—' }}</div>
         <div class="proj-act">
           <button class="btn-main" :disabled="p.current || !!opening"
+                  data-testid="project-continue"
                   :aria-label="p.current ? `项目 ${p.name} 正在进行中` : `继续项目 ${p.name}，切换并跳到写作台`"
                   @click="openProject(p)">
             {{ opening === p.name ? '切换中…' : (p.current ? '进行中' : '继续') }}
           </button>
           <a class="btn-line proj-export" :href="api.exportProjectUrl(p.name)" :download="`${p.name}-story.zip`"
+             data-testid="project-export"
              :aria-label="`导出项目 ${p.name} 为 zip 下载`">
             <AppIcon name="download" :size="12" /> 导出
           </a>
@@ -129,7 +132,7 @@ async function openProject(p) {
     <EmptyState v-else icon="book" title="还没有项目"
                 desc="项目是一本书的全部：章节、世界状态、伏笔账与训练信号。从抽一组开局配置开始。">
       <button class="btn-main" aria-label="开新项目，去抽一组开局配置"
-              @click="emit('navigate', 'gacha')">开新项目</button>
+              data-testid="new-project-empty" @click="emit('navigate', 'gacha')">开新项目</button>
     </EmptyState>
   </div>
 </template>

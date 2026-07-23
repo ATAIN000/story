@@ -115,6 +115,7 @@ onMounted(refresh)
                 :class="{ active: view === item.id }"
                 :aria-current="view === item.id ? 'page' : undefined"
                 :aria-label="item.name"
+                :data-testid="`nav-${item.id}`"
                 @click="view = item.id">
           <span class="ic"><AppIcon :name="NAV_ICONS[item.id]" :size="16" /></span>
           {{ item.name }}<span class="cnt">{{ navCount(item.id) }}</span>
@@ -140,9 +141,10 @@ onMounted(refresh)
             <span class="dot" aria-hidden="true"></span>{{ stage || '生成中' }}
           </span>
           <div class="theme-ctl">
-            <button @click="bumpFont(-1)" title="缩小正文字号" aria-label="缩小正文字号">A−</button>
-            <button @click="bumpFont(1)" title="放大正文字号" aria-label="放大正文字号">A＋</button>
+            <button @click="bumpFont(-1)" title="缩小正文字号" aria-label="缩小正文字号" data-testid="font-decrease">A−</button>
+            <button @click="bumpFont(1)" title="放大正文字号" aria-label="放大正文字号" data-testid="font-increase">A＋</button>
             <button @click="toggleTheme" :aria-label="theme === 'night' ? '切换到日间模式' : '切换到夜读模式'"
+                    data-testid="theme-toggle"
                     :title="theme === 'night' ? '切换到日间模式' : '切换到夜读模式'">
               <AppIcon :name="theme === 'night' ? 'sun' : 'moon'" :size="13" />
               {{ theme === 'night' ? '日间' : '夜读' }}

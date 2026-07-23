@@ -100,7 +100,7 @@ const replaySteps = computed(() => {
         <span class="gc-time">先看方案 · 批准才动笔</span>
       </div>
       <div class="gc-done-row">
-        <button class="btn-main" :disabled="busy || generating" @click="emit('plan')">生成下一章</button>
+        <button class="btn-main" :disabled="busy || generating" data-testid="gen-plan" @click="emit('plan')">生成下一章</button>
         <span class="gc-note">系统先给本章方案（轨道调度 + 节拍 + 钩子），你批准后成稿<span style="opacity:.7">（plan → confirm）</span></span>
       </div>
     </template>
@@ -138,8 +138,8 @@ const replaySteps = computed(() => {
         </div>
       </div>
       <div class="gc-done-row">
-        <button class="btn-main" :disabled="generating" @click="emit('confirm')">批准生成</button>
-        <button class="btn-line" :disabled="busy || generating" @click="emit('discard')">作废</button>
+        <button class="btn-main" :disabled="generating" data-testid="gen-confirm" @click="emit('confirm')">批准生成</button>
+        <button class="btn-line" :disabled="busy || generating" data-testid="gen-discard" @click="emit('discard')">作废</button>
         <span class="gc-note">批准后系统按方案成稿并过硬约束自检</span>
       </div>
     </template>
@@ -203,16 +203,16 @@ const replaySteps = computed(() => {
       </div>
 
       <div class="gc-done-row">
-        <button class="btn-line" @click="emit('gotoReview')">进入审读 →</button>
-        <button class="btn-main" @click="emit('archive')">归档本章</button>
+        <button class="btn-line" data-testid="gen-goto-review" @click="emit('gotoReview')">进入审读 →</button>
+        <button class="btn-main" data-testid="gen-archive" @click="emit('archive')">归档本章</button>
         <button v-if="!confirmingRollback" class="btn-line danger" :disabled="generating"
-                @click="emit('rollbackRequest')">回滚本章</button>
+                data-testid="gen-rollback" @click="emit('rollbackRequest')">回滚本章</button>
       </div>
       <div v-if="confirmingRollback" class="gc-confirm" role="alertdialog">
         回滚将撤回第 {{ report?.chapterNo ?? reviewNo }} 章的全部事件，世界状态回到 tick {{ rollbackTick }}（本章保留为灰色「已回滚」记录）。
         <div class="cf-act">
-          <button class="btn-line danger" :disabled="generating" @click="emit('rollbackConfirm')">确认回滚</button>
-          <button class="btn-line" @click="emit('rollbackCancel')">取消</button>
+          <button class="btn-line danger" :disabled="generating" data-testid="gen-rollback-confirm" @click="emit('rollbackConfirm')">确认回滚</button>
+          <button class="btn-line" data-testid="gen-rollback-cancel" @click="emit('rollbackCancel')">取消</button>
         </div>
       </div>
     </template>

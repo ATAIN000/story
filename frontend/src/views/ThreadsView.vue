@@ -92,7 +92,8 @@ function fmtWhen(item) {
 
         <div v-if="col.items.length" class="kb-list">
           <div v-for="(item, i) in col.items" :key="`${col.key}-${i}`" class="fs-card"
-               :class="{ overdue: item.overdue }">
+               :class="{ overdue: item.overdue }"
+               :data-testid="`foreshadow-card-${item.id}`">
             <div class="fh">
               <span class="fid" :style="{ color: col.color }">{{ item.id }}</span>
               <span class="fwhen">{{ fmtWhen(item) }}</span>
@@ -102,7 +103,7 @@ function fmtWhen(item) {
             <div v-if="item.payoff" class="fb-meta payoff">→ {{ item.payoff }}</div>
             <!-- 操作（B7 未做 → 降级「记一笔」intent 入口） -->
             <div class="fops">
-              <button class="mini-btn" @click="openNote(item)">记一笔</button>
+              <button class="mini-btn" data-testid="foreshadow-note" @click="openNote(item)">记一笔</button>
             </div>
           </div>
         </div>

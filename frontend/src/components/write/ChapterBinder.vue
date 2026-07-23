@@ -46,6 +46,7 @@ const spark = computed(() => {
     <div v-if="!chapters.length" class="b-empty">还没有章节。<br>批准方案后，第一章会出现在这里。</div>
     <div v-for="(c, i) in chapters" :key="c.no + '@' + (c.timestamp || i)" class="ch-item"
          :class="{ active: c === activeCh, rb: c.rolledBack }"
+         :data-testid="`chapter-item-${c.no}`"
          tabindex="0" role="button" :aria-pressed="c === activeCh"
          @click="$emit('select', c.no)"
          @keydown.enter.prevent="$emit('select', c.no)" @keydown.space.prevent="$emit('select', c.no)">

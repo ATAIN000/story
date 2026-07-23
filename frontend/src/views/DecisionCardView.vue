@@ -127,6 +127,7 @@ function selectNo(no) { selectedNo.value = no }
       <button v-for="c in cardChapters" :key="c.no" role="tab"
               :aria-selected="c.no === selectedNo"
               class="dc-tab" :class="{ active: c.no === selectedNo, rb: c.rolledBack }"
+              :data-testid="`card-tab-${c.no}`"
               @click="selectNo(c.no)">
         第{{ c.no }}章<span class="dc-tab-t">{{ c.title }}</span>
       </button>

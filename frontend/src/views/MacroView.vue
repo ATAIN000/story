@@ -46,7 +46,7 @@ onMounted(loadPlan)
 
     <div v-else-if="!plan" class="macro-empty">
       <p>当前项目还没有宏观计划。</p>
-      <button class="btn-main" @click="emit('navigate', 'gacha')">前往开局向导生成</button>
+      <button class="btn-main" data-testid="macro-empty-gacha" @click="emit('navigate', 'gacha')">前往开局向导生成</button>
     </div>
 
     <MacroDashboard v-else :plan="plan" :current-episode="currentEpisode" />

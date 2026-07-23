@@ -173,7 +173,8 @@ onUnmounted(() => window.removeEventListener(THEME_EVENT, onTheme))
 
         <!-- 事件节点 -->
         <g class="tl-events">
-          <g v-for="(e, i) in placedEvents" :key="`e${i}`" class="g-node">
+          <g v-for="(e, i) in placedEvents" :key="`e${i}`" class="g-node"
+             :data-testid="`timeline-event-${e.chapter}-${e.track}`">
             <rect :x="e.x - NODE_W / 2" :y="e.y" :width="NODE_W" :height="NODE_H" rx="6"
                   fill="var(--s2)" stroke="var(--line2)" />
             <text :x="e.x" :y="e.y + 16" text-anchor="middle" font-size="11" fill="var(--ink)">

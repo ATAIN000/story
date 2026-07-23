@@ -156,7 +156,7 @@ function onFont(e) {
           </div>
 
           <div class="test-zone">
-            <button class="btn primary" :disabled="testing" @click="testConnection">
+            <button class="btn primary" :disabled="testing" data-testid="test-connection" @click="testConnection">
               {{ testing ? '测试中…' : '测试连接' }}
             </button>
             <span v-if="testResult" class="test-res" :class="{ ok: testResult.ok, fail: !testResult.ok }">
@@ -192,7 +192,7 @@ function onFont(e) {
             <label class="switch">
               <input type="checkbox" :checked="evalEnabled"
                      :disabled="loading"
-                     @change="onToggleEval" aria-label="自评迭代开关" />
+                     @change="onToggleEval" aria-label="自评迭代开关" data-testid="toggle-eval" />
               <span class="slider"></span>
             </label>
           </div>
@@ -205,7 +205,7 @@ function onFont(e) {
             <label class="switch">
               <input type="checkbox" :checked="irFirst"
                      :disabled="loading"
-                     @change="onToggleIr" aria-label="IR-first 优先开关" />
+                     @change="onToggleIr" aria-label="IR-first 优先开关" data-testid="toggle-ir-first" />
               <span class="slider"></span>
             </label>
           </div>
@@ -242,7 +242,8 @@ function onFont(e) {
               </div>
             </div>
             <a v-if="currentName" class="btn" :href="api.exportProjectUrl(currentName)"
-               :download="`${currentName}-story.zip`" aria-label="导出当前项目为 zip 下载">导出 zip</a>
+               :download="`${currentName}-story.zip`" aria-label="导出当前项目为 zip 下载"
+               data-testid="settings-export-zip">导出 zip</a>
           </div>
         </div>
       </section>
@@ -259,7 +260,8 @@ function onFont(e) {
               <div class="sw-name">主题</div>
               <div class="sw-sub">日间 / 夜读（图表类组件订阅主题切换事件重绘）</div>
             </div>
-            <button class="btn" @click="toggleTheme" :aria-label="theme === 'night' ? '切到日间' : '切到夜读'">
+            <button class="btn" @click="toggleTheme" :aria-label="theme === 'night' ? '切到日间' : '切到夜读'"
+                    data-testid="settings-theme-toggle">
               {{ theme === 'night' ? '☀ 切到日间' : '☾ 切到夜读' }}
             </button>
           </div>
@@ -268,7 +270,7 @@ function onFont(e) {
               <div class="sw-name">正文字号</div>
               <div class="sw-sub">仅影响手稿 .para 渲染（{{ fsSize }}px）</div>
             </div>
-            <select class="sel" :value="fsSize" @change="onFont" aria-label="正文字号">
+            <select class="sel" :value="fsSize" @change="onFont" aria-label="正文字号" data-testid="settings-font-size">
               <option v-for="n in FONT_OPTIONS" :key="n" :value="n">{{ n }}px</option>
             </select>
           </div>

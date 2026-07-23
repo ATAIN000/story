@@ -56,6 +56,7 @@ const genreLabel = computed(() => displayName(props.config, vm.value.genre) || '
       <button v-for="c in CATS" :key="c.name" class="w-cat"
               :class="{ active: c.name === activeCat }"
               :aria-current="c.name === activeCat ? 'true' : undefined"
+              :data-testid="`world-cat-${c.name}`"
               @click="activeCat = c.name">
         <div class="cn">{{ c.name }}</div>
         <div class="cc">{{ c.items.length }} 条</div>

@@ -101,7 +101,7 @@ async function genConfig() {
           <span class="card-tag">只读 · 改 yaml</span>
         </header>
         <div class="card-body">
-          <div v-for="g in groups" :key="g.point" class="ext-group">
+          <div v-for="g in groups" :key="g.point" class="ext-group" :data-testid="`plugin-group-${g.point}`">
             <div class="ext-point">{{ g.point }}</div>
             <div v-if="g.items.length" class="ext-items">
               <div v-for="name in g.items" :key="name" class="ext-item">
@@ -178,7 +178,7 @@ async function genConfig() {
               <span>目标章数</span>
               <input type="number" min="1" max="50" v-model.number="targetLength" aria-label="目标章数" />
             </label>
-            <button class="btn primary" :disabled="genBusy" @click="genConfig">
+            <button class="btn primary" :disabled="genBusy" data-testid="genre-lab-generate" @click="genConfig">
               {{ genBusy ? '生成中…' : '生成配置' }}
             </button>
           </div>

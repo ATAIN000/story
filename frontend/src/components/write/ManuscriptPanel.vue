@@ -87,6 +87,7 @@ const modeLabel = computed(() => MODE_LABEL[props.chapter.generationMode] || pro
       <div class="para"
            :class="{ sel: sel === i && opPara !== i, read: readSet.has(i) }"
            :style="{ fontSize: fsSize + 'px' }"
+           :data-testid="`paragraph-${i}`"
            tabindex="0" role="button" :aria-pressed="sel === i"
            @click="opPara === i ? null : clickPara(i)"
            @keydown.enter.prevent="clickPara(i)" @keydown.space.prevent="clickPara(i)">

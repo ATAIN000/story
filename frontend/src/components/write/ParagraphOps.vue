@@ -288,10 +288,10 @@ function jumpToRewrite() {
   <!-- 1. fab：贴附段落右上角（评审 8.2-#1）；panel 未展开时显示 -->
   <div v-if="!panel" class="fab" role="toolbar" aria-label="段落操作">
     <template v-if="!generating">
-      <button @click="startEdit" title="改字"><AppIcon name="pen" :size="12" /> 改字</button>
-      <button @click="pickPanel('wrong')" title="这不对…"><AppIcon name="alert" :size="12" /> 这不对…</button>
-      <button @click="pickPanel('rewrite')" title="重写这段"><AppIcon name="refresh" :size="12" /> 重写这段</button>
-      <button @click="pickPanel('note')" title="记一笔"><AppIcon name="pin" :size="12" /> 记一笔</button>
+      <button @click="startEdit" title="改字" data-testid="fab-edit"><AppIcon name="pen" :size="12" /> 改字</button>
+      <button @click="pickPanel('wrong')" title="这不对…" data-testid="fab-wrong"><AppIcon name="alert" :size="12" /> 这不对…</button>
+      <button @click="pickPanel('rewrite')" title="重写这段" data-testid="fab-rewrite"><AppIcon name="refresh" :size="12" /> 重写这段</button>
+      <button @click="pickPanel('note')" title="记一笔" data-testid="fab-note"><AppIcon name="pin" :size="12" /> 记一笔</button>
     </template>
     <span v-else class="fab-lock">正在生成中…</span>
   </div>
