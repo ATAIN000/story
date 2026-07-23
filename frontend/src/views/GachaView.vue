@@ -10,7 +10,7 @@
  */
 import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { api } from '../api/api'
-import { toGachaCardVM, toGenreListVM, displayName, toWorldviewSchemaVM, toEvaluateVM } from '../api/adapters'
+import { displayName, toWorldviewSchemaVM, toEvaluateVM } from '../api/adapters'
 import { presetToLayers } from '../api/worldviewPresets'
 import { useToast } from '../composables/useToast'
 import AppIcon from '../components/AppIcon.vue'
@@ -25,11 +25,38 @@ defineEmits(['refresh', 'navigate'])
 const { toast, toastError } = useToast()
 const dn = (id) => displayName(props.config, id)
 
-/* ===== 段 1：题材选择（P20 session 模式） ===== */
-const genreList = ref(null)                // toGenreListVM 输出
-const genres = computed(() => genreList.value?.genres ?? [])
+/* ===== 段 1：题材选择（P22 搜索/筛选/分页浏览，315 题材不平铺） ===== */
+const PAGE_SIZE = 24
+const genreItems = ref([])                 // 当前页 items（/api/gacha/genres 新版）
+const genreTotal = ref(0)
+const genreFacets = ref({ families: [], tags: [], tiers: [] })
+const genreStats = ref(null)
+const genreOffset = ref(0)
+const genreQuery = ref('')
+const selectedTags = ref([])               // tag 云多选（AND 语义）
+const selectedTier = ref('')               // '' | base | hot | fusion | legacy | recent（recent 走本地快照）
+const selectedFamily = ref('')
 const listLoading = ref(false)
-const selectedGenre = ref(null)            // 选中题材 name
+const selectedGenre = ref(null)            // 选中题材 id
+const selectedGenreItem = ref(null)        /* 选中时缓存的 item 快照：翻页/换筛选后
+                                              骨架步仍能读到 recommended_presets */
+/* 我的最近：localStorage 存完整 item 快照，recent tab 直接渲染 */
+const RECENT_KEY = 'gacha_recent_genres'
+function loadRecentGenres() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(RECENT_KEY) || '[]')
+    return Array.isArray(raw) ? raw.filter(g => g && g.id) : []
+  } catch { return [] }
+}
+const recentGenres = ref(loadRecentGenres())
+const TIER_TABS = [
+  { key: '', label: '全部' },
+  { key: 'base', label: '基类' },
+  { key: 'hot', label: '高热' },
+  { key: 'fusion', label: '融合' },
+  { key: 'legacy', label: '既有' },
+  { key: 'recent', label: '我的最近' },
+]
 const synthLoading = ref(false)
 const synthElapsed = ref(0)
 let synthTimer = null
@@ -52,7 +79,14 @@ const busy = computed(() => listLoading.value || confirmBusy.value)
 
 const NAME_RE = /^[\p{L}\p{N} _-]+$/u
 const RESERVED_RE = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i
-const selectedGenreVM = computed(() => genres.value.find(g => g.name === selectedGenre.value) ?? null)
+/* 选中题材 VM：当前页 → 最近快照 → 选中缓存，都找不到 → null（选中项可能不在当前页） */
+const selectedGenreVM = computed(() => {
+  const id = selectedGenre.value
+  if (!id) return null
+  return genreItems.value.find(g => g.id === id)
+    ?? recentGenres.value.find(g => g.id === id)
+    ?? (selectedGenreItem.value?.id === id ? selectedGenreItem.value : null)
+})
 const currentGenreName = computed(() => selectedGenre.value || synthCard.value?.genre?.name || null)
 const suggestedName = computed(() => {
   const g = selectedGenre.value || synthCard.value?.genre?.name || 'story'
@@ -98,6 +132,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   clearInterval(synthTimer)
   clearTimeout(evalTimer)
+  clearTimeout(searchTimer)
   /* P20: 离开时清理未完成的 gacha session */
   if (sessionId.value) {
     api.gachaCancel(sessionId.value).catch(() => {})
@@ -105,23 +140,122 @@ onBeforeUnmount(() => {
   }
 })
 
-/* ---- 段 1 题材列表 ---- */
+/* ---- 段 1 题材浏览（搜索/筛选/分页） ---- */
+let genreSeq = 0          /* 竞态守卫：只采用最后一次请求的响应 */
+let searchTimer = null
+
 async function loadGenres() {
-  if (listLoading.value) return
+  const seq = ++genreSeq
   listLoading.value = true
   try {
-    const d = await api.gachaGenres()
-    genreList.value = toGenreListVM(d)
-    if (d.note) toast(d.note)
+    const params = { offset: genreOffset.value, limit: PAGE_SIZE }
+    const q = genreQuery.value.trim()
+    if (q) params.q = q
+    if (selectedTags.value.length) params.tags = selectedTags.value.join(',')
+    if (selectedTier.value && selectedTier.value !== 'recent') params.tier = selectedTier.value
+    if (selectedFamily.value) params.family = selectedFamily.value
+    const d = await api.gachaGenres(params)
+    if (seq !== genreSeq) return
+    genreItems.value = d.items ?? []
+    genreTotal.value = d.total ?? 0
+    genreFacets.value = d.facets ?? { families: [], tags: [], tiers: [] }
+    genreStats.value = d.stats ?? null
   } catch (e) {
-    toastError(`题材加载失败：${e.message}`)
+    if (seq === genreSeq) toastError(`题材加载失败：${e.message}`)
   } finally {
-    listLoading.value = false
+    if (seq === genreSeq) listLoading.value = false
   }
 }
 
-function chooseGenre(name) {
-  selectedGenre.value = name
+/* 搜索框防抖 ~300ms；q 变化 offset 归零（recent tab 下输入则切回「全部」） */
+function onSearchInput() {
+  clearTimeout(searchTimer)
+  searchTimer = setTimeout(() => {
+    if (selectedTier.value === 'recent') selectedTier.value = ''
+    genreOffset.value = 0
+    loadGenres()
+  }, 300)
+}
+
+const topTags = computed(() => (genreFacets.value?.tags ?? []).slice(0, 20))
+
+function toggleTag(id) {
+  const i = selectedTags.value.indexOf(id)
+  if (i >= 0) selectedTags.value.splice(i, 1)
+  else selectedTags.value.push(id)
+  genreOffset.value = 0
+  loadGenres()
+}
+
+function clearTags() {
+  if (!selectedTags.value.length) return
+  selectedTags.value = []
+  genreOffset.value = 0
+  loadGenres()
+}
+
+function setTier(key) {
+  if (selectedTier.value === key) return
+  selectedTier.value = key
+  genreOffset.value = 0
+  if (key !== 'recent') loadGenres()   /* recent 纯前端渲染 localStorage 快照，不请求 */
+}
+
+function onFamilyChange() {
+  genreOffset.value = 0
+  loadGenres()
+}
+
+const hasActiveFilters = computed(() =>
+  !!genreQuery.value.trim() || selectedTags.value.length > 0 || !!selectedFamily.value
+  || (!!selectedTier.value && selectedTier.value !== 'recent'))
+
+function resetFilters() {
+  genreQuery.value = ''
+  selectedTags.value = []
+  selectedFamily.value = ''
+  if (selectedTier.value !== 'recent') selectedTier.value = ''
+  genreOffset.value = 0
+  loadGenres()
+}
+
+/* recent tab 渲染本地快照，其余渲染当前页 */
+const visibleGenres = computed(() =>
+  selectedTier.value === 'recent' ? recentGenres.value : genreItems.value)
+
+/* 分页 */
+const pageIndex = computed(() => Math.floor(genreOffset.value / PAGE_SIZE) + 1)
+const pageCount = computed(() => Math.max(1, Math.ceil(genreTotal.value / PAGE_SIZE)))
+function prevPage() {
+  if (genreOffset.value <= 0) return
+  genreOffset.value = Math.max(0, genreOffset.value - PAGE_SIZE)
+  loadGenres()
+}
+function nextPage() {
+  if (genreOffset.value + PAGE_SIZE >= genreTotal.value) return
+  genreOffset.value += PAGE_SIZE
+  loadGenres()
+}
+
+function pushRecentGenre(item) {
+  const snapshot = {
+    id: item.id, title: item.title, family: item.family,
+    family_title: item.family_title, tier: item.tier,
+    tags: item.tags ?? [], vibe: item.vibe ?? '',
+    default_culture: item.default_culture ?? '',
+    recommended_presets: item.recommended_presets ?? [],
+    recommended_macro_templates: item.recommended_macro_templates ?? [],
+    legacy: !!item.legacy,
+  }
+  const list = [snapshot, ...recentGenres.value.filter(g => g.id !== item.id)].slice(0, 8)
+  recentGenres.value = list
+  try { localStorage.setItem(RECENT_KEY, JSON.stringify(list)) } catch { /* 隐私模式写不进就只在内存 */ }
+}
+
+function chooseGenre(item) {
+  selectedGenre.value = item.id
+  selectedGenreItem.value = item
+  pushRecentGenre(item)
   synthCard.value = null     // 切回 library 选择时清 synth 卡
 }
 
@@ -135,6 +269,7 @@ async function synthGenre() {
     /* synth 返回精简卡 {mode, genre:{name,source,desc,yaml?}, note} */
     synthCard.value = d
     selectedGenre.value = null   // synth 选中态与列表互斥
+    selectedGenreItem.value = null
     if (d.note) toast(d.note)
   } catch (e) {
     toastError(`AI 合成失败：${e.message}`)
@@ -180,6 +315,36 @@ async function loadSchema() {
 
 /* ---- 段 2 骨架选择 ---- */
 const presetCards = computed(() => schemaVM.value?.presets ?? [])
+
+/* P22：题材推荐骨架（recommended_presets 取自已加载/缓存的题材 item，不新增请求） */
+const recommendedPresetKeys = computed(() => selectedGenreVM.value?.recommended_presets ?? [])
+function isRecommendedPreset(key) { return recommendedPresetKeys.value.includes(key) }
+/* 推荐命中排前（按推荐顺序），其余保持原序（sort 稳定） */
+const sortedPresetCards = computed(() => {
+  const rec = recommendedPresetKeys.value
+  if (!rec.length) return presetCards.value
+  return [...presetCards.value].sort((a, b) => {
+    const ra = rec.indexOf(a.key)
+    const rb = rec.indexOf(b.key)
+    return (ra === -1 ? 999 : ra) - (rb === -1 ? 999 : rb)
+  })
+})
+const presetNameOf = (key) => presetCards.value.find(p => p.key === key)?.name ?? key
+/* 推荐列表里第一个真实存在的骨架（兜底：推荐 key 可能不在 10 骨架内） */
+const firstRecommendedPreset = computed(() =>
+  recommendedPresetKeys.value.find(k => presetCards.value.some(p => p.key === k)) ?? null)
+/* 选了非推荐骨架时的温和提示；命中任一推荐 / blank / random 选中态都不提示 */
+const presetAffinityHint = computed(() => {
+  const k = chosenPresetKey.value
+  if (!k || k === 'blank') return null
+  if (!presetCards.value.some(p => p.key === k)) return null   /* random 尚未落定的中间态 */
+  const rec = firstRecommendedPreset.value
+  if (!rec || isRecommendedPreset(k)) return null
+  return { key: rec, name: presetNameOf(rec) }
+})
+function adoptRecommendedPreset() {
+  if (firstRecommendedPreset.value) choosePreset(firstRecommendedPreset.value)
+}
 
 function presetHighlights(preset) {
   if (!preset.summary) return []
@@ -266,24 +431,37 @@ function backToWizardFromCross() { stage.value = 'wizard' }
 /* ---- 段 4.5 → 段 5（宏观规划） ---- */
 function goMacro() {
   stage.value = 'macro'
-  if (macroTemplates.value.length === 0) loadMacroTemplates()
+  /* P22：模板列表带题材维度（recommended 标记），题材变了要重载 */
+  if (macroTemplates.value.length === 0 || macroGenreLoaded.value !== currentGenreName.value) {
+    loadMacroTemplates()
+  }
 }
 
 function backToCast() { stage.value = 'cast' }
 
 /* ===== 段 5：宏观规划函数 ===== */
+const macroGenreLoaded = ref(null)   /* 模板列表是按哪个题材加载的 */
 async function loadMacroTemplates() {
   if (macroTemplateLoading.value) return
   macroTemplateLoading.value = true
   try {
-    const res = await api.macroTemplates()
+    const genre = currentGenreName.value || ''
+    const res = await api.macroTemplates(genre)
     macroTemplates.value = res.templates ?? []
+    macroGenreLoaded.value = genre
   } catch (e) {
     toastError(`幕结构模板加载失败：${e.message}`)
   } finally {
     macroTemplateLoading.value = false
   }
 }
+
+/* P22：recommended=true 的模板排前（sort 稳定，其余保持原序） */
+const sortedMacroTemplates = computed(() => {
+  const list = macroTemplates.value
+  if (!list.some(t => t.recommended)) return list
+  return [...list].sort((a, b) => (b.recommended ? 1 : 0) - (a.recommended ? 1 : 0))
+})
 
 const macroElapsed = ref(0)
 let macroTimer = null
@@ -742,7 +920,7 @@ async function doConfirm() {
       <span class="gc-spin" aria-hidden="true"></span>AI 正在生成题材包，通常 20-60 秒（已等待 {{ synthElapsed }} 秒）…
     </div>
 
-    <!-- ===== 段 1：题材选择（P13 单栏卡片网格） ===== -->
+    <!-- ===== 段 1：题材选择（P22 搜索/筛选/分页浏览） ===== -->
     <template v-if="stage === 'theme'">
       <!-- synth 选中态展示 -->
       <div v-if="synthCard" class="gacha-synth-picked" role="status">
@@ -752,31 +930,115 @@ async function doConfirm() {
         <button class="btn-line btn-line-xs" aria-label="取消 AI 合成，回到题材列表" @click="synthCard = null">重新选择</button>
       </div>
 
-      <div v-else-if="listLoading" class="gacha-loading" role="status">
-        <span class="gc-spin" aria-hidden="true"></span>加载题材列表…
-      </div>
-      <section v-else-if="genres.length" class="gacha-genre-grid" role="group" aria-label="题材选择">
-        <button v-for="g in genres" :key="g.name"
-                class="gacha-genre-card"
-                :class="{ selected: selectedGenre === g.name }"
-                :aria-label="`选择题材：${g.title}。${g.desc}`"
-                :aria-pressed="selectedGenre === g.name"
-                data-testid="genre-card"
-                @click="chooseGenre(g.name)">
-          <div class="gacha-genre-name">{{ g.title }}</div>
-          <div class="gacha-genre-desc">{{ g.desc || '—' }}</div>
-          <div v-if="g.cultureTitle" class="gacha-genre-badge">
-            <AppIcon name="globe" :size="11" /> {{ dn(g.cultureTitle) || g.cultureTitle }}
+      <template v-else>
+        <!-- 搜索 + tier 页签 + 族筛选（P22 浏览工具条） -->
+        <div class="gg-filter">
+          <input v-model="genreQuery" class="gg-search" type="search"
+                 data-testid="genre-search"
+                 placeholder="搜索题材：名称 / 标签 / 描述"
+                 aria-label="搜索题材，输入后自动筛选"
+                 @input="onSearchInput">
+          <div class="gg-filter-row">
+            <div class="gg-tiers" role="group" aria-label="题材分层筛选">
+              <button v-for="t in TIER_TABS" :key="t.key || 'all'"
+                      class="gg-tier"
+                      :class="{ selected: selectedTier === t.key }"
+                      :aria-pressed="selectedTier === t.key"
+                      data-testid="genre-tier-tab"
+                      @click="setTier(t.key)">{{ t.label }}</button>
+            </div>
+            <label v-if="selectedTier !== 'recent'" class="gg-family-wrap">
+              <span class="gg-family-label">族</span>
+              <select v-model="selectedFamily"
+                      class="gg-family" data-testid="genre-family-filter"
+                      aria-label="题材族筛选（单选，可回到全部族）"
+                      @change="onFamilyChange">
+                <option value="">全部族</option>
+                <option v-for="f in genreFacets.families" :key="f.id" :value="f.id">
+                  {{ f.title }}（{{ f.count }}）
+                </option>
+              </select>
+            </label>
           </div>
-          <ul v-if="g.castSummary.length" class="gacha-genre-chips" aria-hidden="true">
-            <li v-for="c in g.castSummary.slice(0, 5)" :key="c">{{ c.length > 10 ? c.slice(0, 10) + '…' : c }}</li>
-          </ul>
-        </button>
-      </section>
-      <div v-else class="gacha-loading">
-        <span>暂无可用题材。</span>
-        <button class="btn-line" aria-label="重新加载题材列表" @click="loadGenres">重新加载</button>
-      </div>
+        </div>
+
+        <!-- tag 云：facets.tags 前 20，多选 AND，独立 chip 平铺 -->
+        <div v-if="selectedTier !== 'recent' && topTags.length" class="gg-tags-block">
+          <div class="gg-tags-head">
+            <span class="gg-tags-title">标签筛选（可多选）</span>
+            <button v-if="selectedTags.length" class="btn-line btn-line-xs"
+                    :aria-label="`清除已选的 ${selectedTags.length} 个标签`"
+                    @click="clearTags">清除（已选 {{ selectedTags.length }}）</button>
+          </div>
+          <div class="gg-tags" role="group" aria-label="标签筛选，可多选，且关系">
+            <button v-for="t in topTags" :key="t.id"
+                    class="gg-tag"
+                    :class="{ selected: selectedTags.includes(t.id) }"
+                    :aria-pressed="selectedTags.includes(t.id)"
+                    data-testid="genre-tag-chip"
+                    @click="toggleTag(t.id)">
+              <span class="gg-tag-name">{{ t.id }}</span>
+              <span class="gg-tag-count" aria-hidden="true">{{ t.count }}</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 三轴摘要条：选中题材的 题材 · 文化 · 推荐骨架 -->
+        <div v-if="selectedGenreVM" class="gg-axis" data-testid="genre-axis-summary" role="status">
+          <span>题材 <b>{{ selectedGenreVM.title }}</b></span>
+          <template v-if="selectedGenreVM.default_culture">
+            <span class="gg-axis-sep" aria-hidden="true">·</span>
+            <span>文化 <b>{{ dn(selectedGenreVM.default_culture) }}</b></span>
+          </template>
+          <template v-if="selectedGenreVM.recommended_presets?.length">
+            <span class="gg-axis-sep" aria-hidden="true">·</span>
+            <span>推荐骨架 <b>{{ selectedGenreVM.recommended_presets[0] }}</b></span>
+          </template>
+        </div>
+
+        <!-- 结果区：仅当前页 24 张卡 -->
+        <div v-if="listLoading" class="gacha-loading" role="status">
+          <span class="gc-spin" aria-hidden="true"></span>加载题材…
+        </div>
+        <section v-else-if="visibleGenres.length" class="gacha-genre-grid" role="group" aria-label="题材选择">
+          <button v-for="g in visibleGenres" :key="g.id"
+                  class="gacha-genre-card gg-card"
+                  :class="{ selected: selectedGenre === g.id }"
+                  :aria-label="`选择题材：${g.title}。${g.vibe}`"
+                  :aria-pressed="selectedGenre === g.id"
+                  data-testid="genre-card"
+                  @click="chooseGenre(g)">
+            <div class="gg-card-head">
+              <span class="gacha-genre-name">{{ g.title }}</span>
+              <span v-if="g.legacy" class="gg-legacy-badge">精修</span>
+            </div>
+            <div class="gg-card-vibe">{{ g.vibe || '—' }}</div>
+            <ul v-if="g.tags?.length" class="gg-card-tags" aria-hidden="true">
+              <li v-for="t in g.tags.slice(0, 3)" :key="t">{{ t }}</li>
+            </ul>
+            <div v-if="g.recommended_presets?.length" class="gg-card-rec">
+              <AppIcon name="sparkles" :size="11" /> 推荐骨架 {{ g.recommended_presets[0] }}
+            </div>
+            <span class="gg-card-check" aria-hidden="true"><AppIcon name="check" :size="12" /></span>
+          </button>
+        </section>
+        <div v-else class="gacha-loading">
+          <span>{{ selectedTier === 'recent' ? '还没有最近使用过的题材。' : '没有匹配的题材。' }}</span>
+          <button v-if="hasActiveFilters" class="btn-line"
+                  aria-label="清除全部筛选条件" @click="resetFilters">清除筛选</button>
+        </div>
+
+        <!-- 分页页脚（recent tab 为本地快照，不分页） -->
+        <div v-if="selectedTier !== 'recent'" class="gg-pager">
+          <button class="btn-line" :disabled="genreOffset <= 0 || listLoading"
+                  data-testid="genre-page-prev" aria-label="上一页题材" @click="prevPage">← 上一页</button>
+          <span class="gg-pager-info">
+            第 {{ pageIndex }}/{{ pageCount }} 页 · 共 <b data-testid="genre-total">{{ genreTotal }}</b> 个
+          </span>
+          <button class="btn-line" :disabled="genreOffset + PAGE_SIZE >= genreTotal || listLoading"
+                  data-testid="genre-page-next" aria-label="下一页题材" @click="nextPage">下一页 →</button>
+        </div>
+      </template>
 
       <footer class="gacha-foot">
         <button class="btn-line gacha-synth-btn" :disabled="busy"
@@ -800,15 +1062,27 @@ async function doConfirm() {
       <section v-else class="wv-skeleton" aria-label="世界观骨架选择">
         <p class="wv-intro">挑一个世界观骨架作为基底，进入向导后可逐层微调；或选「空白自定义」从零开始。</p>
 
+        <!-- P22：选了非推荐骨架时的温和提示，一键改选推荐 -->
+        <div v-if="presetAffinityHint" class="gg-skel-hint" role="status">
+          <span>该骨架与题材亲和度一般，推荐「{{ presetAffinityHint.name }}」。</span>
+          <button class="btn-line btn-line-xs" data-testid="skeleton-adopt-recommend"
+                  :aria-label="`采用推荐骨架：${presetAffinityHint.name}`"
+                  @click="adoptRecommendedPreset">采用推荐</button>
+        </div>
+
         <div class="wv-skel-grid" role="group" aria-label="骨架卡列表">
-          <button v-for="preset in presetCards" :key="preset.key"
+          <button v-for="preset in sortedPresetCards" :key="preset.key"
                   class="wv-skel-card"
                   :class="{ selected: chosenPresetKey === preset.key }"
                   :aria-label="`选择骨架：${preset.name}。${preset.vibe}`"
                   :aria-pressed="chosenPresetKey === preset.key"
                   data-testid="skeleton-card"
                   @click="choosePreset(preset.key)">
-            <div class="wv-skel-name">{{ preset.name }}</div>
+            <div class="wv-skel-name">
+              {{ preset.name }}
+              <span v-if="isRecommendedPreset(preset.key)" class="gg-rec-badge"
+                    data-testid="skeleton-recommend-badge">推荐</span>
+            </div>
             <div class="wv-skel-vibe">{{ preset.vibe }}</div>
             <ul class="wv-skel-chips" aria-hidden="true">
               <li v-for="h in presetHighlights(preset).slice(0, 4)" :key="h.paramKey">
@@ -1121,14 +1395,18 @@ async function doConfirm() {
           <span class="gc-spin" aria-hidden="true"></span>加载幕结构模板…
         </div>
         <div v-else class="wv-macro-templates" role="group" aria-label="幕结构模板选择">
-          <button v-for="t in macroTemplates" :key="t.name"
+          <button v-for="t in sortedMacroTemplates" :key="t.name"
                   class="wv-macro-tmpl-card"
                   :class="{ selected: selectedTemplate === t.name }"
                   :aria-pressed="selectedTemplate === t.name"
                   :aria-label="`选择模板：${t.title || t.name}（${t.beat_count} 拍）`"
                   data-testid="macro-template-card"
                   @click="selectedTemplate = t.name">
-            <div class="wv-macro-tmpl-name">{{ t.title || t.name }}</div>
+            <div class="wv-macro-tmpl-name">
+              {{ t.title || t.name }}
+              <span v-if="t.recommended" class="gg-rec-badge"
+                    data-testid="macro-template-recommend-badge">推荐</span>
+            </div>
             <div v-if="t.description" class="wv-macro-tmpl-desc">{{ t.description }}</div>
             <div class="wv-macro-tmpl-beats">{{ t.beat_count }} 拍</div>
           </button>
@@ -1242,4 +1520,92 @@ async function doConfirm() {
   word-break: break-all;
   line-height: 1.5;
 }
+
+/* ===== P22 题材浏览：搜索/筛选/分页（复用主题变量与 gacha 设计语言） ===== */
+/* 控件区：搜索独占一行，第二行 tier 页签 + 族筛选 */
+.gg-filter { margin-top: 20px; display: flex; flex-direction: column; gap: 12px; }
+.gg-search { width: 100%; border: 1px solid var(--line2); border-radius: 10px;
+  background: var(--s2); color: var(--ink); padding: 11px 16px; font-size: 14px; }
+.gg-search::placeholder { color: var(--faint); }
+.gg-search:focus { outline: 2px solid var(--primary); outline-offset: -1px; border-color: transparent; }
+.gg-filter-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center;
+  justify-content: space-between; }
+/* tier 胶囊页签组：未选描边，选中填充主色 */
+.gg-tiers { display: flex; flex-wrap: wrap; gap: 8px; }
+.gg-tier { font-size: 12.5px; padding: 6px 16px; border-radius: 999px;
+  border: 1px solid var(--line2); background: transparent; color: var(--ink2);
+  transition: border-color .15s, background .15s, color .15s; }
+.gg-tier:hover { border-color: var(--primary); color: var(--primary); }
+.gg-tier.selected { border-color: var(--primary); background: var(--primary);
+  color: #fffdf8; font-weight: 600; }
+/* 族筛选：label + 自绘 chevron 下拉 */
+.gg-family-wrap { display: inline-flex; align-items: center; gap: 8px; position: relative; }
+.gg-family-label { font-size: 12px; color: var(--faint); }
+.gg-family { appearance: none; border: 1px solid var(--line2); border-radius: 8px;
+  background: var(--s2); color: var(--ink); padding: 7px 30px 7px 12px;
+  font-size: 12.5px; max-width: 240px; cursor: pointer; }
+.gg-family:focus { outline: 2px solid var(--primary); outline-offset: -1px; border-color: transparent; }
+.gg-family-wrap::after { content: '▾'; position: absolute; right: 10px; top: 50%;
+  transform: translateY(-50%); color: var(--faint); font-size: 11px; pointer-events: none; }
+
+/* tag 云：标题行 + 独立 chip 平铺（多行自然换行） */
+.gg-tags-block { margin-top: 16px; }
+.gg-tags-head { display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 8px; }
+.gg-tags-title { font-size: 12px; color: var(--faint); letter-spacing: .04em; }
+.gg-tags { display: flex; flex-wrap: wrap; gap: 8px; }
+.gg-tag { display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; padding: 4px 10px 4px 12px; border-radius: 999px;
+  border: 1px solid var(--line2); background: var(--s2); color: var(--ink2);
+  transition: border-color .15s, background .15s, color .15s; }
+.gg-tag:hover { border-color: var(--primary); color: var(--primary); }
+.gg-tag.selected { border-color: var(--primary); background: var(--primary); color: #fffdf8; }
+.gg-tag.selected:hover { background: var(--primary-hover); color: #fffdf8; }
+.gg-tag-count { font-size: 10px; line-height: 1; padding: 2px 6px; border-radius: 999px;
+  background: var(--s3); color: var(--faint); }
+.gg-tag.selected .gg-tag-count { background: rgba(255, 253, 248, .28); color: #fffdf8; }
+
+/* 三轴摘要条：题材 · 文化 · 推荐骨架 */
+.gg-axis { margin-top: 14px; padding: 9px 14px; border: 1px solid var(--line2);
+  border-left: 3px solid var(--primary); border-radius: 8px; background: var(--s2);
+  font-size: 12px; color: var(--ink2); display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; }
+.gg-axis b { color: var(--ink); font-weight: 600; }
+.gg-axis-sep { color: var(--faint); }
+
+/* 题材卡：层次化垂直排布（title 行 → vibe 两行截断 → 小胶囊 tags → 底部推荐骨架） */
+.gg-card { position: relative; min-height: 160px; }
+.gg-card.selected { background: var(--primary-tint); }
+.gg-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.gg-card-head .gacha-genre-name { flex: 1 1 auto; min-width: 0; }
+.gg-card-vibe { font-size: 12px; color: var(--ink2); line-height: 1.6;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.gg-card-tags { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.gg-card-tags li { font-size: 10px; padding: 2px 9px; border-radius: 999px;
+  background: var(--s3); color: var(--ink2); white-space: nowrap; }
+.gg-card-rec { margin-top: auto; font-size: 10.5px; color: var(--faint);
+  display: inline-flex; align-items: center; gap: 4px; }
+/* 选中勾选角标：骑在卡片右上角边框上 */
+.gg-card-check { position: absolute; top: -7px; right: -7px; width: 20px; height: 20px;
+  border-radius: 50%; background: var(--primary); color: #fffdf8;
+  display: none; align-items: center; justify-content: center;
+  box-shadow: 0 0 0 2px var(--bg); }
+.gg-card.selected .gg-card-check { display: flex; }
+
+/* 精修徽标（legacy 题材，title 行内靠右） */
+.gg-legacy-badge { flex-shrink: 0; font: 500 10px var(--sans); padding: 1px 7px;
+  border-radius: 4px; border: 1px solid var(--violet); color: var(--violet); }
+
+/* 分页页脚 */
+.gg-pager { margin-top: 16px; display: flex; align-items: center; justify-content: center; gap: 12px; }
+.gg-pager-info { font-size: 12px; color: var(--faint); }
+.gg-pager-info b { color: var(--ink2); }
+
+/* 推荐徽标（骨架卡 / 宏观模板卡通用） */
+.gg-rec-badge { margin-left: 6px; font: 500 10px var(--sans); padding: 1px 7px;
+  border-radius: 4px; border: 1px solid var(--accent); color: var(--accent); vertical-align: 2px; }
+
+/* 骨架亲和度温和提示行 */
+.gg-skel-hint { margin: 10px 0 14px; padding: 9px 14px; border: 1px solid var(--line2);
+  border-left: 3px solid var(--accent); border-radius: 8px; background: var(--s2);
+  font-size: 12px; color: var(--ink2); display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 </style>

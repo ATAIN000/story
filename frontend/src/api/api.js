@@ -65,7 +65,12 @@ export const api = {
      cancel(sid) → {ok}
      genres() → 题材列表（GET）
      synthGenre() → AI 合成题材卡 */
-  gachaGenres: () => req('/api/gacha/genres'),
+  /* P22：题材浏览（搜索/筛选/分页）。params: {q?, tags?, tier?, family?,
+     offset?, limit?}——空值参数不上链（URLSearchParams 空串则不挂 ?）。 */
+  gachaGenres: (params = {}) => {
+    const qs = new URLSearchParams(params).toString()
+    return req('/api/gacha/genres' + (qs ? `?${qs}` : ''))
+  },
   gachaSynth: () => post('/api/gacha/synth'),
   gachaBegin: (genreName, culture = null) =>
     post('/api/gacha/begin', culture ? { genre_name: genreName, culture } : { genre_name: genreName }),
@@ -106,7 +111,9 @@ export const api = {
      templates() → {templates[{name, description, beat_count}]}
      planGet() → 当前项目 macro_plan.json（无 → 404）
      P20: 宏观生成改用 WebSocket（GachaView 内直连） */
-  macroTemplates: () => req('/api/macro/templates'),
+  /* P22: 可选 genre —— 带时后端按题材标记 recommended（前端据此置顶/高亮） */
+  macroTemplates: (genre = '') =>
+    req('/api/macro/templates' + (genre ? `?genre=${encodeURIComponent(genre)}` : '')),
   macroPlanGet: () => req('/api/macro/plan'),
 
   /* P18.1: 跨层冲突检测 — 已迁移到 session 端点（gachaSessionCrossCheck） */
