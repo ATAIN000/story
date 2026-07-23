@@ -69,7 +69,7 @@ class TestCultureBoundValidation(unittest.TestCase):
         这里直接调 registry.validate_combo 验证 culture_bound 防线本身。
         """
         with self.assertRaises(StoryEngineError):
-            # wuxia 的 allowed_cultures = [confucian_officialdom, taoist_chinese]
+            # wuxia 的 allowed_cultures = [confucian_officialdom, jianghu-martial]
             # scandinavian_protestant 不在内 → 必须拒绝
             self.kernel.registry.validate_combo("wuxia", "scandinavian_protestant")
 

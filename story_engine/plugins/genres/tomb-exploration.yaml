@@ -10,7 +10,7 @@ fusion:
   core_conflict: "科学的考古方法 vs 超自然的风水秘术和鬼怪；贪欲驱动探险 vs 死亡如影随形"
   fusion_formula: "风水秘术/民俗传说 + 探险悬疑 + 团队配置 + 历史谜团"
 culture_bound: true                  # 盗墓流深度绑定中国民俗
-allowed_cultures: ["chinese_folk", "confucian_officialdom"]
+allowed_cultures: ["confucian_officialdom"]  # P22 幽灵文化 chinese_folk 清除（未注册）
 
 params:
   title: "盗墓探险"  # P9.1 中文显示名（id 仍为功能键，不变）

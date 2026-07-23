@@ -45,12 +45,12 @@ NEW_GENRES = {
 ORIGINAL_GENRES = {"mystery", "romance", "wuxia"}
 ALL_GENRES = NEW_GENRES | ORIGINAL_GENRES
 
-# culture_bound 题材的声明白名单（按各 yaml 实际声明值）
+# culture_bound 题材的声明白名单（按各 yaml 实际声明值；P22 幽灵文化已清零）
 CULTURE_BOUND = {
-    "folk-cthulhu": ["chinese_folk", "confucian_officialdom"],
-    "supernatural-management": ["chinese_folk", "confucian_officialdom"],
-    "tomb-exploration": ["chinese_folk", "confucian_officialdom"],
-    "wuxia": ["confucian_officialdom", "taoist_chinese"],
+    "folk-cthulhu": ["confucian_officialdom"],
+    "supernatural-management": ["confucian_officialdom"],
+    "tomb-exploration": ["confucian_officialdom"],
+    "wuxia": ["confucian_officialdom", "jianghu-martial"],
 }
 
 # 运行时三键（Showrunner/调度直接消费）；prompt 五键 + phase_beats 五态
@@ -58,8 +58,8 @@ CORE_KEYS = ("tracks", "beats_per_chapter", "payoff_window")
 PROMPT_KEYS = ("role", "setting", "characters", "style", "hard_requirements")
 TODOROV_PHASES = ("equilibrium", "disruption", "recognition",
                   "repair", "new_equilibrium")
-# wuxia：Phase 2 遗留，缺 prompt/phase_beats，引擎有设计内兜底（见模块 docstring）
-PROMPT_SECTION_GENRES = ALL_GENRES - {"wuxia"}
+# P22：wuxia 已补齐 prompt/phase_beats，全题材均需含这两段
+PROMPT_SECTION_GENRES = ALL_GENRES
 
 # ② 代表题材：5 新 + 3 旧
 REPRESENTATIVE = ["mystery", "romance", "wuxia", "cyberpunk-xianxia",
@@ -81,9 +81,10 @@ class TestAllGenresLoadAndValidate(unittest.TestCase):
             pass
 
     def test_registry_enumerates_all_29_genres(self):
+        # P22：codegen 扩库后 ≥300；29 个 legacy 手工包必须全部仍在册
         genres = self.kernel.registry.list_plugins("story.genre")["story.genre"]
-        self.assertEqual(len(genres), 29)
-        self.assertEqual(set(genres), ALL_GENRES)
+        self.assertGreaterEqual(len(genres), 300)
+        self.assertTrue(ALL_GENRES <= set(genres))
 
     def test_validate_combo_with_confucian_officialdom(self):
         for genre in sorted(ALL_GENRES):

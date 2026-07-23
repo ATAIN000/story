@@ -7,7 +7,8 @@ extension_point: story.genre
 activation_events: ["on_genre:wuxia"]
 
 culture_bound: true
-allowed_cultures: [confucian_officialdom, taoist_chinese]
+# P22 幽灵文化 taoist_chinese → 已注册的 jianghu-martial
+allowed_cultures: [confucian_officialdom, jianghu-martial]
 
 params:
   title: "武侠江湖"  # P9.1 中文显示名（id 仍为功能键，不变）
@@ -39,3 +40,35 @@ params:
   foreshadow_templates:
     - {content: "师父的欲言又止", trigger: "身份揭晓", payoff: "身世之谜"}
   active_critics: [character_motivation, setting_consistency, plot_coherence, emotion_arc]
+
+  # P22：补齐 H7 门禁三段（prompt/phase_beats/evaluation_weights）
+  evaluation_weights:
+    情节连贯: 0.25
+    设定一致性: 0.20
+    角色动机: 0.15
+    对话真实度: 0.15
+    主题深度: 0.10
+    套路检测: 0.10
+    感官细节: 0.05
+  prompt:
+    role: "武侠小说作者"
+    setting: "架空古代江湖，门派林立，恩怨分明，武功有明确传承与上限"
+    characters: "主角（身负恩怨的江湖客）、师父/对手/同道（依本章决策卡阵容）"
+    style: "800-1200字，白描硬派，招式与规矩并重"
+    hard_requirements:
+      - "武功不得超出设定上限，胜负须有铺垫"
+      - "江湖规矩一旦立下就必须被遵守，违背须付出代价"
+      - "禁用现代器物与超自然力量直接破局"
+  phase_beats:
+    equilibrium:
+      - {id: jianghu_daily, desc: "门派日常与恩怨前史", primitive: GoalFormation}
+    disruption:
+      - {id: grudge_sparks, desc: "恩怨引爆或师门遭变", primitive: TurningPoint}
+    recognition:
+      - {id: truth_of_grudge, desc: "恩怨真相与幕后浮现", primitive: Revelation}
+    repair:
+      - {id: training_cost, desc: "历练与代价，武学突破", primitive: Sacrifice}
+      - {id: duel_setup, desc: "约战与规矩确认", primitive: Conflict}
+    new_equilibrium:
+      - {id: duel_settle, desc: "对决了断，恩怨两清", primitive: Recognition}
+      - {id: next_hook, desc: "新的江湖风波钩子", primitive: Suspense}

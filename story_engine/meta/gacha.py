@@ -248,9 +248,15 @@ def derive_culture(allowed_cultures: list | None, genre_name: str | None = None)
     allowed = allowed_cultures or ["*"]
     if "*" not in allowed:
         return allowed[0] if allowed else "confucian_officialdom"
-    # 通配：按题材推荐
+    # 通配：先查手工映射（legacy 精修，如 romance=古代言情 → 儒家官场，
+    # 优先级高于 taxonomy 的粗粒度默认值），再查 taxonomy 推荐文化
     if genre_name and genre_name in GENRE_CULTURE_HINT:
         return GENRE_CULTURE_HINT[genre_name]
+    if genre_name:
+        from .genre_taxonomy import culture_for_genre
+        taxon_culture = culture_for_genre(genre_name)
+        if taxon_culture:
+            return taxon_culture
     non_star = [c for c in allowed if c != "*"]
     return non_star[0] if non_star else "anglo-american"
 

@@ -7,6 +7,12 @@ from __future__ import annotations
 
 from ..types import PluginNotFoundError
 from ..types_meta import StoryConfig, UserIntent
+from .genre_taxonomy import all_taxa
+
+# P22：codegen 生成包与 legacy 手工包共用大量题材词，300+ 候选下纯 Jaccard
+# 退化（生成包文档短、命中即高分，抢占经典路由）。路径 B 候选收敛到 legacy
+# 精修包；生成题材由开局浏览 UI（taxonomy 搜索/筛选）显式选择。
+_LEGACY_IDS = {t.id for t in all_taxa() if t.legacy}
 
 
 def _tokenize(text: str) -> set[str]:
@@ -50,6 +56,14 @@ class RAGCombinator:
         best_genre = None
         best_score = -1.0
         for genre_name in plugins:
+            # P22：候选收敛到 legacy 精修包。codegen 生成包（286 个）与 legacy
+            # 共用大量题材词，且文档短而泛化——300+ 候选下 Jaccard 退化成分数
+            # 全压 0.003 的噪声排序，经典路由被生成包抢占（实测「破案悬疑」→
+            # low-fantasy-heist，因生成包轨道名含「破案」而 mystery 手工包全文
+            # 是包青天具体内容、零命中）。生成题材经开局浏览 UI 显式选择
+            # （taxonomy 搜索/筛选），不走自由文本相似度路由。
+            if genre_name not in _LEGACY_IDS:
+                continue
             try:
                 manifest = self.kernel.registry.get_manifest("story.genre", genre_name)
             except PluginNotFoundError:

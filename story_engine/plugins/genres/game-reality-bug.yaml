@@ -1,0 +1,164 @@
+manifest_version: 1
+name: game-reality-bug
+extension_point: story.genre
+activation_events:
+- on_genre:game-reality-bug
+fusion:
+  type: base
+  parent_genres:
+  - game-reality
+  core_conflict: 游戏现实品类下的「BUG成神」叙事发动机
+  fusion_formula: 游戏现实 × bug
+culture_bound: false
+allowed_cultures:
+- '*'
+params:
+  title: 游戏现实·BUG成神
+  pacing_curve: 游戏现实·BUG成神节奏：建置→冲突升级→反转→收束
+  power_system: narrative_driven
+  emotion_arcs:
+  - man_in_hole
+  - cinderella
+  conflict_types:
+  - type: cognitive
+    weight: 0.3
+  - type: relational
+    weight: 0.3
+  - type: physical
+    weight: 0.2
+  - type: political
+    weight: 0.2
+  information_distribution: partial
+  max_red_herrings: 2
+  resolution_pattern: 在「游戏现实·BUG成神」核心冲突中完成主题兑现
+  main_track: A
+  theme_track: E
+  payoff_window: 2
+  beats_per_chapter: 4
+  tracks:
+  - id: A
+    name: 主线·任务与升级
+    arc_type: Serialized
+    archetype: Quest
+    progress: 0.0
+    last_touched: 0
+  - id: B
+    name: 副线·系统真相
+    arc_type: Serialized
+    archetype: Monster
+    progress: 0.0
+    last_touched: 0
+  - id: C
+    name: 副线·势力拉拢
+    arc_type: Serialized
+    archetype: Tragedy
+    progress: 0.0
+    last_touched: 0
+  - id: D
+    name: 单元·委托副本
+    arc_type: Anthology
+    archetype: Quest
+    progress: 0.0
+    last_touched: 0
+    min_main_progress: 0.3
+  - id: E
+    name: 主题·外挂与自主
+    arc_type: Serialized
+    archetype: Rebirth
+    progress: 0.0
+    last_touched: 0
+  world_rules:
+  - id: no_deus_ex
+    kind: bool
+    desc: 结局不得凭空引入未铺垫关键
+    expr: not(is_resolution and introduces_new_key_clue)
+  foreshadow_templates:
+  - content: 早早出现的异常细节
+    trigger: 中段复现
+    payoff: 指向核心真相
+  - content: 配角随口一句话
+    trigger: 危机时被记起
+    payoff: 成为破局钥匙
+  taboo_list:
+  - 必须兑现「游戏现实·BUG成神」的核心承诺，不得换皮跑题
+  - 关键胜利须来自角色抉择，而非突然开挂
+  - 设定前后一致，禁止无铺垫的规则变更
+  evaluation_weights:
+    情节连贯: 0.25
+    设定一致性: 0.2
+    角色动机: 0.15
+    套路检测: 0.15
+    对话真实度: 0.1
+    感官细节: 0.1
+    主题深度: 0.05
+  active_critics:
+  - plot_coherence
+  - setting_consistency
+  - character_motivation
+  - cliche_detection
+  prompt:
+    role: 游戏现实·BUG成神小说作者
+    setting: 以「游戏现实品类下的「BUG成神」叙事发动机」为世界基底的故事舞台；默认文化气质贴近 modern-chinese-urban，推荐世界观骨架
+      infinite_flow。
+    characters: 主角（被抛入游戏现实·BUG成神核心冲突的人）、对手/阻力（体现该品类规则压力）、同伴（提供情感与信息差）
+    style: 1000-1500字，节奏清晰，冲突可见，章末留钩子
+    hard_requirements:
+    - 紧扣题材标签：system, comedy
+    - 每章推进至少一个轨道（主线或主题）
+    - 禁止无代价的万能解决方案
+    - 人物动机必须可被读者理解
+  phase_beats:
+    equilibrium:
+    - id: setup
+      desc: 日常与承诺建立
+      primitive: GoalFormation
+    disruption:
+    - id: break
+      desc: 打破平衡的事件
+      primitive: TurningPoint
+    - id: pressure
+      desc: 压力升级
+      primitive: Suspense
+    recognition:
+    - id: reveal
+      desc: 关键认知更新
+      primitive: Revelation
+    - id: clash
+      desc: 对立表面化
+      primitive: Conflict
+    repair:
+    - id: cost
+      desc: 付出代价推进
+      primitive: Sacrifice
+    - id: betray
+      desc: 信任或规则被撕裂
+      primitive: Betrayal
+    new_equilibrium:
+    - id: settle
+      desc: 新平衡与主题兑现
+      primitive: Recognition
+    - id: hook
+      desc: 下一阶段钩子
+      primitive: Suspense
+  blend_domains:
+  - 游戏现实
+  - bug
+  - 人物抉择
+  pacing_targets:
+    reversal_density:
+    - 0.3
+    - 0.7
+    avg_reversal_magnitude:
+    - 0.3
+    - 0.7
+    pacing_consistency:
+    - 0.5
+    - 0.8
+    cliffhanger_strength:
+    - 0.5
+    - 0.9
+  taxonomy_tags:
+  - system
+  - comedy
+  recommended_preset: infinite_flow
+  recommended_culture: modern-chinese-urban

@@ -12,7 +12,7 @@ fusion:
 
 # culture_bound：俗神体系根植中国民间信仰，仅与本土文化包组合
 culture_bound: true
-allowed_cultures: ["chinese_folk", "confucian_officialdom"]
+allowed_cultures: ["confucian_officialdom"]  # P22 幽灵文化 chinese_folk 清除（未注册）
 
 params:
   title: "民俗克苏鲁"  # P9.1 中文显示名（id 仍为功能键，不变）

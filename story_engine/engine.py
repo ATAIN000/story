@@ -269,6 +269,11 @@ class StoryEngine:
         # 才追加；同 id 不覆盖；无 profile / 无可表达规则时 genre_params 不变，
         # 行为与现状逐字一致）
         genre_params = self._merge_worldview_rules(genre_params)
+        # P22：内嵌 world_rules 兜底消毒（pack/worldview 路径自带校验，内嵌规则
+        # 此前无门禁——romance 的 forced_union 等超词汇表 expr 会让 Step 6
+        # 在生成期 KeyError 崩溃）：kind=narrative 分流进 prompt；expr 非法
+        # → warning + 拒载；全合法时返回 params 本体（零拷贝，行为不变）
+        genre_params = self._sanitize_world_rules(genre_params)
         # 权威 GenreBundle 构建一次：Showrunner 决策卡与 spawn_director 共用
         self.bundle = GenreBundle(
             genre=genre_name, culture=culture_name,
@@ -442,6 +447,52 @@ class StoryEngine:
             return genre_params
         params = dict(genre_params)
         params["world_rules"] = merged
+        return params
+
+    # ============ P22：内嵌 world_rules 消毒（生成期防崩） ============
+    def _sanitize_world_rules(self, genre_params: dict) -> dict:
+        """对最终 world_rules 列表做加载门禁（内嵌规则此前无校验，超词汇表
+        expr 会让 validator Step 6 在事件校验时 KeyError）。
+
+        - kind=narrative（有 id+desc）→ 不进 world_rules，desc 去重追加进
+          prompt.hard_requirements（与 P21 pack narrative 同款分流）
+        - 其余规则 expr 过 check_rule_expr；非法 → warning + 拒载
+        - 全部合法且无 narrative → 返回 params 本体（零拷贝，行为逐字一致）
+        """
+        rules = genre_params.get("world_rules")
+        if not rules:
+            return genre_params
+        kept: list[dict] = []
+        narrative_descs: list[str] = []
+        dirty = False
+        for rule in rules:
+            if not isinstance(rule, dict):
+                dirty = True
+                continue
+            if rule.get("kind") == "narrative":
+                dirty = True
+                if rule.get("desc"):
+                    narrative_descs.append(rule["desc"])
+                continue
+            if not ConsistencyValidator.check_rule_expr(rule.get("expr")):
+                logger.warning(
+                    "内嵌 world_rules 规则「%s」expr 非法（%r），拒载",
+                    rule.get("id", "?"), rule.get("expr"))
+                dirty = True
+                continue
+            kept.append(rule)
+        if not dirty:
+            return genre_params
+        params = dict(genre_params)
+        params["world_rules"] = kept
+        if narrative_descs:
+            prompt = dict(params.get("prompt") or {})
+            hrs = list(prompt.get("hard_requirements") or [])
+            for d in narrative_descs:
+                if d not in hrs:
+                    hrs.append(d)
+            prompt["hard_requirements"] = hrs
+            params["prompt"] = prompt
         return params
 
     # ============ 创世（seed 世界） ============

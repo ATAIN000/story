@@ -1,0 +1,455 @@
+{
+  "blueprint": {
+    "logline": "一个孤独是唯一的出路的主角，在fantasy-mystery的世界中学会连接才是真正的力量",
+    "thematic_argument": {
+      "lie": "孤独是唯一的出路",
+      "truth": "连接才是真正的力量",
+      "url": "孤独是唯一的出路才是对的"
+    },
+    "central_conflict": {
+      "protagonist_want": "达成目标",
+      "protagonist_need": "理解他人的价值",
+      "antagonist_want": "阻止达成目标",
+      "stakes": "如果失败，连接才是真正的力量将永远无法实现"
+    },
+    "story_type": "growth",
+    "total_episodes": 12,
+    "target_pace": "fast_escalation"
+  },
+  "act_structure": {
+    "template": "save_the_cat_15",
+    "acts": [
+      {
+        "id": "act_1_setup",
+        "name": "建置",
+        "episode_range": [
+          1,
+          2
+        ],
+        "function": "建立世界、角色、核心冲突",
+        "beats": [
+          {
+            "name": "opening_image",
+            "ep": "1",
+            "desc": "主角的日常状态/初始意象"
+          },
+          {
+            "name": "setup",
+            "ep": "1",
+            "desc": "世界观/角色/日常生活展开"
+          },
+          {
+            "name": "inciting_incident",
+            "ep": "1",
+            "desc": "打破日常的触发事件"
+          },
+          {
+            "name": "debate",
+            "ep": "2",
+            "desc": "主角犹豫是否踏上旅程"
+          },
+          {
+            "name": "break_into_two",
+            "ep": "2",
+            "desc": "主角接受挑战，进入新世界"
+          }
+        ]
+      },
+      {
+        "id": "act_2a_rising",
+        "name": "上升",
+        "episode_range": [
+          2,
+          6
+        ],
+        "function": "主角在目标上取得进展，但问题升级",
+        "beats": [
+          {
+            "name": "b_story",
+            "ep": "3",
+            "desc": "副线开启：重要关系建立"
+          },
+          {
+            "name": "fun_and_games",
+            "ep": "4",
+            "desc": "才华展示/对抗交锋/爽感段落"
+          },
+          {
+            "name": "midpoint",
+            "ep": "6",
+            "desc": "中点转折——假胜利或假败"
+          }
+        ]
+      },
+      {
+        "id": "act_2b_descent",
+        "name": "坠落",
+        "episode_range": [
+          6,
+          10
+        ],
+        "function": "黑暗期/假败/重新觉醒",
+        "beats": [
+          {
+            "name": "bad_guys_close_in",
+            "ep": "7",
+            "desc": "对手反击/证据被毁/盟友受伤"
+          },
+          {
+            "name": "all_is_lost",
+            "ep": "9",
+            "desc": "最低点——主角失去一切"
+          },
+          {
+            "name": "dark_night",
+            "ep": "9",
+            "desc": "主角自我怀疑/放弃/反思"
+          },
+          {
+            "name": "break_into_three",
+            "ep": "10",
+            "desc": "新线索出现/觉醒/重新出发"
+          }
+        ]
+      },
+      {
+        "id": "act_3_climax",
+        "name": "高潮与结局",
+        "episode_range": [
+          10,
+          12
+        ],
+        "function": "终极对决/真相揭露/弧光完成",
+        "beats": [
+          {
+            "name": "finale",
+            "ep": "11",
+            "desc": "对决/反转/真相揭露/牺牲"
+          },
+          {
+            "name": "final_image",
+            "ep": "12",
+            "desc": "新均衡/弧光完成/呼应开场"
+          }
+        ]
+      }
+    ]
+  },
+  "episode_outlines": [
+    {
+      "episode": 1,
+      "synopsis": "第1集：主角的日常状态/初始意象",
+      "purpose": "opening_image",
+      "key_events": [
+        "主角的日常状态/初始意象"
+      ],
+      "ends_with_hook": "留下悬念，引向第2集",
+      "character_arc_focus": "祁望",
+      "flexibility": "medium"
+    },
+    {
+      "episode": 2,
+      "synopsis": "第2集：主角犹豫是否踏上旅程",
+      "purpose": "debate",
+      "key_events": [
+        "主角犹豫是否踏上旅程"
+      ],
+      "ends_with_hook": "留下悬念，引向第3集",
+      "character_arc_focus": "祁望",
+      "flexibility": "medium"
+    },
+    {
+      "episode": 3,
+      "synopsis": "第3集：副线开启：重要关系建立",
+      "purpose": "b_story",
+      "key_events": [
+        "副线开启：重要关系建立"
+      ],
+      "ends_with_hook": "留下悬念，引向第4集",
+      "character_arc_focus": "祁望",
+      "flexibility": "medium"
+    },
+    {
+      "episode": 4,
+      "synopsis": "第4集：才华展示/对抗交锋/爽感段落",
+      "purpose": "fun_and_games",
+      "key_events": [
+        "才华展示/对抗交锋/爽感段落"
+      ],
+      "ends_with_hook": "留下悬念，引向第5集",
+      "character_arc_focus": "祁望",
+      "flexibility": "medium"
+    },
+    {
+      "episode": 5,
+      "synopsis": "第5集：才华展示/对抗交锋/爽感段落",
+      "purpose": "fun_and_games",
+      "key_events": [
+        "才华展示/对抗交锋/爽感段落"
+      ],
+      "ends_with_hook": "留下悬念，引向第6集",
+      "character_arc_focus": "祁望",
+      "flexibility": "medium"
+    },
+    {
+      "episode": 6,
+      "synopsis": "第6集：中点转折——假胜利或假败",
+      "purpose": "midpoint",
+      "key_events": [
+        "中点转折——假胜利或假败"
+      ],
+      "ends_with_hook": "留下悬念，引向第7集",
+      "character_arc_focus": "祁望",
+      "flexibility": "medium"
+    },
+    {
+      "episode": 7,
+      "synopsis": "第7集：对手反击/证据被毁/盟友受伤",
+      "purpose": "bad_guys_close_in",
+      "key_events": [
+        "对手反击/证据被毁/盟友受伤"
+      ],
+      "ends_with_hook": "留下悬念，引向第8集",
+      "character_arc_focus": "祁望",
+      "flexibility": "medium"
+    },
+    {
+      "episode": 8,
+      "synopsis": "第8集：对手反击/证据被毁/盟友受伤",
+      "purpose": "bad_guys_close_in",
+      "key_events": [
+        "对手反击/证据被毁/盟友受伤"
+      ],
+      "ends_with_hook": "留下悬念，引向第9集",
+      "character_arc_focus": "祁望",
+      "flexibility": "medium"
+    },
+    {
+      "episode": 9,
+      "synopsis": "第9集：最低点——主角失去一切",
+      "purpose": "all_is_lost",
+      "key_events": [
+        "最低点——主角失去一切"
+      ],
+      "ends_with_hook": "留下悬念，引向第10集",
+      "character_arc_focus": "祁望",
+      "flexibility": "medium"
+    },
+    {
+      "episode": 10,
+      "synopsis": "第10集：新线索出现/觉醒/重新出发",
+      "purpose": "break_into_three",
+      "key_events": [
+        "新线索出现/觉醒/重新出发"
+      ],
+      "ends_with_hook": "留下悬念，引向第11集",
+      "character_arc_focus": "祁望",
+      "flexibility": "medium"
+    },
+    {
+      "episode": 11,
+      "synopsis": "第11集：对决/反转/真相揭露/牺牲",
+      "purpose": "finale",
+      "key_events": [
+        "对决/反转/真相揭露/牺牲"
+      ],
+      "ends_with_hook": "留下悬念，引向第12集",
+      "character_arc_focus": "祁望",
+      "flexibility": "medium"
+    },
+    {
+      "episode": 12,
+      "synopsis": "第12集：新均衡/弧光完成/呼应开场",
+      "purpose": "final_image",
+      "key_events": [
+        "新均衡/弧光完成/呼应开场"
+      ],
+      "ends_with_hook": "故事完结",
+      "character_arc_focus": "祁望",
+      "flexibility": "medium"
+    }
+  ],
+  "arc_schedule": {
+    "characters": [
+      {
+        "name": "祁望",
+        "archetype_arc": "positive_change",
+        "lie": "",
+        "truth": "",
+        "milestones": [
+          {
+            "episode_range": "1-2",
+            "phase": "setup",
+            "state": "初始状态",
+            "event": "",
+            "behavior": "拒绝改变"
+          },
+          {
+            "episode_range": "3-6",
+            "phase": "crack",
+            "state": "第一次动摇",
+            "event": "关键事件冲击",
+            "behavior": "开始犹豫"
+          },
+          {
+            "episode_range": "7-9",
+            "phase": "relapse",
+            "state": "被强化Lie",
+            "event": "遭遇挫折",
+            "behavior": "退回旧模式"
+          },
+          {
+            "episode_range": "10-12",
+            "phase": "truth_embrace",
+            "state": "觉醒",
+            "event": "理解真相",
+            "behavior": "彻底转变"
+          }
+        ]
+      },
+      {
+        "name": "死者",
+        "archetype_arc": "flat_positive",
+        "lie": "",
+        "truth": "",
+        "milestones": [
+          {
+            "episode_range": "1-2",
+            "phase": "setup",
+            "state": "初始状态",
+            "event": "",
+            "behavior": "拒绝改变"
+          },
+          {
+            "episode_range": "3-6",
+            "phase": "crack",
+            "state": "第一次动摇",
+            "event": "关键事件冲击",
+            "behavior": "开始犹豫"
+          },
+          {
+            "episode_range": "7-9",
+            "phase": "relapse",
+            "state": "被强化Lie",
+            "event": "遭遇挫折",
+            "behavior": "退回旧模式"
+          },
+          {
+            "episode_range": "10-12",
+            "phase": "truth_embrace",
+            "state": "觉醒",
+            "event": "理解真相",
+            "behavior": "彻底转变"
+          }
+        ]
+      }
+    ]
+  },
+  "foreshadow_blueprint": {
+    "threads": [
+      {
+        "id": "FS_001",
+        "name": "主线悬念",
+        "type": "main_mystery",
+        "plant_episodes": [
+          1,
+          4
+        ],
+        "harvest_episode": 9,
+        "salience_ladder": [
+          {
+            "ep": 1,
+            "level": 0.2,
+            "form": "初次暗示"
+          },
+          {
+            "ep": 4,
+            "level": 0.5,
+            "form": "线索浮现"
+          },
+          {
+            "ep": 9,
+            "level": 1,
+            "form": "真相揭露"
+          }
+        ],
+        "spacing_rule": "max_5_eps",
+        "status": "planned"
+      },
+      {
+        "id": "FS_002",
+        "name": "角色秘密",
+        "type": "character_secret",
+        "plant_episodes": [
+          3
+        ],
+        "harvest_episode": 9,
+        "salience_ladder": [
+          {
+            "ep": 3,
+            "level": 0.3,
+            "form": "一个细节"
+          },
+          {
+            "ep": 9,
+            "level": 1,
+            "form": "秘密揭露"
+          }
+        ],
+        "spacing_rule": "max_8_eps",
+        "status": "planned"
+      }
+    ]
+  },
+  "pacing_curve": {
+    "curve_type": "wave_escalation",
+    "key_tension_points": [
+      {
+        "episode": 1,
+        "tension": 0.5,
+        "reason": "建置开始"
+      },
+      {
+        "episode": 2,
+        "tension": 0.8,
+        "reason": "建置结束"
+      },
+      {
+        "episode": 2,
+        "tension": 0.5,
+        "reason": "上升开始"
+      },
+      {
+        "episode": 6,
+        "tension": 0.8,
+        "reason": "上升结束"
+      },
+      {
+        "episode": 6,
+        "tension": 0.5,
+        "reason": "坠落开始"
+      },
+      {
+        "episode": 10,
+        "tension": 0.8,
+        "reason": "坠落结束"
+      },
+      {
+        "episode": 10,
+        "tension": 0.5,
+        "reason": "高潮与结局开始"
+      },
+      {
+        "episode": 12,
+        "tension": 0.3,
+        "reason": "结局——归于平静"
+      }
+    ],
+    "genre_pace_profile": {
+      "type": "fantasy-mystery",
+      "micro_rhythm": "3-5集一小高潮",
+      "buffer_rule": "高强度冲突后必须有缓冲"
+    }
+  },
+  "revision_log": []
+}

@@ -27,20 +27,19 @@ params:
     - {id: C, name: "副线·情敌", arc_type: Serialized, archetype: Tragedy,  progress: 0.0, last_touched: 0}
     - {id: D, name: "主题·成长", arc_type: Serialized, archetype: Rebirth,  progress: 0.0, last_touched: 0}
 
-  # 世界规则（Z3 SMT 硬约束）
+  # 世界规则（P22：超 Z3 词汇表的创作约束改 kind: narrative，进 prompt 不进 SMT；
+  # 原 forced_union / rival_deus_ex_machina / misunderstanding_cleared_chapter
+  # 均不在 5 事实词汇表，Step 6 事件校验会 KeyError 崩溃）
   world_rules:
     - id: mutual_consent
-      kind: bool
+      kind: narrative
       desc: "两情相悦律：姻缘圆满不得依赖强迫手段"
-      expr: "not(forced_union and is_resolution)"
     - id: rival_fairness
-      kind: bool
+      kind: narrative
       desc: "情敌公平竞争：主角胜出不得靠情敌暴毙等机械降神"
-      expr: "not(rival_deus_ex_machina)"
     - id: misunderstanding_aging
-      kind: arith
+      kind: narrative
       desc: "误会时效：核心误会须在结局前解开"
-      expr: "misunderstanding_cleared_chapter <= final_chapter"
 
   # 伏笔模板（Showrunner 种子计划用）
   foreshadow_templates:

@@ -6,10 +6,13 @@
    内嵌规则原位保留、插件 params 本体不被污染；合并结果可过 Z3 管线
 2. 非法 expr 拒载：tmp pack 含坏 expr / 引用未知事实 / 缺 id 的规则 +
    一条好规则 → 坏规则跳过 + warning，好规则正常合并，未注册包跳过不崩
-3. 未配置 rule_packs 的 genre（romance）world_rules 与 yaml 基线逐字一致
+3. 无 rule_packs 且内嵌规则全合法的 genre（wuxia）world_rules 与 yaml
+   基线逐字一致（零拷贝）
 4. P21：kind=narrative 规则（hermes 包创作约束）不进 world_rules/validator，
    其 desc 分流进 prompt.hard_requirements；无拒载 warning；
    registry 缓存的插件 params 本体不被污染
+5. P22：romance 内嵌 kind=narrative 规则（原超词汇表 expr 会令 Step 6
+   KeyError）消毒分流进 prompt；world_rules 清空后 validator 落默认集
 """
 from __future__ import annotations
 
@@ -105,18 +108,48 @@ def test_invalid_expr_rules_rejected(tmp_path, monkeypatch, caplog):
         eng.kernel.close()
 
 
-# ---------- 用例3：未配置 rule_packs 的 genre 与基线逐字一致 ----------
+# ---------- 用例3：无 rule_packs 且内嵌规则全合法的 genre 零拷贝基线 ----------
 
 def test_genre_without_rule_packs_baseline(tmp_path, monkeypatch):
-    monkeypatch.setenv("STORY_ENGINE_GENRE", "romance")
+    monkeypatch.setenv("STORY_ENGINE_GENRE", "wuxia")
     eng = StoryEngine(str(tmp_path))
     try:
         expected = yaml.safe_load(
-            (GENRES_DIR / "romance.yaml").read_text(encoding="utf-8")
+            (GENRES_DIR / "wuxia.yaml").read_text(encoding="utf-8")
         )["params"]["world_rules"]
         assert eng.validator.world_rules == expected
-        # 未走合并路径：bundle.genre_params 即插件 params 本体（零拷贝）
+        # 未走合并/消毒路径：bundle.genre_params 即插件 params 本体（零拷贝）
         assert eng.bundle.genre_params is eng.genre.params
+    finally:
+        eng.kernel.close()
+
+
+# ---------- 用例5：P22 内嵌 kind=narrative 规则消毒分流（romance） ----------
+
+def test_embedded_narrative_rules_sanitized(tmp_path, monkeypatch):
+    """romance 内嵌 3 条 narrative（原 forced_union 等超词汇表 expr 会让
+    Step 6 KeyError）→ 分流进 prompt；world_rules 清空，validator 落默认集。"""
+    monkeypatch.setenv("STORY_ENGINE_GENRE", "romance")
+    eng = StoryEngine(str(tmp_path))
+    try:
+        # 内嵌 3 条 narrative 全部分流：bundle world_rules 为空
+        assert eng.bundle.genre_params["world_rules"] == []
+        # validator 收到空列表 → 落回内置默认规则（非空、全可编译）
+        assert eng.validator.world_rules
+        assert all(r.get("expr") for r in eng.validator.world_rules)
+        # 3 条 narrative desc 进了 prompt.hard_requirements
+        hrs = eng.bundle.genre_params["prompt"]["hard_requirements"]
+        assert "两情相悦律：姻缘圆满不得依赖强迫手段" in hrs
+        assert "情敌公平竞争：主角胜出不得靠情敌暴毙等机械降神" in hrs
+        assert "误会时效：核心误会须在结局前解开" in hrs
+        # registry 缓存的插件 params 本体不被污染
+        assert len(eng.genre.params["world_rules"]) == 3
+        assert len(eng.genre.params["prompt"]["hard_requirements"]) == 3
+        # Step 6 事件校验不再 KeyError（原 forced_union 崩溃路径）
+        event = WorldEvent(event_id="e1", event_type="test", timestamp="",
+                           world_tick=0, branch_id="main", payload={})
+        check = eng.validator._check_world_rules_smt(event, WorldState())
+        assert check.passed is True
     finally:
         eng.kernel.close()
 

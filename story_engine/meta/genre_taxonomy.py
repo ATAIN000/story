@@ -579,6 +579,39 @@ def taxon_by_id(genre_id: str) -> GenreTaxon | None:
     return None
 
 
+# ---------- P22：三轴亲和公共函数（gacha/cross_check/macro 同源消费） ----------
+
+def culture_for_genre(genre_id: str) -> str | None:
+    """题材推荐文化（taxonomy default_culture）；未知题材 → None。"""
+    t = taxon_by_id(genre_id)
+    return t.default_culture if t else None
+
+
+def presets_for_genre(genre_id: str) -> tuple[str, ...]:
+    """题材亲和骨架列表（primary 在前 + secondary）；未知题材 → 空元组。"""
+    t = taxon_by_id(genre_id)
+    if not t:
+        return ()
+    return (t.primary_preset, *t.secondary_presets)
+
+
+def macro_templates_for_genre(genre_id: str) -> tuple[str, ...]:
+    """题材推荐幕结构模板列表（首个为最推荐）；未知题材 → 空元组。"""
+    t = taxon_by_id(genre_id)
+    return t.macro_templates if t else ()
+
+
+def is_preset_compatible(genre_id: str, preset: str | None) -> bool:
+    """题材×骨架亲和判定：preset 在 (primary+secondary) 内 → True；
+    未知题材 / 空 preset → True（不出警）。"""
+    if not preset:
+        return True
+    presets = presets_for_genre(genre_id)
+    if not presets:
+        return True
+    return preset in presets
+
+
 def list_taxa(
     *, q: str = "", tags: Iterable[str] | None = None,
     tier: str = "", family: str = "",
