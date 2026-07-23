@@ -1127,11 +1127,8 @@ async function doConfirm() {
           <div v-if="macroGenerating" class="wv-macro-progress">
             <span class="gc-spin" aria-hidden="true"></span>
             <span class="wv-macro-prog-text">
-              {{ macroElapsed < 30 ? 'AI 正在构思故事蓝图、幕结构、分集梗概…' :
-                 macroElapsed < 60 ? '正在细化角色弧光与伏笔布局…' :
-                 macroElapsed < 120 ? '正在生成节奏曲线，即将完成…' :
-                 '生成时间较长，请耐心等待（LLM 正在产出完整 YAML）…' }}
-              <br><span class="wv-macro-prog-hint">通常需要 30-90 秒，取决于 LLM 响应速度</span>
+              已等待 {{ macroElapsed }} 秒
+              <br><span class="wv-macro-prog-hint">LLM 正在生成中，下方可实时看到输出</span>
             </span>
           </div>
         </div>
