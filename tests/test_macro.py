@@ -188,6 +188,41 @@ def test_macro_plan_generate_endpoint():
     assert resp.status_code == 410
 
 
+def test_as_episode_list_coerces_llm_shapes():
+    """LLM 把 plant_episodes 写成标量/字符串时需规范成 list[int]。"""
+    from story_engine.macro.generator import _as_episode_list, _as_episode_int, _build_plan
+
+    assert _as_episode_list(None) == []
+    assert _as_episode_list(3) == [3]
+    assert _as_episode_list("1, 3，5") == [1, 3, 5]
+    assert _as_episode_list({"x": 2, "y": 8}) == [2, 8]
+    assert _as_episode_int("第12集") == 12
+
+    parsed = {
+        "story_blueprint": {
+            "logline": "x", "thematic_argument": {}, "central_conflict": {},
+            "total_episodes": 12,
+        },
+        "act_structure": {"acts": []},
+        "episode_outlines": [{"episode": 1, "title": "t"}],
+        "arc_schedule": {"characters": []},
+        "foreshadow_blueprint": {
+            "threads": [{
+                "id": "f1", "name": "伏",
+                "plant_episodes": "2,4",
+                "harvest_episode": "10",
+                "salience_ladder": "not-a-list",
+            }],
+        },
+        "pacing_curve": {"key_tension_points": []},
+    }
+    plan = _build_plan(parsed, "save_the_cat_15", 12)
+    t = plan.foreshadow_blueprint.threads[0]
+    assert t.plant_episodes == [2, 4]
+    assert t.harvest_episode == 10
+    assert t.salience_ladder == []
+
+
 def test_cast_summary_accepts_none_and_id_field():
     """P20 修复：cast=None 不崩；前端 id 字段可当人名。"""
     from story_engine.macro.generator import _cast_summary, _build_prompt

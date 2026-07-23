@@ -137,6 +137,24 @@ const CHAR_VARS = ['--primary', '--accent', '--violet', '--sky', '--green', '--s
 function charVar(idx) { return `var(${CHAR_VARS[idx % CHAR_VARS.length]})` }
 
 /* ===== 工具函数 ===== */
+/** LLM 常把 plant_episodes 写成 "1,3" / 单数字 / 对象；统一成可展示文案 */
+function formatPlantEps(v) {
+  if (v == null || v === '') return '—'
+  if (Array.isArray(v)) {
+    const parts = v.map(x => (x == null || x === '' ? null : String(x))).filter(Boolean)
+    return parts.length ? parts.join(', ') : '—'
+  }
+  if (typeof v === 'number' || typeof v === 'boolean') return String(v)
+  if (typeof v === 'string') {
+    const s = v.trim()
+    return s || '—'
+  }
+  if (typeof v === 'object') {
+    const vals = Object.values(v).filter(x => x != null && x !== '')
+    return vals.length ? vals.map(String).join(', ') : '—'
+  }
+  return String(v)
+}
 function fmtRange(r) {
   if (!r) return ''
   if (Array.isArray(r)) {
@@ -168,13 +186,13 @@ function actFlexGrow(act) {
 
 /* 伏笔显著性阶梯迷你进度条 */
 function ladderSteps(ladder) {
-  if (!ladder || !ladder.length) return []
+  if (!Array.isArray(ladder) || !ladder.length) return []
   const levelOrder = { vague: 0.2, subtle: 0.35, moderate: 0.55, action: 0.75, explicit: 1 }
   return ladder.map(s => ({
-    ep: s.ep,
-    level: s.level || '',
-    form: s.form || '',
-    pct: levelOrder[(s.level || '').toLowerCase()] ?? 0.5,
+    ep: s?.ep,
+    level: s?.level || '',
+    form: s?.form || '',
+    pct: levelOrder[String(s?.level || '').toLowerCase()] ?? 0.5,
   }))
 }
 </script>
@@ -423,7 +441,7 @@ function ladderSteps(ladder) {
               <span v-if="f.type" class="md-fs-type">{{ f.type }}</span>
             </div>
             <div class="md-fs-flow">
-              <span>埋 {{ (f.plant_episodes || []).join(', ') || '—' }}</span>
+              <span>埋 {{ formatPlantEps(f.plant_episodes) }}</span>
               <span class="md-fs-arrow">→</span>
               <span>收 第{{ f.harvest_episode || '?' }}集</span>
             </div>
@@ -445,7 +463,7 @@ function ladderSteps(ladder) {
               <span v-if="f.type" class="md-fs-type">{{ f.type }}</span>
             </div>
             <div class="md-fs-flow">
-              <span>埋 {{ (f.plant_episodes || []).join(', ') || '—' }}</span>
+              <span>埋 {{ formatPlantEps(f.plant_episodes) }}</span>
               <span class="md-fs-arrow">→</span>
               <span>收 第{{ f.harvest_episode || '?' }}集</span>
             </div>
@@ -460,7 +478,7 @@ function ladderSteps(ladder) {
               <span v-if="f.type" class="md-fs-type">{{ f.type }}</span>
             </div>
             <div class="md-fs-flow">
-              <span>埋 {{ (f.plant_episodes || []).join(', ') || '—' }}</span>
+              <span>埋 {{ formatPlantEps(f.plant_episodes) }}</span>
               <span class="md-fs-arrow">→</span>
               <span>收 第{{ f.harvest_episode || '?' }}集</span>
             </div>

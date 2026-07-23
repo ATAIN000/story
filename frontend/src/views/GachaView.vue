@@ -378,11 +378,13 @@ async function regenerateComponent(component) {
 }
 
 function skipMacro() {
+  if (macroGenerating.value || busy.value) return
   macroPlan.value = null
   requestConfirm()
 }
 
 function confirmMacro() {
+  if (macroGenerating.value || busy.value) return
   requestConfirm()
 }
 
@@ -1073,7 +1075,7 @@ async function doConfirm() {
         </div>
 
         <div v-else-if="crossCheckWarnings.length === 0" class="wv-crosscheck-ok" role="status">
-          <div class="wv-crosscheck-ok-icon">✅</div>
+          <div class="wv-crosscheck-ok-icon" aria-hidden="true">✓</div>
           <p>所有层次对齐，未发现跨层冲突。可以安全进入宏观规划。</p>
         </div>
 
@@ -1082,24 +1084,26 @@ async function doConfirm() {
                class="wv-cc-warning"
                :class="'sev-' + w.severity.toLowerCase()">
             <div class="wv-cc-sev">
-              <span class="wv-cc-icon">{{ w.severity === 'HIGH' ? '🔴' : w.severity === 'MEDIUM' ? '🟡' : '🟢' }}</span>
+              <span class="wv-cc-icon" aria-hidden="true">{{ w.severity === 'HIGH' ? '●' : w.severity === 'MEDIUM' ? '◐' : '○' }}</span>
               <span class="wv-cc-type">{{ w.type }}</span>
               <span class="wv-cc-severity">{{ w.severity }}</span>
             </div>
             <div class="wv-cc-title">{{ w.title }}</div>
             <p class="wv-cc-desc">{{ w.description }}</p>
-            <p class="wv-cc-suggestion">💡 {{ w.suggestion }}</p>
+            <p class="wv-cc-suggestion">建议：{{ w.suggestion }}</p>
           </div>
         </div>
 
         <footer class="gacha-foot">
           <button class="btn-line" aria-label="返回人物原型" data-testid="crosscheck-back" @click="backToCastFromCross">← 返回人物</button>
-          <button class="btn-line" aria-label="返回世界观向导修改设定" data-testid="crosscheck-back-wizard" @click="backToWizardFromCross">🔧 回③修改设定</button>
+          <button class="btn-line gacha-synth-btn" aria-label="返回世界观向导修改设定" data-testid="crosscheck-back-wizard" @click="backToWizardFromCross">
+            <AppIcon name="pen" :size="12" /> 回③修改设定
+          </button>
           <button class="btn-main"
                   :disabled="busy"
                   data-testid="crosscheck-accept"
                   aria-label="接受并继续到宏观规划" @click="acceptConflicts">
-            {{ crossCheckWarnings.length > 0 ? '✅ 接受继续' : '✅ 进入宏观规划' }} →
+            {{ crossCheckWarnings.length > 0 ? '接受继续 →' : '进入宏观规划 →' }}
           </button>
         </footer>
       </section>
@@ -1169,18 +1173,22 @@ async function doConfirm() {
         </div>
 
         <footer class="gacha-foot">
-          <button class="btn-line" aria-label="返回冲突检测" data-testid="macro-back" @click="stage = 'crosscheck'">← 返回冲突检测</button>
+          <button class="btn-line" aria-label="返回冲突检测" data-testid="macro-back"
+                  :disabled="macroGenerating"
+                  @click="stage = 'crosscheck'">← 返回冲突检测</button>
           <button v-if="macroPlan" class="btn-line" :disabled="macroGenerating"
                   data-testid="macro-regenerate"
                   aria-label="重新生成宏观计划" @click="generateMacro">
             {{ macroGenerating ? '生成中…' : '↻ 全局重摇' }}
           </button>
-          <button class="btn-line" aria-label="跳过宏观计划，直接开工" data-testid="macro-skip" @click="skipMacro">跳过</button>
+          <button class="btn-line" aria-label="跳过宏观计划，直接开工" data-testid="macro-skip"
+                  :disabled="macroGenerating || busy"
+                  @click="skipMacro">跳过</button>
           <button ref="startBtn" class="btn-main"
-                  :disabled="busy"
+                  :disabled="busy || macroGenerating"
                   data-testid="confirm-start"
                   aria-label="确认开工" @click="confirmMacro">
-            {{ confirmBusy ? '开工中…' : '确认开工' }}
+            {{ confirmBusy ? '开工中…' : macroGenerating ? '生成中…' : '确认开工' }}
           </button>
         </footer>
       </section>

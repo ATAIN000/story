@@ -354,11 +354,11 @@ def _plan_from_dict(d: dict, template_name: str, total_episodes: int) -> MacroPl
         ladder = [
             SaliencePoint(ep=s.get("ep", 0), level=s.get("level", 0.0),
                           form=s.get("form", ""))
-            for s in (t.get("salience_ladder") or []) if isinstance(s, dict)]
+            for s in _as_salience_ladder(t.get("salience_ladder"))]
         threads.append(ForeshadowThread(
             id=t.get("id", ""), name=t.get("name", ""), type=t.get("type", ""),
-            plant_episodes=t.get("plant_episodes", []),
-            harvest_episode=t.get("harvest_episode", 0),
+            plant_episodes=_as_episode_list(t.get("plant_episodes")),
+            harvest_episode=_as_episode_int(t.get("harvest_episode"), 0),
             salience_ladder=ladder, spacing_rule=t.get("spacing_rule", ""),
             status=t.get("status", "planned")))
     # pacing_curve
@@ -488,6 +488,59 @@ def _beat_summary(act_structure) -> str:
     return "\n".join(lines)
 
 
+def _as_episode_list(raw) -> list[int]:
+    """LLM 常把 plant_episodes 写成 int / '1,3' / {'a':1}；统一成 list[int]。"""
+    if raw is None:
+        return []
+    if isinstance(raw, bool):
+        return []
+    if isinstance(raw, int):
+        return [raw] if raw > 0 else []
+    if isinstance(raw, float):
+        return [int(raw)] if raw > 0 else []
+    if isinstance(raw, str):
+        parts = [p.strip() for p in raw.replace("，", ",").split(",") if p.strip()]
+        out = []
+        for p in parts:
+            try:
+                n = int(float(p))
+            except (TypeError, ValueError):
+                continue
+            if n > 0:
+                out.append(n)
+        return out
+    if isinstance(raw, dict):
+        return _as_episode_list(list(raw.values()))
+    if isinstance(raw, (list, tuple)):
+        out = []
+        for x in raw:
+            out.extend(_as_episode_list(x))
+        return out
+    return []
+
+
+def _as_episode_int(raw, default: int = 0) -> int:
+    if isinstance(raw, bool) or raw is None:
+        return default
+    if isinstance(raw, int):
+        return raw
+    if isinstance(raw, float):
+        return int(raw)
+    if isinstance(raw, str):
+        s = raw.strip().lstrip("第").rstrip("集")
+        try:
+            return int(float(s))
+        except (TypeError, ValueError):
+            return default
+    return default
+
+
+def _as_salience_ladder(raw) -> list:
+    if not isinstance(raw, list):
+        return []
+    return [s for s in raw if isinstance(s, dict)]
+
+
 # ============================================================
 # 解析 + 校验
 # ============================================================
@@ -612,12 +665,12 @@ def _build_plan(parsed: dict, template_name: str, total_episodes: int) -> MacroP
         ladder = [
             SaliencePoint(ep=s.get("ep", 0), level=s.get("level", 0.0),
                           form=s.get("form", ""))
-            for s in (t.get("salience_ladder") or []) if isinstance(s, dict)
+            for s in _as_salience_ladder(t.get("salience_ladder"))
         ]
         threads.append(ForeshadowThread(
             id=t.get("id", ""), name=t.get("name", ""), type=t.get("type", ""),
-            plant_episodes=t.get("plant_episodes", []),
-            harvest_episode=t.get("harvest_episode", 0),
+            plant_episodes=_as_episode_list(t.get("plant_episodes")),
+            harvest_episode=_as_episode_int(t.get("harvest_episode"), 0),
             salience_ladder=ladder, spacing_rule=t.get("spacing_rule", ""),
             status=t.get("status", "planned")))
 
