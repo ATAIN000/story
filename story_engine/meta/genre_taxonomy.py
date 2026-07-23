@@ -428,6 +428,41 @@ def _macro_for(profile: str) -> tuple[str, ...]:
     return ("save_the_cat_15", "three_act_classic")
 
 
+# legacy 29 的展示名/一句话（取自各插件 params.title + resolution_pattern，
+# 进搜索索引——此前 title 用 id 原文，中文名搜不到、卡片显示原生 id）
+_LEGACY_TITLES: dict[str, tuple[str, str]] = {
+    "apocalypse-romance": ("末日情缘", "建立安全区 + 情感落地（或为对方牺牲）"),
+    "court-workplace": ("律政职场", "上位 + 反思「变成自己讨厌的人」"),
+    "cozy-fantasy-mystery": ("治愈奇幻推理", "温和的真相揭示 + 社区关系修复"),
+    "cyberpunk-xianxia": ("赛博修仙", "揭露天道=AI的真相 + 选择人性飞升或数字永生"),
+    "fantasy-mystery": ("奇幻推理", "排除所有不可能的魔法→唯一可能的真相"),
+    "fantasy-sports": ("奇幻竞技", "在公平性质疑中证明「努力能弥补天赋差」"),
+    "folk-cthulhu": ("民俗克苏鲁", "在「不可名状」面前找到东方式的应对"),
+    "game-reality-invasion": ("游戏入侵现实", "打破游戏vs现实的边界 + 回答「什么是真实」"),
+    "historical-isekai": ("历史穿越", "改变历史节点 + 承担蝴蝶效应后果"),
+    "historical-system": ("历史系统流", "系统真相揭示 + 忠于历史还是忠于系统"),
+    "horror-comedy": ("恐怖喜剧", "用荒诞方式化解恐怖 + 留一个「其实没完」的尾巴"),
+    "infinite-dungeon": ("无限流", "破解主神空间真相 + 逃离或取代主神"),
+    "isekai-detective": ("穿越侦探", "科学断案 + 在权力结构中推行正义"),
+    "isekai-romance": ("穿越情缘", "不放弃自我的前提下找到爱情"),
+    "meta-isekai-dual": ("元穿双界", "信息差消除 + 共同选择改写结局"),
+    "mystery": ("公案悬疑", "真相揭示 + 正义"),
+    "political-cultivation": ("权谋修仙", "实力+权术双赢 or 认清最高权力在天道"),
+    "reborn-business-era": ("重生商战", "商业成功 + 弥补前世遗憾"),
+    "romance-suspense": ("言情悬疑", "爱人的秘密揭晓，但性质出人意料"),
+    "romance": ("古代言情", "有情人终成眷属"),
+    "romantasy": ("西幻言情", "爱情与世界两全（或为一方牺牲另一方）"),
+    "sci-fi-horror": ("科幻恐怖", "极少人生还 + 威胁未被真正解决"),
+    "sequence-pathway": ("序列途径", "封神（序列0）+ 承担途径终极代价"),
+    "supernatural-management": ("灵异经营", "主线真相 + 店铺/能力终极形态"),
+    "system-isekai": ("系统穿越", "掌控/摆脱系统 + 在异世界立足"),
+    "tomb-exploration": ("盗墓探险", "揭开历史真相 + 带着代价逃生"),
+    "wuxia-steampunk": ("蒸汽武侠", "新旧融合的新武学 or 旧时代悲壮落幕"),
+    "wuxia": ("武侠江湖", "恩怨了结/归隐/传承"),
+    "xianxia-cthulhu": ("修仙克苏鲁", "觉醒真相 + 付出代价"),
+}
+
+
 def _legacy_defaults(lid: str) -> tuple[str, str, str, tuple[str, ...]]:
     """title_hint, preset, culture, tags — title 最终以插件为准。"""
     if lid == "infinite-dungeon":
@@ -462,13 +497,14 @@ def expand_taxonomy() -> list[GenreTaxon]:
     seen: set[str] = set()
 
     for lid in sorted(_LEGACY_IDS):
-        title, preset, culture, tags = _legacy_defaults(lid)
+        _hint, preset, culture, tags = _legacy_defaults(lid)
+        title, vibe = _LEGACY_TITLES.get(lid, (_hint, f"既有题材包 {lid}"))
         out.append(GenreTaxon(
             id=lid, title=title, family="legacy", family_title="既有",
             subtrope="legacy", tier="legacy", tags=tags,
             default_culture=culture, primary_preset=preset,
             secondary_presets=_secondary_for(preset),
-            track_profile="legacy", vibe=f"既有题材包 {lid}",
+            track_profile="legacy", vibe=vibe,
             legacy=True, macro_templates=_macro_for("mystery"),
         ))
         seen.add(lid)
