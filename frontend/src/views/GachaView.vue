@@ -275,6 +275,7 @@ async function generateMacro() {
     const castPayload = buildCastPayload()
     const body = {
       template_name: selectedTemplate.value || 'save_the_cat_15',
+      genre_name: selectedGenre.value || synthCard.value?.genre?.name || undefined,
     }
     if (wvPayload) body.worldview = wvPayload
     if (castPayload) body.cast = castPayload

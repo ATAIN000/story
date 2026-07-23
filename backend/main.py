@@ -1243,6 +1243,7 @@ def macro_templates():
 
 class MacroPlanReq(BaseModel):
     template_name: str = "save_the_cat_15"
+    genre_name: str | None = None               # P19: 前端传入选中的题材名（开局向导期间 engine 还没切）
     worldview: dict | None = None
     cast: list | None = None
     regenerate_component: str | None = None       # P18.2: 单组件重摇
@@ -1273,6 +1274,23 @@ async def macro_plan_generate(req: MacroPlanReq):
         wv_profile = WorldviewProfile(layers=req.worldview["layers"])
     cast_profile = req.cast if isinstance(req.cast, list) else None
 
+    # P19: 用前端传入的 genre_name 取 bundle（开局向导期间 engine 还没切到新题材）
+    bundle = engine.bundle
+    if req.genre_name and req.genre_name != engine.bundle.genre:
+        try:
+            m = engine.kernel.registry.get_manifest("story.genre", req.genre_name)
+            from story_engine.types import GenreBundle
+            culture = engine.bundle.culture.name  # 文化暂用当前的（confirm 时才确定）
+            bundle = GenreBundle(
+                genre=m.name, culture=culture,
+                language=engine.bundle.language,
+                target_length=m.params.get("target_length", 12) if hasattr(m, 'params') else 12,
+                platform="novel",
+                genre_params=m.params if hasattr(m, 'params') else {},
+                culture_params=engine.bundle.culture_params)
+        except Exception:
+            pass  # 回退到 engine.bundle
+
     # P18.2: 冲突标记注入
     conflict_warnings = req.conflict_warnings if isinstance(req.conflict_warnings, list) else None
 
@@ -1280,12 +1298,12 @@ async def macro_plan_generate(req: MacroPlanReq):
     if req.regenerate_component and req.existing_plan:
         from story_engine.macro.generator import regenerate_component as _regen
         plan = await _regen(
-            engine.kernel, engine.bundle, wv_profile, cast_profile, template,
+            engine.kernel, bundle, wv_profile, cast_profile, template,
             req.regenerate_component, req.existing_plan, conflict_warnings)
         return macro_plan_to_dict(plan)
 
     plan = await generate_macro_plan(
-        engine.kernel, engine.bundle, wv_profile, cast_profile, template,
+        engine.kernel, bundle, wv_profile, cast_profile, template,
         conflict_warnings=conflict_warnings)
     return macro_plan_to_dict(plan)
 
