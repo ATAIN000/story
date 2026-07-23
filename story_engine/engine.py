@@ -323,7 +323,10 @@ class StoryEngine:
         合并语义（与 story.evaluator critic pack 同款 pack-wins）：
         - 同 id → pack 规则覆盖内嵌规则（保持内嵌原位）；内嵌没有的规则追加
         - pack 未注册 / params.rules 非列表 → warning + 跳过该包
-        - 规则非映射 / 缺 id / 缺 expr → warning + 跳过该条
+        - kind=narrative 规则（P21）：只要求 id+desc，不进 world_rules
+          （validator 无法消费），其 desc 追加进 prompt.hard_requirements
+          作为 LLM 创作约束（去重：desc 已存在则不加）
+        - 其余规则非映射 / 缺 id / 缺 expr → warning + 跳过该条
         - expr 过 Z3 语法校验（ConsistencyValidator.check_rule_expr，与
           validator Step 6 同一解析路径）：非法 → 该条拒载 + warning，
           其余规则不受影响
@@ -339,6 +342,8 @@ class StoryEngine:
         merged = list(embedded)
         slot = {r.get("id"): i for i, r in enumerate(merged)
                 if isinstance(r, dict)}
+        narrative_slot: dict[str, int] = {}
+        narrative_rules: list[dict] = []
         for name in pack_names:
             manifest = packs.get(str(name))
             if manifest is None:
@@ -350,10 +355,27 @@ class StoryEngine:
                 logger.warning("world.rule 包「%s」缺 rules 列表，跳过", name)
                 continue
             for rule in rules:
-                if not isinstance(rule, dict) \
-                        or not rule.get("id") or not rule.get("expr"):
+                if not isinstance(rule, dict) or not rule.get("id"):
                     logger.warning(
-                        "world.rule 包「%s」含缺 id/expr 的规则（%r），跳过该条",
+                        "world.rule 包「%s」含缺 id 的规则（%r），跳过该条",
+                        name, rule)
+                    continue
+                # P21：narrative 规则分流——创作约束进 prompt 不进 Z3
+                if rule.get("kind") == "narrative":
+                    if not rule.get("desc"):
+                        logger.warning(
+                            "world.rule 包「%s」narrative 规则「%s」缺 desc，跳过",
+                            name, rule["id"])
+                        continue
+                    if rule["id"] in narrative_slot:
+                        narrative_rules[narrative_slot[rule["id"]]] = rule
+                    else:
+                        narrative_slot[rule["id"]] = len(narrative_rules)
+                        narrative_rules.append(rule)
+                    continue
+                if not rule.get("expr"):
+                    logger.warning(
+                        "world.rule 包「%s」含缺 expr 的规则（%r），跳过该条",
                         name, rule)
                     continue
                 if not ConsistencyValidator.check_rule_expr(rule["expr"]):
@@ -368,6 +390,16 @@ class StoryEngine:
                     merged.append(rule)               # 新规则追加
         params = dict(genre_params)
         params["world_rules"] = merged
+        if narrative_rules:
+            # 浅拷贝陷阱：必须新建 prompt dict 与 list，不得原地改 registry
+            # 缓存的 manifest params（同进程多项目会互相污染、重复追加）
+            prompt = dict(params.get("prompt") or {})
+            hrs = list(prompt.get("hard_requirements") or [])
+            for r in narrative_rules:
+                if r["desc"] not in hrs:
+                    hrs.append(r["desc"])
+            prompt["hard_requirements"] = hrs
+            params["prompt"] = prompt
         return params
 
     # ============ P12.3：worldview profile world_rules 合并 ============

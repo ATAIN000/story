@@ -7,6 +7,9 @@
 2. 非法 expr 拒载：tmp pack 含坏 expr / 引用未知事实 / 缺 id 的规则 +
    一条好规则 → 坏规则跳过 + warning，好规则正常合并，未注册包跳过不崩
 3. 未配置 rule_packs 的 genre（romance）world_rules 与 yaml 基线逐字一致
+4. P21：kind=narrative 规则（hermes 包创作约束）不进 world_rules/validator，
+   其 desc 分流进 prompt.hard_requirements；无拒载 warning；
+   registry 缓存的插件 params 本体不被污染
 """
 from __future__ import annotations
 
@@ -96,7 +99,7 @@ def test_invalid_expr_rules_rejected(tmp_path, monkeypatch, caplog):
         msgs = [r.getMessage() for r in caplog.records]
         assert any("bad_syntax" in m and "非法" in m for m in msgs)
         assert any("unknown_fact" in m and "非法" in m for m in msgs)
-        assert any("缺 id/expr" in m for m in msgs)
+        assert any("缺 id" in m for m in msgs)
         assert any("未注册" in m for m in msgs)
     finally:
         eng.kernel.close()
@@ -114,5 +117,35 @@ def test_genre_without_rule_packs_baseline(tmp_path, monkeypatch):
         assert eng.validator.world_rules == expected
         # 未走合并路径：bundle.genre_params 即插件 params 本体（零拷贝）
         assert eng.bundle.genre_params is eng.genre.params
+    finally:
+        eng.kernel.close()
+
+
+# ---------- 用例4：P21 narrative 规则分流进 prompt.hard_requirements ----------
+
+def test_narrative_rules_to_prompt(tmp_path, monkeypatch, caplog):
+    monkeypatch.setenv("STORY_ENGINE_GENRE", "isekai-detective")
+    with caplog.at_level(logging.WARNING):
+        eng = StoryEngine(str(tmp_path))
+    try:
+        # 无「expr 非法」拒载 warning（knox 8 条 + gongan 5 条已全部 narrative 化）
+        assert not any("非法" in r.getMessage() for r in caplog.records)
+        # world_rules 只剩内嵌 3 条合法 bool 规则（narrative 不进 validator）
+        assert [r["id"] for r in eng.validator.world_rules] == [
+            "fair_play", "tech_no_miracle", "clue_before_reveal"]
+        # narrative desc 追加进 prompt.hard_requirements（内嵌 3 条原位保留在前）
+        hrs = eng.bundle.genre_params["prompt"]["hard_requirements"]
+        assert hrs[:3] == [
+            "每次动用现代技术，必须交代如何克服古代条件限制（材料/卫生/工具）",
+            "真相至少一次被权力压制——主角须学会'曲线正义'",
+            "权力阻挠须有真实利益逻辑，禁止纯粹作恶的脸谱反派"]
+        assert "凶手必须是故事早期出现过的角色，且读者未被允许进入其内心" in hrs
+        assert ("禁止机械降神——真相必须从前文已建立的证据链中推出，"
+                "不能靠巧合、天启或未铺垫的机制") in hrs
+        assert len(hrs) == 3 + 8 + 5
+        # registry 缓存的插件 params 本体不被污染（合并在副本上进行）
+        assert eng.genre.params["prompt"]["hard_requirements"] == yaml.safe_load(
+            (GENRES_DIR / "isekai-detective.yaml").read_text(encoding="utf-8")
+        )["params"]["prompt"]["hard_requirements"]
     finally:
         eng.kernel.close()

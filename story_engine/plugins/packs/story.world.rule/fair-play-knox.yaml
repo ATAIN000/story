@@ -4,38 +4,32 @@ extension_point: story.world.rule
 params:
   title: "诺克斯十诫"  # P9.1 中文显示名（id 仍为功能键，不变）
   desc: "Knox 侦探小说十诫（1928）：黄金时代公平推理规则，确保读者享有与侦探平等的推理权"
+  # P21：规则均为 kind: narrative——创作约束无法落入 Z3 5 事实词汇表，
+  # 进 LLM prompt（hard_requirements）不进 validator（原 expr 全部拒载失效）
   rules:
     - id: knox_1
-      kind: bool
+      kind: narrative
       desc: "凶手必须是故事早期出现过的角色，且读者未被允许进入其内心"
-      expr: "killer_appears_early and not(reader_saw_killer_thoughts)"
     - id: knox_2
-      kind: bool
+      kind: narrative
       desc: "排除一切超自然或灵异手段作为破案关键"
-      expr: "not(supernatural_resolves_crime)"
     - id: knox_3
-      kind: int
+      kind: narrative
       desc: "至多一处密室或暗道"
-      expr: "count(secret_room, secret_passage) <= 1"
     - id: knox_4
-      kind: bool
+      kind: narrative
       desc: "不得使用未被发现的毒药或需要长篇科学解释的装置"
-      expr: "not(undiscovered_poison) and not(needs_long_science_explanation)"
     - id: knox_6
-      kind: bool
+      kind: narrative
       desc: "侦探不得靠偶然事故或无根据的直觉破案"
-      expr: "not(accident_helps_detective) and not(baseless_intuition)"
     - id: knox_7
-      kind: bool
+      kind: narrative
       desc: "侦探本人不得是罪犯"
-      expr: "not(detective_is_criminal)"
     - id: knox_8
-      kind: bool
+      kind: narrative
       desc: "侦探发现的线索必须立即呈现给读者"
-      expr: "all_clues_shown_to_reader_when_found"
     - id: knox_10
-      kind: bool
+      kind: narrative
       desc: "双胞胎/替身不得出现，除非已事先铺垫"
-      expr: "implies(has_twin_or_double, twin_prepared_in_text)"
   source: hermes
   source_notes: "Ronald Knox 'Decalogue' (1928), Detection Club. 第5条因时代偏见已弃用。"

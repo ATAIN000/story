@@ -4,26 +4,23 @@ extension_point: story.world.rule
 params:
   title: "武侠禁忌"  # P9.1 中文显示名（id 仍为功能键，不变）
   desc: "武侠类型禁忌：维护江湖世界内在逻辑和武学一致性的底线规则"
+  # P21：规则均为 kind: narrative——创作约束无法落入 Z3 5 事实词汇表，
+  # 进 LLM prompt（hard_requirements）不进 validator（原 expr 全部拒载失效）
   rules:
     - id: wuxia_power_scaling
-      kind: bool
+      kind: narrative
       desc: "武力值体系必须一致——不能为了剧情需要让弱者突然打赢强者，除非有合理的成长或突破机制"
-      expr: "power_outcome_consistent_with_scaling"
     - id: wuxia_no_unearned_powerup
-      kind: bool
+      kind: narrative
       desc: "禁止无代价的实力暴涨——奇遇/秘籍/传功必须有铺垫和代价"
-      expr: "not(unearned_power_escalation)"
     - id: wuxia_jianghu_code
-      kind: bool
+      kind: narrative
       desc: "江湖规矩必须被一致执行——如果设定了「祸不及家人」，就不能在后续随意违背，除非作为明确的冲突点"
-      expr: "jianghu_code_consistently_applied"
     - id: wuxia_sect_hierarchy
-      kind: bool
+      kind: narrative
       desc: "门派等级体系必须稳定——掌门/长老/弟子的权力关系不能随意变动，除非有明确的权力交接事件"
-      expr: "sect_hierarchy_stable_or_explicitly_transferred"
     - id: wuxia_causality_chain
-      kind: bool
+      kind: narrative
       desc: "江湖恩怨必须有因果链——不能凭空树敌，每个冲突必须可追溯到具体的前因"
-      expr: "all_conflicts_have_traceable_cause"
   source: hermes
   source_notes: "金庸/古龙武侠世界构建一致性原则 + 江湖道义体系"

@@ -4,26 +4,23 @@ extension_point: story.world.rule
 params:
   title: "公案禁忌"  # P9.1 中文显示名（id 仍为功能键，不变）
   desc: "公案/推理类型禁忌：维护推理公平性和逻辑严谨性的底线规则"
+  # P21：规则均为 kind: narrative——创作约束无法落入 Z3 5 事实词汇表，
+  # 进 LLM prompt（hard_requirements）不进 validator（原 expr 全部拒载失效）
   rules:
     - id: gongan_no_deus_ex_machina
-      kind: bool
+      kind: narrative
       desc: "禁止机械降神——真相必须从前文已建立的证据链中推出，不能靠巧合、天启或未铺垫的机制"
-      expr: "not(deus_ex_machina_resolution)"
     - id: gongan_clue_fairness
-      kind: bool
+      kind: narrative
       desc: "所有关键线索必须在侦探推理之前已出现在文本中（读者有机会自行推理）"
-      expr: "all_clues_presented_before_deduction"
     - id: gongan_no_withheld_identity
-      kind: bool
+      kind: narrative
       desc: "凶手身份不能在最后才凭空出现——必须在故事前半段以某种形式登场"
-      expr: "killer_introduced_before_midpoint"
     - id: gongan_testimony_consistency
-      kind: bool
+      kind: narrative
       desc: "证人供词必须前后一致或在文本中被明确标记为说谎——不能作者随意更改角色记忆"
-      expr: "testimony_consistent_or_marked_as_lie"
     - id: gongan_motivation_traceable
-      kind: bool
+      kind: narrative
       desc: "犯罪动机必须在真相揭晓时可追溯——不能是「他就是疯了」式无动机犯罪（除非前文已铺垫精神状态）"
-      expr: "motivation_traceable_or_mental_state_fore shadowed"
   source: hermes
   source_notes: "综合本格推理fair-play原则 + 中国公案叙事传统"
