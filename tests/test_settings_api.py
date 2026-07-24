@@ -33,9 +33,10 @@ class TestSettingsApi(unittest.TestCase):
         r = self.client.get("/api/settings")
         self.assertEqual(r.status_code, 200)
         body = r.json()
-        # 6 字段结构
+        # 7 字段结构（P23 起 +llm_configured）
         for k in ("eval_enabled", "ir_first", "eval_max_rounds",
-                  "llm_mode", "llm_model", "base_url_masked"):
+                  "llm_mode", "llm_model", "llm_configured",
+                  "base_url_masked"):
             self.assertIn(k, body)
         # api_key 永不出现
         self.assertNotIn("api_key", body)
@@ -75,6 +76,53 @@ class TestSettingsApi(unittest.TestCase):
         self.assertNotIn("key", body)
         self.assertNotIn("api_key", body)
         self.assertIn("model", body)
+
+    # ---------- P23：在线 LLM 配置 + 错误中文化 ----------
+
+    def test_4_llm_settings_inprocess_override(self):
+        old_model = backend.engine.llm.model
+        old_url = backend.engine.llm.base_url
+        try:
+            r = self.client.post("/api/settings/llm", json={
+                "base_url": "https://api.deepseek.com/v1",
+                "model": "deepseek-chat"})
+            self.assertEqual(r.status_code, 200)
+            body = r.json()
+            self.assertEqual(body["llm_model"], "deepseek-chat")
+            self.assertIn("llm_configured", body)
+            self.assertNotIn("api_key", body)
+            # 非法 base_url → 422 中文提示
+            r = self.client.post("/api/settings/llm",
+                                 json={"base_url": "http://evil.example.com"})
+            self.assertEqual(r.status_code, 422)
+            self.assertIn("https", r.json()["detail"])
+        finally:
+            backend.engine.llm.base_url = old_url
+            backend.engine.llm.model = old_model
+
+    def test_5_validation_422_chinese(self):
+        # P23：Pydantic 422 → 中文字段名（不再漏英文 Field required）
+        r = self.client.post("/api/gacha/begin", json={})
+        self.assertEqual(r.status_code, 422)
+        self.assertIn("题材名", r.json()["detail"])
+
+    def test_6_persist_env_roundtrip(self):
+        # P23：_persist_env 写回 .env（保留注释行、替换已有键、追加新键）
+        import tempfile
+        from pathlib import Path
+        saved_root = backend.ROOT
+        tmp = Path(tempfile.mkdtemp())
+        (tmp / ".env").write_text("# 注释行\nFOO=1\n", encoding="utf-8")
+        try:
+            backend.ROOT = tmp
+            backend._persist_env({"FOO": "2", "BAR": "x"})
+            text = (tmp / ".env").read_text(encoding="utf-8")
+            self.assertIn("# 注释行", text)
+            self.assertIn("FOO=2", text)
+            self.assertNotIn("FOO=1", text)
+            self.assertIn("BAR=x", text)
+        finally:
+            backend.ROOT = saved_root
 
 
 if __name__ == "__main__":

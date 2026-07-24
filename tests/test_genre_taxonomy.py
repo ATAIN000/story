@@ -43,6 +43,13 @@ def test_taxonomy_count_and_unique():
     assert len(titles) == len(set(titles)), "taxon title 重复"
 
 
+def test_tag_zh_covers_all_taxa_tags():
+    """P23：TAG_ZH 覆盖全部 taxon tag（前端 chips 不再显示英文 id）。"""
+    from story_engine.meta.genre_taxonomy import TAG_ZH
+    missing = {tag for t in all_taxa() for tag in t.tags} - set(TAG_ZH)
+    assert not missing, f"TAG_ZH 缺：{sorted(missing)}"
+
+
 def test_all_genre_yamls_pass_validate():
     files = sorted(GENRES_DIR.glob("*.yaml"))
     assert len(files) >= 300
