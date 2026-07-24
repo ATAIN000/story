@@ -224,6 +224,8 @@ export function toConfigVM(cfg) {
     pluginCount: Object.values(plugins)
       .reduce((n, names) => n + (Array.isArray(names) ? names.length : 0), 0),
     displayNames: cfg.display_names ?? {},   // P9.1 {id: title}，无 title 后端已回落 id
+    /* P23：扩展点 id → 中文标签（插件页分桶标题），源 registry EXTENSION_POINTS */
+    extensionLabels: cfg.extension_labels ?? {},
     axes: {
       genre: axes.genre ?? '',
       culture: axes.culture ?? '',
@@ -414,6 +416,9 @@ export function toSettingsVM(s) {
     evalMaxRounds: s.eval_max_rounds ?? 3,
     llmMode: s.llm_mode ?? '',
     llmModel: s.llm_model ?? '',
+    /* P23：settings_view 新增 llm_configured（api_key 是否已配置，bool）——
+       前端只消费布尔态，key 本身永不出后端 */
+    llmConfigured: s.llm_configured ?? false,
     baseUrlMasked: s.base_url_masked ?? '',
   }
 }

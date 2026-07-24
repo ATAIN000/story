@@ -1,11 +1,12 @@
 <script setup>
-// 设置视图（P6.10）：LLM 接入卡（展示掩码 base_url/model/mode + [测试连接]）+
+// 设置视图（P6.10）：LLM 接入卡（P23 起可编辑：provider 快捷下拉 + base_url/model/
+// api_key 表单 + [测试连接] 先测后存 + [保存配置] 可选写回 .env）+
 // 三个开关 EVAL_ENABLED / IR_FIRST / EVAL_MAX_ROUNDS（POST /api/settings 进程内覆盖，
 // 不持久化，重启失效）+ 项目导出（P10.6：当前项目 zip 直链下载）+ 界面设置
 // （主题 + 字号，复用全局 composable）。
 //
-// 明确不做（评审意见 8）：7 步验证开关、违规动作 mark 模式、provider 在线切换、
-// 伏笔回收窗口/钩子在线改。key 永不在前端展示或编辑（走 .env）。
+// 明确不做（评审意见 8）：7 步验证开关、违规动作 mark 模式、伏笔回收窗口/钩子在线改。
+// api_key 只上行不展示：已配置时输入框 placeholder 提示「输入以更换」，key 永不回前端。
 import { ref, onMounted, computed } from 'vue'
 import { api } from '../api/api'
 import { toSettingsVM } from '../api/adapters'
@@ -96,23 +97,90 @@ function onMaxRounds(e) {
   saveToggle('eval_max_rounds', n)
 }
 
-// ---- 测试连接（B10） ----
+// ---- LLM 接入（P23：在线编辑 + 先测后存） ----
+/* provider 快捷预设：选中自动填 base_url + 推荐 model；「自定义」不自动填 */
+const PROVIDERS = [
+  { key: 'moonshot', name: 'Moonshot 开放平台', baseUrl: 'https://api.moonshot.cn/v1', model: 'kimi-k2.6' },
+  { key: 'kimicode', name: 'Kimi Code 套餐', baseUrl: 'https://api.kimi.com/coding/v1', model: 'kimi-for-coding' },
+  { key: 'glm', name: '智谱 GLM', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-4-flash' },
+  { key: 'deepseek', name: 'DeepSeek', baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-chat' },
+  { key: 'openai', name: 'OpenAI', baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini' },
+  { key: 'custom', name: '自定义', baseUrl: '', model: '' },
+]
+const providerKey = ref('custom')
+const llmBaseUrl = ref('')
+const llmModel = ref('')
+const llmApiKey = ref('')          // 只上行不展示；空 = 保持不变
+const persistEnv = ref(true)       // 写回 .env（重启后仍生效），默认勾
+const forceSave = ref(false)       // 用户强制：未通过测试也允许保存
+const testPassed = ref(false)      // 最近一次测试通过且表单未再改动
+const saving = ref(false)
+const saveError = ref('')
+
+function onProviderChange() {
+  const p = PROVIDERS.find(x => x.key === providerKey.value)
+  if (p && p.key !== 'custom') {
+    llmBaseUrl.value = p.baseUrl
+    llmModel.value = p.model
+  }
+  markLlmDirty()
+}
+/* 表单任何改动都使「测试通过」失效（先测后存口径） */
+function markLlmDirty() {
+  testPassed.value = false
+  saveError.value = ''
+}
+const canSaveLlm = computed(() => testPassed.value || forceSave.value)
+
+// ---- 测试连接（B10 / P23：key 输入框非空测临时配置，否则测当前生效配置） ----
 const testing = ref(false)
 const testResult = ref(null)  // {ok, latency_ms, model, error?}
 async function testConnection() {
   testing.value = true
   testResult.value = null
   try {
-    testResult.value = await api.testLlm({})
+    const key = llmApiKey.value.trim()
+    const body = key
+      ? { base_url: llmBaseUrl.value.trim(), api_key: key, model: llmModel.value.trim() }
+      : {}
+    testResult.value = await api.testLlm(body)
+    testPassed.value = !!testResult.value.ok
     if (testResult.value.ok) {
       toast(`连接正常 · ${testResult.value.latency_ms ?? '?'}ms · ${testResult.value.model}`)
     } else {
       toastError(`连接失败：${testResult.value.error ?? '未知错误'}`)
     }
   } catch (e) {
+    testPassed.value = false
     toastError(`测试连接失败：${e.message}`)
   } finally {
     testing.value = false
+  }
+}
+
+// ---- 保存 LLM 配置（P23：POST /api/settings/llm；空键不送 = 保持不变） ----
+async function saveLlm() {
+  if (!canSaveLlm.value || saving.value) return
+  saving.value = true
+  saveError.value = ''
+  try {
+    const body = { persist: persistEnv.value }
+    if (llmBaseUrl.value.trim()) body.base_url = llmBaseUrl.value.trim()
+    if (llmModel.value.trim()) body.model = llmModel.value.trim()
+    if (llmApiKey.value.trim()) body.api_key = llmApiKey.value.trim()
+    await api.updateLlmSettings(body)
+    llmApiKey.value = ''          // 保存后清空 key 输入框（永不展示已存 key）
+    testPassed.value = false
+    forceSave.value = false
+    await load()                  // 刷新 settings 视图（mode/model/掩码/配置态）
+    toast(persistEnv.value
+      ? 'LLM 配置已保存并写回 .env（重启后仍生效）'
+      : 'LLM 配置已保存（进程内生效，重启失效）')
+  } catch (e) {
+    saveError.value = e.message   // 后端 detail（如 base_url 非 https 的 422 中文错误）
+    toastError(`LLM 配置保存失败：${e.message}`)
+  } finally {
+    saving.value = false
   }
 }
 
@@ -133,7 +201,7 @@ function onFont(e) {
 
   <div v-else class="settings">
     <div class="sv-scroll">
-      <!-- LLM 接入卡片 -->
+      <!-- LLM 接入卡片（P23：可编辑，先测后存） -->
       <section class="card">
         <header class="card-h">
           <span class="card-t">LLM 接入</span>
@@ -142,22 +210,70 @@ function onFont(e) {
           </span>
         </header>
         <div class="card-body">
-          <div class="kv">
-            <span class="k">模型</span>
-            <span class="v mono">{{ vm?.llmModel || '—' }}</span>
+          <!-- 状态行：配置态状态点 + 脱敏 base_url + 当前模型 -->
+          <div class="llm-status">
+            <span class="llm-dot" :class="{ on: vm?.llmConfigured }" aria-hidden="true"></span>
+            <span>{{ vm?.llmConfigured ? '已配置' : '未配置' }}</span>
+            <span class="llm-status-sep" aria-hidden="true">·</span>
+            <span class="mono">{{ vm?.baseUrlMasked || '—' }}</span>
+            <span class="llm-status-sep" aria-hidden="true">·</span>
+            <span class="mono">{{ vm?.llmModel || '—' }}</span>
           </div>
-          <div class="kv">
-            <span class="k">Base URL（脱敏）</span>
-            <span class="v mono">{{ vm?.baseUrlMasked || '—' }}</span>
+
+          <div class="llm-form">
+            <label class="llm-field">
+              <span class="llm-label">服务商</span>
+              <select class="sel llm-input" v-model="providerKey" data-testid="llm-provider-select"
+                      aria-label="LLM 服务商快捷选择" @change="onProviderChange">
+                <option v-for="p in PROVIDERS" :key="p.key" :value="p.key">{{ p.name }}</option>
+              </select>
+            </label>
+            <label class="llm-field">
+              <span class="llm-label">Base URL</span>
+              <input class="llm-input" type="text" v-model="llmBaseUrl" spellcheck="false"
+                     data-testid="llm-base-url-input"
+                     placeholder="https://api.moonshot.cn/v1"
+                     aria-label="LLM Base URL" @input="markLlmDirty" />
+            </label>
+            <label class="llm-field">
+              <span class="llm-label">模型</span>
+              <input class="llm-input" type="text" v-model="llmModel" spellcheck="false"
+                     data-testid="llm-model-input"
+                     placeholder="kimi-k2.6"
+                     aria-label="LLM 模型名" @input="markLlmDirty" />
+            </label>
+            <label class="llm-field">
+              <span class="llm-label">API Key</span>
+              <input class="llm-input" type="password" v-model="llmApiKey" autocomplete="off"
+                     data-testid="llm-key-input"
+                     :placeholder="vm?.llmConfigured ? '已配置 · 输入以更换' : '粘贴你的 API key'"
+                     aria-label="LLM API Key" @input="markLlmDirty" />
+            </label>
           </div>
-          <div class="kv">
-            <span class="k">API Key</span>
-            <span class="v">●●●●●●（走 .env，不可见/不可编辑）</span>
+
+          <div class="llm-opts">
+            <label class="llm-check">
+              <input type="checkbox" v-model="persistEnv" data-testid="llm-persist-check" />
+              写回 .env（重启后仍生效）
+            </label>
+            <label class="llm-check" title="跳过「先测后存」，直接保存">
+              <input type="checkbox" v-model="forceSave" />
+              未测试也保存（强制）
+            </label>
           </div>
 
           <div class="test-zone">
-            <button class="btn primary" :disabled="testing" data-testid="test-connection" @click="testConnection">
-              {{ testing ? '测试中…' : '测试连接' }}
+            <!-- 包裹 span 保留旧 data-testid="test-connection"（测试指引文档在用），
+                 新规范 testid 在按钮本体上 -->
+            <span data-testid="test-connection" class="llm-test-wrap">
+              <button class="btn primary" :disabled="testing" data-testid="llm-test-btn" @click="testConnection">
+                {{ testing ? '测试中…' : '测试连接' }}
+              </button>
+            </span>
+            <button class="btn" :disabled="!canSaveLlm || saving" data-testid="llm-save-btn"
+                    :title="canSaveLlm ? '' : '先通过「测试连接」，或勾选「未测试也保存」'"
+                    @click="saveLlm">
+              {{ saving ? '保存中…' : '保存配置' }}
             </button>
             <span v-if="testResult" class="test-res" :class="{ ok: testResult.ok, fail: !testResult.ok }">
               <template v-if="testResult.ok">
@@ -168,8 +284,10 @@ function onFont(e) {
               </template>
             </span>
           </div>
+          <div v-if="saveError" class="llm-save-err" role="alert">✗ {{ saveError }}</div>
           <div class="hint">
-            一次性最小请求（「请回复：好」max_tokens=10），只返回 ok/延迟/model，key 永不回前端。
+            测试为一次性最小请求（「请回复：好」max_tokens=10），只返回 ok/延迟/model，key 永不回前端。
+            API key 留空则保持不变；base_url 必须 https（本机可用 http://localhost）。
           </div>
         </div>
       </section>
@@ -306,11 +424,34 @@ function onFont(e) {
 .mono { font-family: Menlo, Consolas, monospace; font-size: 11.5px; }
 
 .test-zone { display: flex; align-items: center; gap: 12px; margin-top: 12px;
-  padding-top: 12px; border-top: 1px dashed var(--line); }
+  padding-top: 12px; border-top: 1px dashed var(--line); flex-wrap: wrap; }
+.llm-test-wrap { display: inline-flex; }
 .test-res { font-size: 12px; font-family: Menlo, Consolas, monospace; }
 .test-res.ok { color: var(--accent); }
 .test-res.fail { color: var(--danger); }
 .hint { margin-top: 10px; font-size: 11px; color: var(--faint); line-height: 1.6; }
+
+/* P23 LLM 接入表单（editorial 主题变量） */
+.llm-status { display: flex; align-items: center; gap: 8px; font-size: 12px;
+  color: var(--ink2); padding-bottom: 10px; margin-bottom: 12px;
+  border-bottom: 1px dashed var(--line); flex-wrap: wrap; }
+.llm-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); flex-shrink: 0; }
+.llm-dot.on { background: var(--green); }
+.llm-status-sep { color: var(--faint); }
+.llm-form { display: flex; flex-direction: column; gap: 10px; }
+.llm-field { display: flex; align-items: center; gap: 10px; }
+.llm-label { min-width: 64px; flex-shrink: 0; font-size: 11.5px; color: var(--faint); }
+.llm-input { flex: 1; min-width: 0; padding: 5px 10px; border: 1px solid var(--line2);
+  border-radius: 5px; background: var(--bg); color: var(--ink);
+  font: 12px Menlo, Consolas, monospace; }
+.llm-input:focus { outline: none; border-color: var(--primary); }
+.llm-input::placeholder { color: var(--faint); }
+select.llm-input { font-family: var(--sans); font-size: 12.5px; }
+.llm-opts { display: flex; align-items: center; gap: 16px; margin-top: 10px; flex-wrap: wrap; }
+.llm-check { display: inline-flex; align-items: center; gap: 6px;
+  font-size: 11.5px; color: var(--ink2); cursor: pointer; }
+.llm-save-err { margin-top: 10px; padding: 8px 12px; border: 1px solid var(--danger);
+  border-radius: 6px; font-size: 12px; color: var(--danger); line-height: 1.6; }
 
 .switch-row { display: flex; align-items: center; justify-content: space-between;
   padding: 11px 0; border-bottom: 1px dashed var(--line); gap: 14px; }

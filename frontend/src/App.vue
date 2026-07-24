@@ -98,6 +98,23 @@ function gotoView(id) {
   if (VIEWS[id]) view.value = id
 }
 
+/* P23 首次启动欢迎横幅：config.llm_mode === 'mock'（即未配置真实 LLM）且
+   未被「先随便看看」关闭过（localStorage storyos_welcome_dismissed）时展示。
+   [去设置] 仅本次关闭（配置好后 mock 消失自然不再出）；[随便看看]/× 持久关闭。 */
+const WELCOME_KEY = 'storyos_welcome_dismissed'
+const welcomeDismissed = ref(false)
+try { welcomeDismissed.value = !!localStorage.getItem(WELCOME_KEY) } catch { /* 隐私模式 */ }
+const showWelcome = computed(() =>
+  !welcomeDismissed.value && (config.value?.llmMode ?? '') === 'mock')
+function welcomeGoSettings() {
+  welcomeDismissed.value = true
+  gotoView('settings')
+}
+function welcomeDismiss() {
+  welcomeDismissed.value = true
+  try { localStorage.setItem(WELCOME_KEY, '1') } catch { /* 写不进就只本次关闭 */ }
+}
+
 onMounted(refresh)
 </script>
 
@@ -153,6 +170,18 @@ onMounted(refresh)
         </div>
       </header>
 
+      <!-- P23 首次启动欢迎横幅（mock 演示模式提示；去设置 / 先随便看看） -->
+      <div v-if="showWelcome" class="welcome-banner" role="status" data-testid="welcome-banner">
+        <span class="wb-text">
+          当前是 <b>Mock 演示模式</b>：离线剧本内容，不耗 API。配置真实 LLM 后开始你的故事 →
+        </span>
+        <button class="btn-main wb-btn" data-testid="welcome-go-settings"
+                aria-label="去设置页配置 LLM" @click="welcomeGoSettings">去设置配置 LLM</button>
+        <button class="btn-line wb-btn" data-testid="welcome-dismiss"
+                aria-label="先随便看看，不再提示" @click="welcomeDismiss">先随便看看</button>
+        <button class="wb-close" aria-label="关闭欢迎横幅" @click="welcomeDismiss">×</button>
+      </div>
+
       <!-- 视图区（状态机切换；组件只消费 adapter 视图模型；navigate = 视图内跳转而发起，如空态 CTA / 抽卡确认开工） -->
       <main class="view" role="main" :aria-label="`视图：${view}`">
         <component :is="activeView" :project="project" :config="config" @refresh="refresh" @navigate="gotoView" />
@@ -162,3 +191,18 @@ onMounted(refresh)
     <ToastHost />
   </div>
 </template>
+
+<style scoped>
+/* P23 首次启动欢迎横幅（--primary-tint 底 + 圆角，与 editorial 主题一致） */
+.welcome-banner { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin: 10px 22px 0; padding: 10px 14px; border: 1px solid var(--line2);
+  border-radius: 8px; background: var(--primary-tint);
+  font-size: 12.5px; color: var(--ink2); }
+.wb-text { flex: 1; min-width: 220px; line-height: 1.6; }
+.wb-text b { color: var(--ink); font-weight: 600; }
+.wb-btn { font-size: 12px; padding: 5px 12px; }
+.wb-close { flex-shrink: 0; width: 24px; height: 24px; border: none; border-radius: 50%;
+  background: transparent; color: var(--faint); font-size: 15px; line-height: 1;
+  cursor: pointer; transition: .12s; }
+.wb-close:hover { color: var(--ink); background: var(--s3); }
+</style>

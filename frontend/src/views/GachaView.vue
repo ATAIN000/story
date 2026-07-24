@@ -31,6 +31,7 @@ const genreItems = ref([])                 // 当前页 items（/api/gacha/genre
 const genreTotal = ref(0)
 const genreFacets = ref({ families: [], tags: [], tiers: [] })
 const genreStats = ref(null)
+const tagZh = ref({})                      /* P23：tag id → 中文（genres 响应 tag_zh 全量映射） */
 const genreOffset = ref(0)
 const genreQuery = ref('')
 const selectedTags = ref([])               // tag 云多选（AND 语义）
@@ -160,6 +161,7 @@ async function loadGenres() {
     genreTotal.value = d.total ?? 0
     genreFacets.value = d.facets ?? { families: [], tags: [], tiers: [] }
     genreStats.value = d.stats ?? null
+    tagZh.value = d.tag_zh ?? {}
   } catch (e) {
     if (seq === genreSeq) toastError(`题材加载失败：${e.message}`)
   } finally {
@@ -178,6 +180,18 @@ function onSearchInput() {
 }
 
 const topTags = computed(() => (genreFacets.value?.tags ?? []).slice(0, 20))
+
+/* P23：tag 中文显示——facets.tags[].zh 优先，映射表兜底，再回落原 id */
+function tagZhLabel(t) {
+  return t?.zh || tagZh.value[t?.id] || t?.id || ''
+}
+function tagZhOf(id) {
+  return tagZh.value[id] || id
+}
+
+/* P23：冲突检测 severity 中文映射（图标与 sev- 类名逻辑不变） */
+const SEV_ZH = { HIGH: '高', MEDIUM: '中', LOW: '低' }
+const sevZh = (s) => SEV_ZH[s] || s
 
 function toggleTag(id) {
   const i = selectedTags.value.indexOf(id)
@@ -975,9 +989,10 @@ async function doConfirm() {
                     class="gg-tag"
                     :class="{ selected: selectedTags.includes(t.id) }"
                     :aria-pressed="selectedTags.includes(t.id)"
+                    :title="t.id"
                     data-testid="genre-tag-chip"
                     @click="toggleTag(t.id)">
-              <span class="gg-tag-name">{{ t.id }}</span>
+              <span class="gg-tag-name">{{ tagZhLabel(t) }}</span>
               <span class="gg-tag-count" aria-hidden="true">{{ t.count }}</span>
             </button>
           </div>
@@ -1014,7 +1029,7 @@ async function doConfirm() {
             </div>
             <div class="gg-card-vibe">{{ g.vibe || '—' }}</div>
             <ul v-if="g.tags?.length" class="gg-card-tags" aria-hidden="true">
-              <li v-for="t in g.tags.slice(0, 3)" :key="t">{{ t }}</li>
+              <li v-for="t in g.tags.slice(0, 3)" :key="t" :title="t">{{ tagZhOf(t) }}</li>
             </ul>
             <div v-if="g.recommended_presets?.length" class="gg-card-rec">
               <AppIcon name="sparkles" :size="11" /> 推荐骨架 {{ g.recommended_presets[0] }}
@@ -1360,7 +1375,7 @@ async function doConfirm() {
             <div class="wv-cc-sev">
               <span class="wv-cc-icon" aria-hidden="true">{{ w.severity === 'HIGH' ? '●' : w.severity === 'MEDIUM' ? '◐' : '○' }}</span>
               <span class="wv-cc-type">{{ w.type }}</span>
-              <span class="wv-cc-severity">{{ w.severity }}</span>
+              <span class="wv-cc-severity">{{ sevZh(w.severity) }}</span>
             </div>
             <div class="wv-cc-title">{{ w.title }}</div>
             <p class="wv-cc-desc">{{ w.description }}</p>

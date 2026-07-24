@@ -99,6 +99,9 @@ export const api = {
   settings: () => req('/api/settings'),
   updateSettings: (patch) => post('/api/settings', patch),
   testLlm: (body = {}) => post('/api/settings/test_llm', body),
+  /* P23：LLM 接入在线配置。body {base_url?, model?, api_key?, persist?}——
+     空键不送（后端语义：空/None = 保持不变）；persist=true 写回 .env */
+  updateLlmSettings: (body) => post('/api/settings/llm', body),
 
   /* --- 世界观架构（P12.5：10 层分步向导 + 级联校验） ---
      schema() → {layers[L0..L3], presets[10], param_count, layers_covered}

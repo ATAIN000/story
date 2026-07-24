@@ -40,6 +40,17 @@ const groups = computed(() => {
   }))
 })
 
+/* P23：扩展点分桶标题中文化——config.extension_labels 形如
+   "题材包：节奏/情感弧/原型/冲突/评估权重"，主标取「：」前中文名，
+   全句放 title 悬停，id 保留为小字副标 */
+const extLabels = computed(() => props.config?.extensionLabels ?? {})
+function extLabelFull(point) { return extLabels.value[point] ?? '' }
+function extLabel(point) {
+  const full = extLabelFull(point)
+  if (!full) return point
+  return String(full).split(/[：:]/)[0].trim() || full
+}
+
 const trainingVm = computed(() => toTrainingStatsVM(stats.value))
 
 async function loadStats() {
@@ -102,7 +113,9 @@ async function genConfig() {
         </header>
         <div class="card-body">
           <div v-for="g in groups" :key="g.point" class="ext-group" :data-testid="`plugin-group-${g.point}`">
-            <div class="ext-point">{{ g.point }}</div>
+            <div class="ext-point" :title="extLabelFull(g.point) || g.point">
+              {{ extLabel(g.point) }}<span class="ext-id">{{ g.point }}</span>
+            </div>
             <div v-if="g.items.length" class="ext-items">
               <div v-for="name in g.items" :key="name" class="ext-item">
                 <span class="ext-name">{{ dn(name) }}<span v-if="dn(name) !== name" class="ext-id">{{ name }}</span></span>
@@ -185,9 +198,9 @@ async function genConfig() {
 
           <div v-if="metaResult" class="gl-result">
             <div class="gl-result-h">StoryConfig 预览</div>
-            <div class="kv"><span class="k">genre</span><span class="v">{{ dn(metaResult.genre) || '—' }}<span v-if="metaResult.genre" class="ext-id">{{ metaResult.genre }}</span></span></div>
-            <div class="kv"><span class="k">culture</span><span class="v">{{ dn(metaResult.culture) || '—' }}<span v-if="metaResult.culture" class="ext-id">{{ metaResult.culture }}</span></span></div>
-            <div class="kv"><span class="k">language</span><span class="v mono">{{ metaResult.language || '—' }}</span></div>
+            <div class="kv"><span class="k">题材</span><span class="v">{{ dn(metaResult.genre) || '—' }}<span v-if="metaResult.genre" class="ext-id">{{ metaResult.genre }}</span></span></div>
+            <div class="kv"><span class="k">文化</span><span class="v">{{ dn(metaResult.culture) || '—' }}<span v-if="metaResult.culture" class="ext-id">{{ metaResult.culture }}</span></span></div>
+            <div class="kv"><span class="k">语言</span><span class="v mono">{{ metaResult.language || '—' }}</span></div>
             <div class="kv"><span class="k">target_length</span><span class="v mono">{{ metaResult.targetLength }} 章</span></div>
             <div v-if="metaResult.theme" class="kv"><span class="k">theme</span><span class="v">{{ metaResult.theme }}</span></div>
             <div class="gl-note">校验已在后端 generate_config 内完成（不兼容组合会 400）；此预览不持久化、不写入当前项目。</div>
@@ -220,7 +233,7 @@ async function genConfig() {
 
 .ext-group { padding: 8px 0; border-bottom: 1px dashed var(--line); }
 .ext-group:last-child { border-bottom: none; }
-.ext-point { font: 600 11.5px Menlo, Consolas, monospace; color: var(--primary); margin-bottom: 6px; }
+.ext-point { font: 600 12.5px var(--sans); color: var(--ink); margin-bottom: 6px; }
 .ext-items { display: flex; flex-direction: column; gap: 4px; }
 .ext-item { display: flex; align-items: center; justify-content: space-between;
   padding: 4px 0; font-size: 12.5px; }
