@@ -1,5 +1,7 @@
 <script setup>
 // 时间线（P6.9）：轨道地铁图 · 竖向版（P23 改：章=行下延，轨道=列）。
+// P23.3：行高按同格最大事件数自适应（此前固定行高，多事件溢出底纹）；
+// 顶部轨道标签区独立加高；脏 agent 显示兜底。
 // 数据源：project（adapter toTimelineVM）—— 轨道=最新决策卡 trackNames；
 // 事件=all_events 按 chapter 聚合，agent→track 哈希分散（最小实现）；
 // 伏笔弧=foreshadows 的 plantedChapter→paidAtChapter（未回收指「未来」行），右侧边沟。
@@ -16,15 +18,16 @@ const props = defineProps({
 
 const vm = computed(() => toTimelineVM(props.project))
 
-/* ---- 竖向几何：章=行（y 下延），轨道=列（x） ---- */
+/* ---- 竖向几何：章=行（y 下延），轨道=列（x）；行高按内容自适应 ---- */
 const PAD_L = 64         // 左侧章标签预留宽
 const PAD_R = 130        // 右侧伏笔弧边沟
-const PAD_T = 56         // 顶部轨道标签预留高
+const PAD_T = 72         // 顶部轨道标签预留高（独立标签区，不被首行事件压）
 const PAD_B = 30
 const COL_W = 190        // 每轨道列宽
-const ROW_H = 96         // 每章行高
+const ROW_MIN = 96       // 每章最小行高
 const NODE_W = COL_W - 24
 const NODE_H = 24
+const STACK_STEP = NODE_H + 6   // 同格事件竖叠步距
 
 const chapterRows = computed(() => {
   const n = Math.max((vm.value.chapterCount ?? 0) + 1, 1)   /* +1 行容纳开放弧 */
@@ -34,13 +37,37 @@ const chapterRows = computed(() => {
   }))
 })
 
+/* 行布局：每行高度 = 该行所有格中最大同格事件数 × 竖叠步距 + 余量（保底 ROW_MIN） */
+const rowLayout = computed(() => {
+  const cellCount = new Map()   // `chapter|track` → count（chapter=0 归入第 1 行）
+  for (const e of vm.value.events) {
+    const ch = e.chapter > 0 ? e.chapter : 1
+    const k = `${ch}|${e.track}`
+    cellCount.set(k, (cellCount.get(k) || 0) + 1)
+  }
+  let acc = PAD_T
+  return chapterRows.value.map(c => {
+    let maxCount = 1
+    for (const t of vm.value.tracks) {
+      maxCount = Math.max(maxCount, cellCount.get(`${c.chapter}|${t.id}`) || 0)
+    }
+    const h = Math.max(ROW_MIN, maxCount * STACK_STEP + 42)
+    const row = { ...c, top: acc, h, cy: acc + h / 2 }
+    acc += h
+    return row
+  })
+})
+
 const width = computed(() => PAD_L + vm.value.tracks.length * COL_W + PAD_R)
-const height = computed(() => PAD_T + chapterRows.value.length * ROW_H + PAD_B)
+const height = computed(() => {
+  const rows = rowLayout.value
+  return rows.length ? rows[rows.length - 1].top + rows[rows.length - 1].h + PAD_B
+                     : PAD_T + PAD_B
+})
 
 function trackX(i) { return PAD_L + i * COL_W + COL_W / 2 }
-function rowY(i) { return PAD_T + i * ROW_H + ROW_H / 2 }
 
-/* 同轨道同章事件竖向叠放 */
+/* 同轨道同章事件竖向叠放（行高已按最大叠数自适应，不溢出底纹） */
 const placedEvents = computed(() => {
   const groups = new Map()   // `chapter|track` → events[]
   for (const e of vm.value.events) {
@@ -54,15 +81,15 @@ const placedEvents = computed(() => {
     const ch = Number(chRaw)
     /* chapter=0（未归章）事件归入第一行（chapter=1）并打 untagged 标，避免被静默丢弃 */
     const chForRow = ch > 0 ? ch : 1
-    const ri = chapterRows.value.findIndex(c => c.chapter === chForRow)
+    const row = rowLayout.value.find(r => r.chapter === chForRow)
     const ti = vm.value.tracks.findIndex(t => t.id === tr)
-    if (ri < 0 || ti < 0) continue
+    if (!row || ti < 0) continue
     evs.forEach((e, i) => {
-      const offset = (i - (evs.length - 1) / 2) * (NODE_H + 6)
+      const offset = (i - (evs.length - 1) / 2) * STACK_STEP
       placed.push({
         ...e,
         x: trackX(ti),
-        y: rowY(ri) + offset - NODE_H / 2,
+        y: row.cy + offset - NODE_H / 2,
         idx: i,
         untagged: ch <= 0,
       }
@@ -91,10 +118,10 @@ const aLineSegments = computed(() => {
 
 /* 伏笔弧：右侧边沟，plantedChapter→paidAtChapter（开放则→chapterCount+1 行） */
 const arcs = computed(() => vm.value.arcs.map(f => {
-  const fromRi = chapterRows.value.findIndex(c => c.chapter === f.from)
-  const toRi = chapterRows.value.findIndex(c => c.chapter === f.to)
-  const y1 = fromRi >= 0 ? rowY(fromRi) : 0
-  const y2 = toRi >= 0 ? rowY(toRi) : y1
+  const fromRow = rowLayout.value.find(r => r.chapter === f.from)
+  const toRow = rowLayout.value.find(r => r.chapter === f.to)
+  const y1 = fromRow ? fromRow.cy : PAD_T
+  const y2 = toRow ? toRow.cy : y1
   const x = width.value - PAD_R + 26
   const mid = (y1 + y2) / 2
   return {
@@ -106,6 +133,13 @@ const arcs = computed(() => vm.value.arcs.map(f => {
     label: `◆${f.id}${f.paidOff ? '（已收）' : '（回收中）'}`,
   }
 }))
+
+/* 事件 agent 显示兜底：空/纯符号（如 LLM 抽出的「∵」）不显示 agent 段 */
+function agentLabel(e) {
+  const a = (e.agent || '').trim()
+  if (a.length >= 2 || /[\u4e00-\u9fa5a-zA-Z0-9]/.test(a)) return `${a}：`
+  return ''
+}
 
 /* 主题切换重绘订阅 */
 const themeTick = ref(0)
@@ -139,24 +173,24 @@ onUnmounted(() => window.removeEventListener(THEME_EVENT, onTheme))
 
         <!-- 章行底纹 + 左侧章标签 -->
         <g class="tl-rows">
-          <rect v-for="(c, i) in chapterRows" :key="`bg${i}`"
-                :x="PAD_L - 8" :y="PAD_T + i * ROW_H + 6"
-                :width="vm.tracks.length * COL_W + 16" :height="ROW_H - 12" rx="10"
-                :fill="c.isFuture ? 'var(--primary)' : 'transparent'"
-                :fill-opacity="c.isFuture ? 0.05 : 0"
-                :stroke="c.isFuture ? 'var(--primary)' : 'var(--line)'"
-                :stroke-dasharray="c.isFuture ? '6 4' : 'none'"
-                :stroke-opacity="c.isFuture ? 0.4 : 0.5" />
-          <text v-for="(c, i) in chapterRows" :key="`ct${i}`"
-                :x="PAD_L - 16" :y="rowY(i) + 4" text-anchor="end" font-size="13"
-                :font-weight="700" :fill="c.isFuture ? 'var(--primary)' : 'var(--faint)'"
-                style="font-family: var(--serif)">第{{ c.chapter }}章</text>
+          <rect v-for="r in rowLayout" :key="`bg${r.chapter}`"
+                :x="PAD_L - 8" :y="r.top + 6"
+                :width="vm.tracks.length * COL_W + 16" :height="r.h - 12" rx="10"
+                :fill="r.isFuture ? 'var(--primary)' : 'transparent'"
+                :fill-opacity="r.isFuture ? 0.05 : 0"
+                :stroke="r.isFuture ? 'var(--primary)' : 'var(--line)'"
+                :stroke-dasharray="r.isFuture ? '6 4' : 'none'"
+                :stroke-opacity="r.isFuture ? 0.4 : 0.5" />
+          <text v-for="r in rowLayout" :key="`ct${r.chapter}`"
+                :x="PAD_L - 16" :y="r.cy + 4" text-anchor="end" font-size="13"
+                :font-weight="700" :fill="r.isFuture ? 'var(--primary)' : 'var(--faint)'"
+                style="font-family: var(--serif)">第{{ r.chapter }}章</text>
         </g>
 
-        <!-- 轨道标签（顶部） -->
+        <!-- 轨道标签（顶部独立区） -->
         <g class="tl-tracks">
           <text v-for="(t, i) in vm.tracks" :key="`tr${t.id}`"
-                :x="trackX(i)" :y="PAD_T - 16" text-anchor="middle"
+                :x="trackX(i)" :y="PAD_T - 18" text-anchor="middle"
                 font-size="12" font-weight="700" fill="var(--faint)">
             {{ t.id }} · {{ t.name.length > 12 ? t.name.slice(0, 12) + '…' : t.name }}
           </text>
@@ -185,7 +219,7 @@ onUnmounted(() => window.removeEventListener(THEME_EVENT, onTheme))
             <rect :x="e.x - NODE_W / 2" :y="e.y" :width="NODE_W" :height="NODE_H" rx="6"
                   fill="var(--s2)" stroke="var(--line2)" />
             <text :x="e.x" :y="e.y + 16" text-anchor="middle" font-size="11" fill="var(--ink)">
-              {{ e.agent || '·' }}：{{ e.action?.slice(0, 14) || e.eventType }}
+              {{ agentLabel(e) }}{{ e.action?.slice(0, 14) || e.eventType }}
             </text>
             <title>第{{ e.chapter }}章 · {{ e.agent }}：{{ e.action }}{{ e.untagged ? '（未归章）' : '' }}</title>
           </g>
