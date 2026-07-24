@@ -116,7 +116,7 @@ loguru 全链路：控制台 INFO + `logs/story_engine.log` DEBUG（按天轮转
 
 ## 致谢
 
-感谢 **凡事皆可短剧** 团队（交流群二维码见应用内导航左下角，
+感谢 **凡事皆可短剧** 团队（交流群二维码见应用内左侧导航「关于」页，
 或把图片放到 `frontend/public/group-qr.png` 后自行构建）。
 
 ## License
