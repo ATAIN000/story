@@ -659,8 +659,11 @@ async function autoDeriveCast() {
         name: c.name || `角色${i + 1}`,
         role: c.role || (i === 0 ? '主角' : '配角'),
         persona: { ...(c.persona || {}) },
+        /* P23.1：泛称名（主角/重要配角…）标记待命名，用户改名后清除 */
+        placeholder: !!c.placeholder,
       }))
-      toast('AI 已自动分配人物原型')
+      const pending = castCards.value.filter(c => c.placeholder).length
+      toast(pending ? `AI 已自动分配人物原型（${pending} 个角色待命名）` : 'AI 已自动分配人物原型')
     } else {
       toastError('AI 未能推导出人物原型，请手动填写')
     }
@@ -1304,7 +1307,10 @@ async function doConfirm() {
               <input v-model.trim="card.name" class="wv-cast-name-input"
                      :placeholder="idx === 0 ? '主角名（必填）' : '配角名'"
                      :aria-label="`${idx === 0 ? '主角' : '配角'}名`"
-                     maxlength="20">
+                     maxlength="20"
+                     @input="card.placeholder = false">
+              <span v-if="card.placeholder" class="wv-cast-pending"
+                    data-testid="cast-pending-badge">待命名</span>
               <button v-if="idx > 0" class="wv-cast-del btn-line btn-line-xs"
                       :aria-label="`删除配角 ${idx}`" @click="removeCastCard(idx)">删除</button>
             </div>

@@ -29,6 +29,9 @@ def derive_cast(worldview_layers: dict | None = None,
       schmidt_goddess, schmidt_polarity, enneagram_type, enneagram_wing,
       narrative_function, arc_type, arc_lie, arc_want, arc_need, arc_truth,
       tropes, mckee_contradiction_text}}]
+    P23.1：名字落到泛称兜底（主角/重要配角/对手/引路人）时附带
+    ``placeholder: True`` —— 泛称是角色身份不是人名（曾有项目把「死者」
+    当真人名落盘），前端据标记提示用户命名。
 
     P19.1：name 优先从 genre_params 的 cast 段 / prompt.characters 提取（复用
     meta.cast.parse_cast），取不到时用题材 archetype 推导合理名，最后退回泛称。
@@ -50,6 +53,7 @@ def derive_cast(worldview_layers: dict | None = None,
 
     protagonist = _make_char(
         name=real_names[0] if real_names else "主角", role="主角",
+        placeholder=not real_names,
         narrative_function=func_main,
         pearson_primary=pearson_main,
         schmidt_goddess=schmidt_main,
@@ -63,6 +67,7 @@ def derive_cast(worldview_layers: dict | None = None,
     support1_pearson = _complementary_pearson(pearson_main)
     support1 = _make_char(
         name=real_names[1] if len(real_names) > 1 else "重要配角", role="配角",
+        placeholder=len(real_names) <= 1,
         narrative_function="ally",
         pearson_primary=support1_pearson,
         schmidt_goddess="none",
@@ -77,6 +82,7 @@ def derive_cast(worldview_layers: dict | None = None,
     if conflict in ("cosmic", "ideological", "civilizational"):
         villain = _make_char(
             name=real_names[2] if len(real_names) > 2 else "对手", role="反派",
+            placeholder=len(real_names) <= 2,
             narrative_function="threshold_guardian",
             pearson_primary=_shadow_pearson(pearson_main),
             schmidt_goddess="none",
@@ -92,6 +98,7 @@ def derive_cast(worldview_layers: dict | None = None,
     if acquisition in ("cultivation", "study", "bestowal"):
         mentor = _make_char(
             name=real_names[3] if len(real_names) > 3 else "引路人", role="导师",
+            placeholder=len(real_names) <= 3,
             narrative_function="mentor",
             pearson_primary="sage",
             schmidt_goddess="none",
@@ -199,12 +206,13 @@ def _shadow_pearson(main: str) -> str:
 
 def _make_char(*, name, role, narrative_function, pearson_primary,
                schmidt_goddess, enneagram_type, arc_type, tropes,
-               schmidt_polarity="positive") -> dict:
+               schmidt_polarity="positive", placeholder=False) -> dict:
     """构建单角色建议（persona 含 CHAR1-CHAR5 全字段）"""
     arc_lie, arc_want, arc_need, arc_truth = _arc_texts(arc_type, pearson_primary)
     return {
         "name": name,
         "role": role,
+        "placeholder": placeholder,   # P23.1：泛称名标记（前端提示命名）
         "persona": {
             "narrative_function": narrative_function,
             "pearson_primary": pearson_primary,

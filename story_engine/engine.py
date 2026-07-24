@@ -274,6 +274,10 @@ class StoryEngine:
         # 在生成期 KeyError 崩溃）：kind=narrative 分流进 prompt；expr 非法
         # → warning + 拒载；全合法时返回 params 本体（零拷贝，行为不变）
         genre_params = self._sanitize_world_rules(genre_params)
+        # P23.1：项目 cast.json 存在时，prompt.characters 以项目阵容为准——
+        # 此前生成 prompt 的 characters 始终用题材默认文案，LLM 看不到项目
+        # 实际阵容，只能现编「嫌疑人甲/乙」占位名（人物条目灌水根因之一）
+        genre_params = self._merge_cast_prompt(genre_params)
         # 权威 GenreBundle 构建一次：Showrunner 决策卡与 spawn_director 共用
         self.bundle = GenreBundle(
             genre=genre_name, culture=culture_name,
@@ -447,6 +451,22 @@ class StoryEngine:
             return genre_params
         params = dict(genre_params)
         params["world_rules"] = merged
+        return params
+
+    # ============ P23.1：项目阵容覆盖 prompt.characters ============
+    def _merge_cast_prompt(self, genre_params: dict) -> dict:
+        """cast.json 非空时，把 prompt.characters 换成项目阵容名单
+        （「祁望（主角）、死者（配角）」式）；无 cast.json / 空 → 原样返回。
+        必须新建 prompt dict（与 _sanitize_world_rules 同款浅拷贝纪律）。"""
+        overrides = _load_cast_overrides(self.project_dir)
+        if not overrides:
+            return genre_params
+        roster = "、".join(
+            f"{ov['id']}（{str(ov.get('role') or '角色')}）" for ov in overrides)
+        params = dict(genre_params)
+        prompt = dict(params.get("prompt") or {})
+        prompt["characters"] = roster
+        params["prompt"] = prompt
         return params
 
     # ============ P22：内嵌 world_rules 消毒（生成期防崩） ============
@@ -1898,11 +1918,19 @@ class StoryEngine:
     @staticmethod
     def _characters_view(state: WorldState,
                          voice_hints: dict[str, str] | None = None) -> list[dict]:
-        """角色卡纯组装（静态，便于空态单测）；voice_hints 见 characters_view"""
+        """角色卡纯组装（静态，便于空态单测）；voice_hints 见 characters_view
+
+        P23.1 白名单过滤：事件流里出现的任意 agent 字符串都会自动建 mind
+        （types.py WorldState.apply），群体/机构/占位名（「评议会」「嫌疑人甲」
+        「角色」）由此灌进人物列表。过滤规则：只保留 ①在阵容册
+        （state.characters）内，或 ②有目标/秘密等实质心智内容的 mind；
+        仅持有零散信念的裸 mind（多为噪音）不展示。"""
         voice_hints = voice_hints or {}
         cards = []
         for cid in sorted(state.minds):
             m = state.minds[cid]
+            if cid not in state.characters and not m.goals and not m.secrets:
+                continue
             relations = []
             for key in sorted(state.relationships):
                 pair = key.split("|")

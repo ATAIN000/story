@@ -660,6 +660,11 @@ button { font: inherit; cursor: pointer; border: none; background: none; color: 
   background: var(--border, #e0e0e0); color: var(--text-sec, #666); white-space: nowrap;
 }
 .wv-cast-badge.main { background: var(--accent, #6366f1); color: #fff; }
+.wv-cast-pending {
+  font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px;
+  background: var(--warning-bg, #fdf0e0); color: var(--warning, #b45309);
+  border: 1px solid var(--warning, #b45309); white-space: nowrap;
+}
 .wv-cast-name-input {
   flex: 1; border: 1px solid var(--border, #e0e0e0); border-radius: 6px;
   padding: 6px 10px; font-size: 14px; background: var(--bg, #fff); color: var(--text, #333);

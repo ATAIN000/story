@@ -762,14 +762,18 @@ export function toWorldViewVM(project, config) {
   const physical = (world?.physical ?? []).map(name => ({
     name, kind: '场景/物品', desc: '已确立的物理事实（事件流聚合）',
   }))
-  /* 人物→role 聚合（来自 minds VM，已有 role 字段） */
+  /* 人物→role 聚合（来自 minds VM，已有 role 字段）
+     P23.1 白名单过滤：事件流任意 agent 字符串都会建 mind（群体/机构/占位名
+     灌水）；只保留 ①在阵容册（role 非空），或 ②有目标/秘密实质内容的 mind */
   const minds = world?.minds ?? []
-  const characterEntries = minds.map(m => ({
-    name: m.id,
-    kind: '人物',
-    desc: m.role || '—',
-    scenes: [],
-  }))
+  const characterEntries = minds
+    .filter(m => m.role || (m.goals && m.goals.length) || (m.secrets && m.secrets.length))
+    .map(m => ({
+      name: m.id,
+      kind: '人物',
+      desc: m.role || '—',
+      scenes: [],
+    }))
   /* 关系对：当成势力/集团雏形 */
   const factions = (world?.relationships ?? []).map(r => ({
     name: r.pair,
