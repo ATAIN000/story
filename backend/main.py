@@ -49,8 +49,9 @@ from uuid import uuid4
 
 import yaml
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from starlette.background import BackgroundTask
@@ -64,12 +65,13 @@ from story_engine.engine import StoryEngine, StoryEngineMockEnded  # noqa: E402
 from story_engine.hitl import (  # noqa: E402
     HumanInput, InterventionRouter, TrainingPipeline)
 from story_engine.kernel import Kernel, LLMPool  # noqa: E402
+from story_engine.kernel.registry import EXTENSION_POINTS  # noqa: E402
 from story_engine.llm import LLMError  # noqa: E402
 from story_engine.logging_config import setup_logging  # noqa: E402
 from story_engine.meta import MetaGenerator, UserIntent  # noqa: E402
 from story_engine.meta.gacha import draw_card_async, derive_culture  # noqa: E402
 from story_engine.meta.genre_taxonomy import (  # noqa: E402
-    all_taxa, culture_for_genre, list_taxa, macro_templates_for_genre,
+    TAG_ZH, all_taxa, culture_for_genre, list_taxa, macro_templates_for_genre,
     presets_for_genre, taxon_by_id, taxonomy_stats)
 from story_engine.macro import (  # noqa: E402
     TEMPLATES as MACRO_TEMPLATES, compute_acts as macro_compute_acts,
@@ -112,6 +114,41 @@ FRONTEND_DIST = Path(os.environ.get("STORY_ENGINE_FRONTEND_DIST",
 app = FastAPI(title="Story Engine", version="0.2.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"],
                    allow_methods=["*"], allow_headers=["*"])
+
+
+# ---------- P23：全局错误中文化 ----------
+_422_FIELD_ZH = {
+    "genre_name": "题材名", "project_name": "项目名", "template_name": "幕结构模板",
+    "chapter": "章节号", "para_index": "段落号", "direction": "改写方向",
+    "worldview": "世界观", "cast": "人物阵容", "tick": "tick",
+    "content": "内容", "text": "文本", "macro_plan": "宏观计划",
+    "base_url": "LLM 地址", "api_key": "API key", "model": "模型",
+}
+
+
+@app.exception_handler(RequestValidationError)
+async def _validation_exc_handler(request, exc: RequestValidationError):
+    """Pydantic 422 → 中文字段提示（未映射字段保留原名）。"""
+    details = []
+    for err in exc.errors()[:5]:
+        loc = [str(x) for x in err.get("loc", []) if x not in ("body", "query")]
+        field = _422_FIELD_ZH.get(loc[-1], loc[-1]) if loc else "请求体"
+        msg = err.get("msg", "")
+        if "Field required" in msg:
+            msg = "必填"
+        details.append(f"{field}：{msg}")
+    return JSONResponse(
+        status_code=422,
+        content={"detail": "；".join(details) or "请求参数不合法"})
+
+
+@app.exception_handler(Exception)
+async def _unhandled_exc_handler(request, exc: Exception):
+    """未捕获异常 → 日志记 traceback，前端只收中文兜底（不再漏英文原文）。"""
+    logger.exception("未捕获异常 | %s %s", request.method, request.url.path)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "服务器内部错误，已记录日志（logs/story_engine.log）"})
 
 # === v0.2: Kernel/User 分离 — 先建 Kernel，注入 Engine 与 MetaGenerator ===
 # P10.1：五件套的构造收敛为 _build_stack 工厂（启动路径行为不变），模块级
@@ -285,10 +322,47 @@ class SettingsReq(BaseModel):
 
 
 class TestLlmReq(BaseModel):
-    """P6.10 B10：LLM 测试连接 body；只接受可选 model 覆盖。
-    base_url/key 永不取自前端（防 SSRF + 系统密钥外泄）——始终用当前
-    engine.llm 配置。key 永不回前端（响应只 ok+latency+model+error）。"""
+    """LLM 测试连接 body。P23 起可选 base_url/api_key：给了就用该临时配置
+    实测（不写入引擎，适配在线配置「先测后存」）；不给则测当前 engine.llm
+    配置。key 永不回前端（响应只 ok+latency+model+error）。"""
     model: str | None = None
+    base_url: str | None = None
+    api_key: str | None = None
+
+
+class LlmSettingsReq(BaseModel):
+    """P23：LLM 接入在线配置 body；三键全可选（空/None=保持不变），
+    persist=true 时把非空键写回 .env（重启后仍生效）。"""
+    base_url: str | None = None
+    model: str | None = None
+    api_key: str | None = None
+    persist: bool = False
+
+
+def _persist_env(updates: dict) -> None:
+    """把 KEY=VALUE 写回 story-engine/.env（保留注释与其他行；无 .env 则从
+    .env.example 复制后改）。与 _load_dotenv 同口径：单行 KEY=VALUE，
+    # 整行注释忽略。"""
+    env_path = ROOT / ".env"
+    if env_path.exists():
+        lines = env_path.read_text(encoding="utf-8").splitlines()
+    else:
+        example = ROOT / ".env.example"
+        lines = (example.read_text(encoding="utf-8").splitlines()
+                 if example.exists() else [])
+    remaining = dict(updates)
+    out = []
+    for line in lines:
+        stripped = line.strip()
+        if stripped and not stripped.startswith("#") and "=" in stripped:
+            k = stripped.split("=", 1)[0].strip()
+            if k in remaining:
+                out.append(f"{k}={remaining.pop(k)}")
+                continue
+        out.append(line)
+    for k, v in remaining.items():
+        out.append(f"{k}={v}")
+    env_path.write_text("\n".join(out) + "\n", encoding="utf-8")
 
 
 @app.get("/api/config")
@@ -300,6 +374,8 @@ def config():
         "plugins": engine.registry.list_plugins(),
         # P9.1 显示名中文化：{id: 中文 title} 合并表，纯展示层叠加（只增不改）
         "display_names": engine.kernel.registry.display_map(),
+        # P23：扩展点 id → 中文标签（插件页分桶标题；registry EXTENSION_POINTS 同源）
+        "extension_labels": dict(EXTENSION_POINTS),
         "axes": {"genre": engine.genre.name,
                  "culture": engine.culture.name, "language": "zh"},
         "kernel": {
@@ -1032,10 +1108,12 @@ def gacha_genres(q: str = "", tags: str = "", tier: str = "",
             "families": [{"id": k, "title": v[0], "count": v[1]}
                          for k, v in sorted(fam_counts.items(),
                                             key=lambda kv: -kv[1][1])],
-            "tags": [{"id": k, "count": v} for k, v in
-                     sorted(tag_counts.items(), key=lambda kv: -kv[1])],
+            "tags": [{"id": k, "zh": TAG_ZH.get(k, k), "count": v}
+                     for k, v in sorted(tag_counts.items(),
+                                        key=lambda kv: -kv[1])],
             "tiers": ["base", "hot", "fusion", "legacy"],
         },
+        "tag_zh": TAG_ZH,
         "stats": taxonomy_stats(),
     }
 
@@ -1473,8 +1551,9 @@ def macro_plan_get():
     try:
         return json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
+        logger.warning("macro_plan.json 读取失败 | %r", exc)
         raise HTTPException(
-            status_code=500, detail=f"macro_plan.json 读取失败：{exc!r}")
+            status_code=500, detail="宏观计划文件读取失败（文件损坏，详见日志）")
 
 
 @app.get("/api/macro/progress")
@@ -1489,7 +1568,9 @@ def macro_progress():
     try:
         plan = json.loads(plan_path.read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
-        raise HTTPException(status_code=500, detail=f"macro_plan.json 读取失败：{exc!r}")
+        logger.warning("macro_plan.json 读取失败 | %r", exc)
+        raise HTTPException(
+            status_code=500, detail="宏观计划文件读取失败（文件损坏，详见日志）")
 
     chapters = getattr(engine, "project", None)
     chapter_count = 0
@@ -1584,7 +1665,9 @@ def macro_deviation():
     try:
         plan = json.loads(plan_path.read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
-        raise HTTPException(status_code=500, detail=f"macro_plan.json 读取失败：{exc!r}")
+        logger.warning("macro_plan.json 读取失败 | %r", exc)
+        raise HTTPException(
+            status_code=500, detail="宏观计划文件读取失败（文件损坏，详见日志）")
 
     chapters = getattr(engine, "project", None)
     chapter_count = 0
@@ -1706,28 +1789,61 @@ def settings_post(req: SettingsReq):
     return engine.apply_settings_overrides(patch)
 
 
+@app.post("/api/settings/llm")
+def settings_llm_post(req: LlmSettingsReq):
+    """【P23】LLM 接入在线配置：LLMPool 单例就地更新立即生效（无需重启）；
+    persist=true 时把非空键写回 .env（重启后仍生效）。api_key 永不返回。
+    空/None 键 = 保持不变；给了 api_key 即切 openai 模式。"""
+    if req.base_url is not None and req.base_url.strip():
+        u = req.base_url.strip()
+        if not (u.startswith("https://") or u.startswith("http://localhost")
+                or u.startswith("http://127.0.0.1")):
+            raise HTTPException(
+                status_code=422,
+                detail="base_url 必须是 https://（或本机 http://localhost）")
+    view = engine.apply_llm_settings({
+        "base_url": req.base_url, "model": req.model, "api_key": req.api_key})
+    if req.persist:
+        updates = {}
+        if req.base_url and req.base_url.strip():
+            updates["STORY_ENGINE_LLM_BASE_URL"] = req.base_url.strip()
+        if req.model and req.model.strip():
+            updates["STORY_ENGINE_LLM_MODEL"] = req.model.strip()
+        if req.api_key and req.api_key.strip():
+            updates["STORY_ENGINE_LLM_API_KEY"] = req.api_key.strip()
+            updates["STORY_ENGINE_LLM_MODE"] = "openai"
+        if updates:
+            _persist_env(updates)
+    return view
+
+
 @app.post("/api/settings/test_llm")
 async def settings_test_llm(req: TestLlmReq | None = None):
-    """【P6.10 B10】一次性 ping LLM —— 最小请求「请回复：好」max_tokens=10。
-    body 缺省用当前 engine.llm 配置；mock 模式直接返回 ok=true。
-    始终用 engine.llm 的 base_url/api_key（不接受前端传入——防 SSRF + 密钥外泄）。
+    """【P6.10 B10 / P23】一次性 ping LLM —— 最小请求「请回复：好」max_tokens=10。
+    body 给了 base_url/api_key 就用该临时配置实测（不写入引擎，「先测后存」）；
+    缺省测当前 engine.llm 配置；mock 模式（且无临时 key）直接返回 ok=true。
     响应只 {ok, latency_ms, model, error?} —— key 永不回前端。"""
     import time as _time
     import httpx
     src = req or TestLlmReq()
     client = engine.llm
-    base_url = client.base_url.rstrip("/")
+    use_temp = bool((src.base_url or "").strip() and (src.api_key or "").strip())
+    base_url = (src.base_url.strip() if use_temp else client.base_url).rstrip("/")
     model = src.model or client.model
-    key = client.api_key
+    key = src.api_key.strip() if use_temp else client.api_key
     # mock 模式：直接 ok（不构造 client）
-    if client.is_mock:
+    if client.is_mock and not use_temp:
         return {"ok": True, "latency_ms": 0.0, "model": client.model}
     if not key:
         return {"ok": False, "error": "未配置 API key（环境变量 STORY_ENGINE_LLM_API_KEY 为空）",
                 "latency_ms": None, "model": model}
     headers = {"Authorization": f"Bearer {key}"}
-    if client.user_agent:
-        headers["User-Agent"] = client.user_agent
+    ua = client.user_agent
+    if not ua and key.startswith("sk-kimi-"):
+        from story_engine.kernel.llm_pool import KIMI_CODE_UA
+        ua = KIMI_CODE_UA
+    if ua:
+        headers["User-Agent"] = ua
     body = {
         "model": model,
         "messages": [{"role": "user", "content": "请回复：好"}],

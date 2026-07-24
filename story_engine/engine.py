@@ -1653,8 +1653,31 @@ class StoryEngine:
             "eval_max_rounds": self._eval_max_rounds(),
             "llm_mode": "mock" if self.llm.is_mock else "openai",
             "llm_model": self.llm.model,
+            "llm_configured": bool(self.llm.api_key),
             "base_url_masked": _mask_url(self.llm.base_url),
         }
+
+    def apply_llm_settings(self, patch: dict) -> dict:
+        """P23：LLM 接入在线配置（进程内覆盖；持久化与否由调用方决定）。
+        就地更新 LLMPool 单例属性（全栈单例相干，无需重启）；
+        空值=保持不变；给了 api_key 即切 openai 模式（is_mock 读 mode+key）。
+        返回更新后的 settings_view。"""
+        llm = self.llm
+        base_url = (patch.get("base_url") or "").strip()
+        if base_url:
+            llm.base_url = base_url.rstrip("/")
+        model = (patch.get("model") or "").strip()
+        if model:
+            llm.model = model
+        api_key = (patch.get("api_key") or "").strip()
+        if api_key:
+            llm.api_key = api_key
+            llm.mode = "openai"
+            # 与 LLMPool.__init__ 同款：sk-kimi- key 自动补 Coding-Agent UA
+            if not llm.user_agent and api_key.startswith("sk-kimi-"):
+                from .kernel.llm_pool import KIMI_CODE_UA
+                llm.user_agent = KIMI_CODE_UA
+        return self.settings_view()
 
     def _eval_enabled_gate(self) -> bool:
         """裸 EVAL_ENABLED 门控（不管 SCRIPTED_DEMO/llm.is_mock）—给 settings_view

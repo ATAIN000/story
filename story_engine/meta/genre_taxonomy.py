@@ -603,6 +603,32 @@ def expand_taxonomy() -> list[GenreTaxon]:
     return out
 
 
+# ---------- P23：tag → 中文显示名（浏览 UI chips/筛选用，id 仍为功能键） ----------
+TAG_ZH: dict[str, str] = {
+    "academy": "学院", "adventure": "冒险", "anglosphere": "欧美",
+    "burn": "烧脑", "combat": "战斗", "comedy": "喜剧",
+    "cosmic_horror": "克系恐怖", "cultivation": "修仙", "cyber": "赛博",
+    "dark": "暗黑", "dungeon_loop": "副本循环", "fantasy": "奇幻",
+    "farming": "种田", "food": "美食", "gritty": "残酷写实",
+    "heal": "治愈", "historical": "历史", "horror": "恐怖",
+    "isekai": "穿越", "legacy": "精修", "martial": "武侠",
+    "mecha": "机甲", "meta": "元叙事", "military": "军事",
+    "myriad": "诸天", "mystery": "悬疑", "myth": "神话",
+    "nue": "虐心", "palace": "宫斗", "politics": "权谋",
+    "progression": "进阶", "rebirth": "重生", "revenge": "复仇",
+    "romance": "言情", "rules": "规则", "shuang": "爽文",
+    "sinosphere": "中华", "slice": "日常", "space": "星际",
+    "sports": "竞技", "steampunk": "蒸汽", "system": "系统",
+    "urban": "都市", "wasteland": "废土", "workplace": "职场",
+    "xuanhuan": "玄幻",
+}
+
+
+def tag_zh(tag: str) -> str:
+    """tag id → 中文显示名；未登记回退 id 原文。"""
+    return TAG_ZH.get(tag, tag)
+
+
 @lru_cache(maxsize=1)
 def all_taxa() -> tuple[GenreTaxon, ...]:
     return tuple(expand_taxonomy())
