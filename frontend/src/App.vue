@@ -28,6 +28,10 @@ const { toast, toastError } = useToast()
 const { generating, stage } = useGeneration()
 const { fsSize, incFont, decFont } = useFontSize()
 
+/* P23 致谢区：群二维码图片缺失时降级为占位框（用户自行放图到
+   frontend/public/group-qr.png 即可显示） */
+const qrFailed = ref(false)
+
 // A−/A＋（story.html :459-461）：只接手稿 .para 字号，提示当前档
 function bumpFont(dir) {
   dir > 0 ? incFont() : decFont()
@@ -142,6 +146,15 @@ onMounted(refresh)
         {{ dn(meta.genre) || '—' }} × {{ dn(meta.culture) || '—' }} × {{ meta.language || 'zh' }}<br>
         editorial · 双主题
       </div>
+      <!-- P23 致谢区：感谢凡事皆可短剧团队 + 群二维码 + MIT -->
+      <div class="nav-about" data-testid="nav-about">
+        <div class="na-thanks">感谢 <b>凡事皆可短剧</b> 团队</div>
+        <img v-if="!qrFailed" class="na-qr" :src="'/group-qr.png'"
+             alt="凡事皆可短剧交流群二维码" loading="lazy" @error="qrFailed = true" />
+        <div v-else class="na-qr na-qr-ph">群二维码<br>放 frontend/public/group-qr.png</div>
+        <div class="na-line">后续沟通渠道</div>
+        <div class="na-line na-mit">MIT License</div>
+      </div>
     </nav>
 
     <div class="main">
@@ -205,4 +218,16 @@ onMounted(refresh)
   background: transparent; color: var(--faint); font-size: 15px; line-height: 1;
   cursor: pointer; transition: .12s; }
 .wb-close:hover { color: var(--ink); background: var(--s3); }
+
+/* P23 致谢区（导航左下，nav-foot 之下） */
+.nav-about { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line);
+  display: flex; flex-direction: column; gap: 6px;
+  font-size: 11px; color: var(--faint); line-height: 1.5; }
+.na-thanks b { color: var(--ink2); font-weight: 600; }
+.na-qr { width: 88px; height: 88px; border-radius: 8px; object-fit: cover;
+  border: 1px solid var(--line2); }
+.na-qr-ph { display: flex; align-items: center; justify-content: center;
+  text-align: center; font-size: 9px; line-height: 1.5;
+  border-style: dashed; color: var(--faint); background: var(--s2); }
+.na-mit { opacity: .75; letter-spacing: .02em; }
 </style>

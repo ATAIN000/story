@@ -114,6 +114,11 @@ loguru 全链路：控制台 INFO + `logs/story_engine.log` DEBUG（按天轮转
 每章生成带 `trace_id`（如 `ch1-a3f2b1c9`），LLM 调用的完整 prompt/response
 全文落盘——grep trace_id 即可拉出该章完整生成链路。
 
+## 致谢
+
+感谢 **凡事皆可短剧** 团队（交流群二维码见应用内导航左下角，
+或把图片放到 `frontend/public/group-qr.png` 后自行构建）。
+
 ## License
 
 MIT（见 LICENSE）
