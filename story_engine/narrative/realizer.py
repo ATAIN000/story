@@ -164,7 +164,7 @@ class LanguageRealizer:
             return ""
         try:
             resp = await self._llm_call(
-                prompt, purpose="realize_chapter", temperature=0.7, max_tokens=4096)
+                prompt, purpose="realize_chapter", temperature=0.7, max_tokens=8912)
             return (getattr(resp, "text", "") or "").strip()
         except Exception:
             return ""
@@ -189,7 +189,7 @@ class LanguageRealizer:
         try:
             resp = await self._llm_call(
                 prompt, purpose="rewrite_paragraph", temperature=0.7,
-                max_tokens=2048)
+                max_tokens=16384)
             return (getattr(resp, "text", "") or "").strip()
         except Exception:
             return ""
@@ -256,7 +256,14 @@ class LanguageRealizer:
             f"=== 质感目标（创作指令） ===\n{self._texture_block(ir.texture)}\n\n"
             f"=== 语言资源（按需取用，不必尽用） ===\n{self._resource_block(ir.texture)}\n\n"
             f"=== 硬要求 ===\n{hard_txt}\n\n"
-            "请以骨架为骨、质感为目标，再创作本章正文。只输出正文本身。")
+            "请以骨架为骨、质感为目标，再创作本章正文。\n"
+            "首行写：标题：XXXX（XXXX 为 4-8 字的本章标题，概括本章核心事件或意象，"
+            "不要用「第N章」这种无信息量标题），空一行后接正文。\n"
+            "**段落节奏**：每 2-4 句必须分段，禁止一整段超过 5 句。"
+            "用空行分隔场景转换、视角切换、时间跳转。读者需要呼吸感。\n"
+            "**章节衔接**：正文开头必须自然承接前情提要的结尾。"
+            "如果前情提到角色在矿坑底，本章开头不能突然让角色在别处——"
+            "必须解释场景如何转换、时间如何推移。")
 
     def _ir_summary(self, ir: NarrativeIR, sjuzhet=None) -> str:
         """beats/events/dialogue 的概念级紧凑摘要（≤800 字，截断标注）。
@@ -438,7 +445,14 @@ class EnglishRealizer(LanguageRealizer):
             f"{self._resource_block(ir.texture)}\n\n"
             f"=== Hard requirements ===\n{hard_txt}\n\n"
             "Re-create the chapter in English from this skeleton and these "
-            "texture targets. Output the prose only.")
+            "texture targets.\n"
+            "First line: Title: XXXX (XXXX is a 4-8 word chapter title evoking "
+            "this chapter's core event or image; avoid generic titles like "
+            "'Chapter N'). Leave one blank line, then the prose.\n"
+            "**Chapter continuity**: The opening must naturally connect to the "
+            "recap's ending. If the recap says characters are in a mine pit, "
+            "this chapter cannot suddenly place them elsewhere — explain any "
+            "scene or time transition.")
 
     def _paragraph_prompt(self, *, ir_context: str, original: str,
                           prev_para: str | None, next_para: str | None,

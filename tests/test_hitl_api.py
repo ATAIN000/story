@@ -57,11 +57,11 @@ class TestHitlApi(unittest.TestCase):
         # 同一事件循环线程（kernel.resolve_human_input docstring），
         # 故把 request_human_input 挂进 TestClient portal 的 loop
         fut = self.client.portal.start_task_soon(
-            backend.kernel.request_human_input,
+            backend.deps.kernel.request_human_input,
             "选哪个走向？", {"options": ["A", "B"]}, 5.0)
         request_id = None
         for _ in range(50):  # 等 pending 落盘（记录追加在首个 await 之前）
-            recs = backend.kernel._read_hitl_requests()
+            recs = backend.deps.kernel._read_hitl_requests()
             if recs:
                 request_id = recs[0]["request_id"]
                 break
@@ -77,7 +77,7 @@ class TestHitlApi(unittest.TestCase):
         self.assertEqual(resp.payload, {"choice": "A"})
         # 落盘记录由 request_human_input 自己标 answered
         self.assertEqual(
-            backend.kernel._read_hitl_requests()[0]["status"], "answered")
+            backend.deps.kernel._read_hitl_requests()[0]["status"], "answered")
 
     def test_2_unknown_type_400_unknown_request_404(self):
         r = self.client.post("/api/intervene", json={
@@ -98,7 +98,7 @@ class TestHitlApi(unittest.TestCase):
         self.assertTrue(r.json()["ok"])
         self.assertFalse(r.json()["regenerated"])  # textual 恒不重生成
 
-        style_path = (backend.kernel.project_dir
+        style_path = (backend.deps.kernel.project_dir
                       / "training_data" / "style.jsonl")
         self.assertTrue(style_path.exists())
         rows = [json.loads(line) for line in

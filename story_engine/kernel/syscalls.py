@@ -328,7 +328,7 @@ class Kernel:
     async def llm_call(self, prompt: str, *,
                        purpose: str = "generate",
                        temperature: float = 0.7,
-                       max_tokens: int = 8192) -> LLMResponse:
+                       max_tokens: int = 16384) -> LLMResponse:
         """统一 LLM 调用入口，多 provider 路由"""
         return await self.llm.call(
             prompt, purpose=purpose, temperature=temperature, max_tokens=max_tokens)

@@ -16,11 +16,78 @@ const props = defineProps({
   confirmingRollback: { type: Boolean, default: false },
   reviewNo: { type: Number, default: null },     // 审读中的章号
   rollbackTick: { type: Number, default: null }, // 回滚目标 tick（WriteView 已算好）
+  genStage: { type: String, default: '' },       // P1-1: 后端进度 stage（actor_tick/realizing/verifying...）
+  genLogs: { type: Array, default: () => [] },    // P1-1: WS 推送的进度日志数组
 })
 const emit = defineEmits(['plan', 'discard', 'confirm', 'archive', 'gotoReview',
   'rollbackRequest', 'rollbackCancel', 'rollbackConfirm'])
 
 const MODE_LABEL = { scripted: '剧本通道', llm: 'LLM 成稿', actor: 'Actor 群像' }
+
+// P1-1: 后端 stage → 中文进度标签
+const STAGE_LABELS = {
+  'started': '准备中…',
+  'generating': '系统执笔中…',
+  'actor_tick': '角色决策中（SOAR 循环）',
+  'realizing': '正文生成中（LLM 创作）',
+  'verifying': '验证事件一致性',
+  'correcting': '修正违规中',
+  'done': '完成',
+  'error': '生成失败',
+  'cancelled': '已取消',
+}
+
+// 步骤顺序（用于判断当前进行到哪步）
+const STEP_ORDER = ['actor_tick', 'realizing', 'verifying', 'correcting']
+const STAGE_SHORT = {
+  'started': '准备', 'generating': '执笔', 'actor_tick': '决策',
+  'realizing': '正文', 'verifying': '验证', 'correcting': '修正',
+  'done': '完成', 'error': '失败',
+}
+
+const stageLabel = computed(() => {
+  if (!props.genStage) return '系统执笔中…'
+  if (props.genStage.startsWith('actor_tick')) return STAGE_LABELS['actor_tick']
+  return STAGE_LABELS[props.genStage] || props.genStage
+})
+
+// 最新一条日志（不堆积历史，只显示当前进行的事）
+const latestLog = computed(() => {
+  if (!props.genLogs || !props.genLogs.length) return null
+  return props.genLogs[props.genLogs.length - 1]
+})
+
+// 当前步骤序号
+const currentStepIndex = computed(() => {
+  const s = props.genStage || ''
+  for (let i = 0; i < STEP_ORDER.length; i++) {
+    if (s.startsWith(STEP_ORDER[i])) return i
+  }
+  return -1
+})
+
+function stepStatus(step) {
+  const idx = STEP_ORDER.indexOf(step)
+  if (currentStepIndex.value > idx) return 'done'
+  if (currentStepIndex.value === idx) return 'run'
+  return 'todo'
+}
+function stepIcon(step) {
+  const st = stepStatus(step)
+  if (st === 'done') return '✓'
+  if (st === 'run') return '●'
+  return '○'
+}
+function stepDetail(step) {
+  const st = stepStatus(step)
+  if (st === 'run' && latestLog.value) return latestLog.value.detail || ''
+  if (st === 'done') {
+    // 找该步骤的最后一条日志
+    const logs = (props.genLogs || []).filter(l => l.stage && l.stage.startsWith(step))
+    return logs.length ? logs[logs.length - 1].detail : '完成'
+  }
+  return ''
+}
 
 // 轨道显示名：决策卡 trackNames 映射优先，退化裸 id
 function makeTname(card) {
@@ -148,25 +215,39 @@ const replaySteps = computed(() => {
     <template v-else-if="flow === 'generating'">
       <div class="gc-head">
         <span class="gc-title">第 {{ plan?.episode ?? nextNo }} 章 · 生成中</span>
-        <span class="gc-time">已批准 · 系统执笔</span>
+        <span class="gc-time">{{ stageLabel }}</span>
       </div>
       <div class="gc-bar"><i class="ind"></i></div>
       <div class="gc-steps">
-        <div class="gc-step done">
-          <span class="st">✓</span><span class="nm">决策卡</span>
-          <span class="dt">方案已批准（推进 ×{{ plan?.advance?.length ?? 0 }} · 节拍 ×{{ plan?.beats?.length ?? 0 }}）</span>
+        <div class="gc-step" :class="stepStatus('actor_tick')">
+          <span class="st">{{ stepIcon('actor_tick') }}</span><span class="nm">角色决策</span>
+          <span class="dt">{{ stepDetail('actor_tick') }}</span>
         </div>
-        <div class="gc-step run">
-          <span class="st"><span class="gc-spin"></span></span><span class="nm">初稿生成</span>
-          <span class="dt">系统执笔中…</span>
+        <div class="gc-step" :class="stepStatus('realizing')">
+          <span class="st">{{ stepIcon('realizing') }}</span><span class="nm">正文生成</span>
+          <span class="dt">{{ stepDetail('realizing') }}</span>
         </div>
-        <div v-for="s in ['硬约束验证', '修正回路', '提交事件库', '快照']" :key="s" class="gc-step todo">
-          <span class="st">○</span><span class="nm">{{ s }}</span><span class="dt"></span>
+        <div class="gc-step" :class="stepStatus('verifying')">
+          <span class="st">{{ stepIcon('verifying') }}</span><span class="nm">硬约束验证</span>
+          <span class="dt">{{ stepDetail('verifying') }}</span>
         </div>
+        <div class="gc-step" :class="stepStatus('correcting')">
+          <span class="st">{{ stepIcon('correcting') }}</span><span class="nm">修正回路</span>
+          <span class="dt">{{ stepDetail('correcting') }}</span>
+        </div>
+        <div class="gc-step todo">
+          <span class="st">○</span><span class="nm">提交事件库 + 快照</span>
+          <span class="dt"></span>
+        </div>
+      </div>
+      <!-- P1-1: 最新进度（只显示最新一条，不重复堆积） -->
+      <div v-if="latestLog" class="gc-current">
+        <span class="gc-spin-sm"></span>
+        <span class="gc-current-detail">{{ latestLog.detail || latestLog.stage }}</span>
       </div>
       <div class="gc-done-row">
         <button class="btn-main" disabled>生成中…</button>
-        <span class="gc-note">已锁定全部生成操作，完成后自动进入步骤回放</span>
+        <span class="gc-note">{{ stageLabel }}</span>
       </div>
     </template>
 
@@ -218,3 +299,21 @@ const replaySteps = computed(() => {
     </template>
   </div>
 </template>
+
+<style scoped>
+/* P1-1: 生成进度步骤 */
+.gc-step.run .st { color: var(--primary); }
+.gc-step.done .st { color: var(--primary); }
+.gc-step.done .nm { color: var(--ink2); }
+.gc-step.todo .st, .gc-step.todo .nm { color: var(--faint); }
+.gc-step.run .dt { color: var(--primary); font-size: 11.5px; }
+
+/* 当前活动指示器 */
+.gc-current { display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+  margin-top: 6px; background: var(--s2); border-radius: 6px;
+  font-size: 12px; color: var(--ink2); }
+.gc-spin-sm { width: 10px; height: 10px; border: 2px solid var(--line2);
+  border-top-color: var(--primary); border-radius: 50%; animation: gc-spin 0.8s linear infinite; }
+.gc-current-detail { flex: 1; }
+@keyframes gc-spin { to { transform: rotate(360deg); } }
+</style>

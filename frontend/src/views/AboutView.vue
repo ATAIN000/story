@@ -24,10 +24,8 @@ const runtime = computed(() => {
 })
 
 const LINKS = [
-  { icon: 'book', title: 'README · 30 秒上手', desc: 'clone → 起后端 → 设置页配 LLM → 抽卡开局' },
-  { icon: 'map', title: '竣工现状与拓展基础图', desc: 'docs/项目竣工现状与拓展基础图.md（新人入口总账）' },
-  { icon: 'feather', title: '接口规范', desc: 'docs/接口规范_part1/2.md（36 个 API 契约）' },
-  { icon: 'check', title: '前端自动化测试指引', desc: 'docs/前端自动化测试指引.md（data-testid 全集）' },
+  { icon: 'book', title: 'README · 快速上手', desc: 'pip install → 起后端 → 设置页配 LLM → 抽卡开局' },
+  { icon: 'download', title: 'Docker 一键部署', desc: 'docker build & run，镜像内置 demo 项目，开箱即用' },
 ]
 </script>
 
@@ -48,15 +46,19 @@ const LINKS = [
         <div class="ab-card-t">
           <AppIcon name="heart" :size="14" /> 致谢
         </div>
-        <p class="ab-text">感谢 <b>凡事皆可短剧</b> 团队在本项目调研、素材与方向上的支持。</p>
+        <p class="ab-text">感谢 <b>「凡事皆可」短剧团队</b> 在本项目调研、素材与方向上的支持。</p>
         <div class="ab-qr-row">
           <img v-if="!qrFailed" class="ab-qr" :src="'/group-qr.png'"
-               alt="凡事皆可短剧交流群二维码" loading="lazy" @error="qrFailed = true" />
+               alt="「凡事皆可」短剧团队交流群二维码" loading="lazy" @error="qrFailed = true" />
           <div v-else class="ab-qr ab-qr-ph">群二维码<br>放 frontend/public/group-qr.png</div>
           <div class="ab-qr-side">
             <b>后续沟通渠道</b>
-            <p>扫码加入「凡事皆可短剧」交流群：<br>问题反馈 · 题材许愿 · 素材共建 · 版本预告</p>
+            <p>扫码加入「凡事皆可」短剧团队交流群：<br>问题反馈 · 题材许愿 · 素材共建 · 版本预告</p>
           </div>
+        </div>
+        <div class="ab-follow">
+          <b>关注抖音</b>
+          <p>抖音号 <b>904608659</b> · 「凡事皆可-AIGC」<br>功能演示 · 短剧实操 · 版本预告</p>
         </div>
       </section>
 
@@ -65,9 +67,13 @@ const LINKS = [
         <div class="ab-card-t">
           <AppIcon name="scale" :size="14" /> 开源协议
         </div>
-        <p class="ab-text">本项目以 <b>MIT License</b> 开源：可自由使用、修改、分发（包括商用），
-          只需保留版权声明。软件按「现状」提供，不附任何担保。</p>
+        <p class="ab-text">本项目以 <b>Apache License 2.0</b> 开源：可自由使用、修改、分发（包括商用），
+          需保留版权声明和许可证声明。包含专利授权条款，修改后的文件需标注变更。</p>
         <p class="ab-dim">完整文本见仓库根目录 LICENSE 文件。</p>
+        <div class="ab-note">
+          <b>⚠️ 单用户部署</b>：本系统是个人写作台，engine/kernel 为进程级单例，
+          不支持多人同时在线（会串数据）。适合本地自用或 Docker 自部署。
+        </div>
       </section>
 
       <!-- 文档卡 -->
@@ -117,6 +123,10 @@ const LINKS = [
 .ab-text { font-size: 13px; color: var(--ink); line-height: 1.8; margin: 0 0 10px; }
 .ab-text b { color: var(--primary); }
 .ab-dim { font-size: 11.5px; color: var(--faint); margin: 0; }
+.ab-note { font-size: 12px; color: var(--ink); line-height: 1.7; margin-top: 10px;
+  padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px;
+  background: var(--s1); }
+.ab-note b { color: var(--primary); }
 
 .ab-qr-row { display: flex; gap: 14px; align-items: center; }
 .ab-qr { width: 108px; height: 108px; border-radius: 10px; object-fit: cover;
@@ -126,6 +136,11 @@ const LINKS = [
   border-style: dashed; background: var(--s2); }
 .ab-qr-side b { font-size: 13px; color: var(--ink); }
 .ab-qr-side p { font-size: 12px; color: var(--ink2); line-height: 1.7; margin: 6px 0 0; }
+
+.ab-follow { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--line); }
+.ab-follow b { font-size: 13px; color: var(--ink); }
+.ab-follow p { font-size: 12px; color: var(--ink2); line-height: 1.7; margin: 6px 0 0; }
+.ab-follow p b { color: var(--primary); }
 
 .ab-link { display: flex; gap: 10px; align-items: flex-start; padding: 7px 0;
   color: var(--ink2); }

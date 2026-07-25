@@ -13,17 +13,21 @@ venv/
 
 # 前端
 frontend/node_modules/
-frontend/dist/
+# dist 保留在 git 中（clone 即用，无需 build）
 frontend/npm-install*.log
 
 # 项目数据（运行时生成）
 logs/
-data/projects/*/story.db
-data/projects/*/story.db-wal
-data/projects/*/story.db-shm
-data/projects/*/chapters.json
-data/projects/*/project.json
-data/projects/*/training_data/
+# 排除所有运行时项目数据（只保留 yupei demo 项目的设定文件）
+data/projects/*
+!data/projects/yupei/
+# yupei 内仍排除二进制/运行时文件
+data/projects/yupei/story.db
+data/projects/yupei/story.db-wal
+data/projects/yupei/story.db-shm
+data/projects/yupei/chapters.json
+data/projects/yupei/project.json
+data/projects/yupei/training_data/
 # P20: gacha 临时工作区
 data/projects/.tmp_gacha_*/
 

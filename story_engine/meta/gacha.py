@@ -236,13 +236,13 @@ def derive_culture(allowed_cultures: list | None, genre_name: str | None = None)
     开局不阻塞——用户可后续在设置页改。"""
     # 题材→推荐文化映射（按题材气质对齐）
     GENRE_CULTURE_HINT = {
-        # 东方/古风题材 → 儒家官场
-        "mystery": "confucian_officialdom", "wuxia": "confucian_officialdom",
-        "romance": "confucian_officialdom", "wuxia-steampunk": "confucian_officialdom",
-        "political-cultivation": "confucian_officialdom", "tomb-exploration": "confucian_officialdom",
+        # 东方/古风题材 → 儒家官场（公案/历史/宫斗官场底色）
+        "mystery": "confucian_officialdom", "wuxia": "jianghu-martial",
+        "romance": "modern-chinese-urban", "wuxia-steampunk": "jianghu-martial",
+        "political-cultivation": "confucian_officialdom", "tomb-exploration": "jianghu-martial",
         "historical-isekai": "confucian_officialdom", "historical-system": "confucian_officialdom",
         "folk-cthulhu": "confucian_officialdom", "xianxia-cthulhu": "confucian_officialdom",
-        "supernatural-management": "confucian_officialdom", "sequence-pathway": "confucian_officialdom",
+        "supernatural-management": "jianghu-martial", "sequence-pathway": "jianghu-martial",
         # 其余 → anglo-american（现代/科幻/西幻/穿越类）
     }
     allowed = allowed_cultures or ["*"]

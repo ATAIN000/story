@@ -41,16 +41,16 @@ class TestParagraphRewrite(unittest.TestCase):
         assert cls.client.post("/api/project/generate").status_code == 200
         ch1 = next(c for c in cls.client.get("/api/project").json()["chapters"]
                    if c["chapter"] == 1)
-        cls.paras = backend.engine._split_paragraphs(ch1["final"]["text"])
+        cls.paras = backend.deps.engine._split_paragraphs(ch1["final"]["text"])
         assert len(cls.paras) >= 3  # 用例 1 取中段，前后段齐备
 
     def tearDown(self):
         # 还原 kernel.llm_call（pop 实例属性即回类方法；共享单例不残留）
-        backend.kernel.__dict__.pop("llm_call", None)
+        backend.deps.kernel.__dict__.pop("llm_call", None)
 
     def test_1_fake_llm_rewrite_with_direction_and_context(self):
         record = []
-        backend.kernel.llm_call = _fake_llm(record, "【重写】包拯览状，目光沉静。")
+        backend.deps.kernel.llm_call = _fake_llm(record, "【重写】包拯览状，目光沉静。")
         r = self.client.post("/api/paragraph/rewrite",
                              json={"chapter": 1, "para_index": 1,
                                    "direction": "更紧张一些"})
@@ -82,7 +82,7 @@ class TestParagraphRewrite(unittest.TestCase):
         self.assertEqual(r.status_code, 404)
 
     def test_3_empty_llm_fallback_200_with_note(self):
-        backend.kernel.llm_call = _fake_llm([], "")
+        backend.deps.kernel.llm_call = _fake_llm([], "")
         r = self.client.post("/api/paragraph/rewrite",
                              json={"chapter": 1, "para_index": 0})
         self.assertEqual(r.status_code, 200)  # 兜底不 500

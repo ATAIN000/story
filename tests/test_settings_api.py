@@ -22,12 +22,12 @@ class TestSettingsApi(unittest.TestCase):
     def setUpClass(cls):
         cls.client = TestClient(backend.app)
         # 清掉之前的覆盖（其他用例可能写过）
-        backend.engine._runtime_overrides = {}
+        backend.deps.engine._runtime_overrides = {}
 
     @classmethod
     def tearDownClass(cls):
         # 复位进程内覆盖（共享单例，字母序靠后的使用方不被污染）
-        backend.engine._runtime_overrides = {}
+        backend.deps.engine._runtime_overrides = {}
 
     def test_1_get_shape_and_no_key(self):
         r = self.client.get("/api/settings")
@@ -58,7 +58,7 @@ class TestSettingsApi(unittest.TestCase):
         # 引擎生成路径：mock/SCRIPTED_DEMO 兜底 → _eval_enabled 仍 False
         # （即覆盖写了，但实际生成时仍被 SCRIPTED_DEMO/llm.is_mock 兜底，
         # 这是设计意图——评审意见：mock 路径不受覆盖影响）
-        self.assertFalse(backend.engine._eval_enabled())
+        self.assertFalse(backend.deps.engine._eval_enabled())
         # ir_first 覆盖 + eval_max_rounds 钳位
         self.client.post("/api/settings",
                          json={"ir_first": True, "eval_max_rounds": 99})
@@ -80,8 +80,8 @@ class TestSettingsApi(unittest.TestCase):
     # ---------- P23：在线 LLM 配置 + 错误中文化 ----------
 
     def test_4_llm_settings_inprocess_override(self):
-        old_model = backend.engine.llm.model
-        old_url = backend.engine.llm.base_url
+        old_model = backend.deps.engine.llm.model
+        old_url = backend.deps.engine.llm.base_url
         try:
             r = self.client.post("/api/settings/llm", json={
                 "base_url": "https://api.deepseek.com/v1",
@@ -97,8 +97,8 @@ class TestSettingsApi(unittest.TestCase):
             self.assertEqual(r.status_code, 422)
             self.assertIn("https", r.json()["detail"])
         finally:
-            backend.engine.llm.base_url = old_url
-            backend.engine.llm.model = old_model
+            backend.deps.engine.llm.base_url = old_url
+            backend.deps.engine.llm.model = old_model
 
     def test_5_validation_422_chinese(self):
         # P23：Pydantic 422 → 中文字段名（不再漏英文 Field required）
@@ -110,19 +110,19 @@ class TestSettingsApi(unittest.TestCase):
         # P23：_persist_env 写回 .env（保留注释行、替换已有键、追加新键）
         import tempfile
         from pathlib import Path
-        saved_root = backend.ROOT
+        saved_root = backend.deps.ROOT
         tmp = Path(tempfile.mkdtemp())
         (tmp / ".env").write_text("# 注释行\nFOO=1\n", encoding="utf-8")
         try:
-            backend.ROOT = tmp
-            backend._persist_env({"FOO": "2", "BAR": "x"})
+            backend.deps.ROOT = tmp
+            backend.helpers._persist_env({"FOO": "2", "BAR": "x"})
             text = (tmp / ".env").read_text(encoding="utf-8")
             self.assertIn("# 注释行", text)
             self.assertIn("FOO=2", text)
             self.assertNotIn("FOO=1", text)
             self.assertIn("BAR=x", text)
         finally:
-            backend.ROOT = saved_root
+            backend.deps.ROOT = saved_root
 
 
 if __name__ == "__main__":

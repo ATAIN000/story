@@ -12,7 +12,7 @@ from typing import Iterable
 
 # 族 → (中文族名, 默认骨架, 默认文化, track_profile, [(sub_id, sub_title, tags...)])
 _FAMILIES: dict[str, tuple] = {
-    "xianxia": ("修仙", "xianxia_cultivation", "confucian_officialdom", "cultivation", [
+    "xianxia": ("修仙", "xianxia_cultivation", "jianghu-martial", "cultivation", [
         ("ascension", "问道飞升", ["cultivation", "sinosphere"]),
         ("sect-war", "宗门争霸", ["cultivation", "politics"]),
         ("rogue", "散修求生", ["cultivation"]),
@@ -24,7 +24,7 @@ _FAMILIES: dict[str, tuple] = {
         ("reincarnate", "仙帝归来", ["cultivation", "rebirth"]),
         ("academy", "仙门学院", ["cultivation", "academy"]),
     ]),
-    "xuanhuan": ("玄幻", "xianxia_cultivation", "confucian_officialdom", "cultivation", [
+    "xuanhuan": ("玄幻", "xianxia_cultivation", "jianghu-martial", "cultivation", [
         ("empire", "王朝玄幻", ["xuanhuan", "politics"]),
         ("beast", "御兽玄幻", ["xuanhuan"]),
         ("talent", "天赋觉醒", ["xuanhuan", "progression"]),
@@ -234,7 +234,7 @@ _FAMILIES: dict[str, tuple] = {
         ("travel", "旅行纪事", ["slice"]),
         ("bookstore", "书店日常", ["slice"]),
     ]),
-    "myth": ("神话", "shanhai_zhiguai", "confucian_officialdom", "myth", [
+    "myth": ("神话", "shanhai_zhiguai", "jianghu-martial", "myth", [
         ("honghuang", "洪荒封神", ["myth", "sinosphere"]),
         ("shanhai", "山海异兽", ["myth", "sinosphere"]),
         ("journey", "西游变奏", ["myth"]),
@@ -262,7 +262,7 @@ _FAMILIES: dict[str, tuple] = {
         ("server", "全服唯一", ["system"]),
         ("bug", "BUG成神", ["system", "comedy"]),
     ]),
-    "supernatural-biz": ("灵异经营", "urban_supernatural", "confucian_officialdom", "urban", [
+    "supernatural-biz": ("灵异经营", "urban_supernatural", "jianghu-martial", "urban", [
         ("haunted-hotel", "鬼屋酒店", ["horror", "workplace"]),
         ("yin-yang-office", "阴阳事务所", ["horror", "workplace"]),
         ("temple", "庙祝日常", ["horror", "slice"]),
@@ -472,7 +472,7 @@ def _legacy_defaults(lid: str) -> tuple[str, str, str, tuple[str, ...]]:
     if "romance" in lid or lid == "romantasy":
         return lid, "hard_reality", "modern-chinese-urban", ("romance",)
     if "xianxia" in lid or "cultivation" in lid:
-        return lid, "xianxia_cultivation", "confucian_officialdom", ("cultivation",)
+        return lid, "xianxia_cultivation", "jianghu-martial", ("cultivation",)
     if "infinite" in lid or "system" in lid or "game" in lid:
         return lid, "infinite_flow", "modern-chinese-urban", ("system",)
     if "fantasy" in lid:
@@ -484,7 +484,7 @@ def _legacy_defaults(lid: str) -> tuple[str, str, str, tuple[str, ...]]:
     if "wuxia" in lid:
         return lid, "wuxia_jianghu", "jianghu-martial", ("martial",)
     if "tomb" in lid or "supernatural" in lid:
-        return lid, "shanhai_zhiguai", "confucian_officialdom", ("myth",)
+        return lid, "shanhai_zhiguai", "jianghu-martial", ("myth",)
     if "apocalypse" in lid:
         return lid, "post_apocalyptic", "modern-chinese-urban", ("wasteland",)
     if "historical" in lid:

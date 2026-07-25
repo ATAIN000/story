@@ -12,6 +12,8 @@ os.environ["STORY_ENGINE_EMBED_MODE"] = "dummy"
 os.environ.setdefault("STORY_ENGINE_EMBED_DIMENSIONS", "512")
 # 老测试默认走剧本路径
 os.environ.setdefault("STORY_ENGINE_SCRIPTED_DEMO", "1")
+# P23.4：测试默认关闭质量门禁（fake/mock LLM 产出不该被硬门禁拦截）
+os.environ.setdefault("STORY_ENGINE_QUALITY_GATE", "0")
 
 # Phase 16：loguru 日志系统（WARNING 级别减少测试噪音）
 from story_engine.logging_config import setup_logging  # noqa: E402
@@ -21,8 +23,10 @@ _backend_module = None
 
 
 def import_backend_main():
-    """导入 backend.main 的隔离 helper（P5.11 抽取，原 test_hitl_api 头部样板，
-    供任何需要 TestClient 的测试文件共享）。
+    """导入 backend 包（隔离 env，避免 .env 污染）。
+
+    返回 backend 包对象，测试通过 backend.app / backend.deps / backend.helpers /
+    backend.routers 访问。backend.main 是模块级单例，进程内只导入一次。
 
     - STORY_ENGINE_PROJECT_DIR 指到临时目录，避免测试事件写入真实项目
       data/projects/yupei（backend 模块级单例按环境变量定项目目录）
@@ -32,8 +36,7 @@ def import_backend_main():
       导入前快照、导入后还原：backend 单例在导入时已捕获所需配置，还原不影响
       后续使用。注意：backend 侧 LLM 配置按 .env 真实值生效，经 API 触发章节
       生成的用例须确保走剧本（SCRIPTED_DEMO=1 且章号在剧本内）等离线路径。
-    - backend.main 是模块级单例，进程内只导入一次，重复调用返回同一模块；
-      kernel.close() 统一挂 atexit——各测试文件不得自行 close（单例共享，
+    - kernel.close() 统一挂 atexit——各测试文件不得自行 close（单例共享，
       先收尾的文件会关掉 SQLite 连接，波及字母序靠后的使用方）。
     """
     global _backend_module
@@ -45,7 +48,7 @@ def import_backend_main():
     root = Path(__file__).resolve().parent.parent
     if str(root) not in sys.path:
         sys.path.insert(0, str(root))
-    import backend.main as backend
+    import backend  # 触发 backend.main 加载（含 app/deps/helpers/routers）
     os.environ.clear()
     os.environ.update(saved_env)
     atexit.register(_close_backend_kernel, backend)
@@ -55,6 +58,6 @@ def import_backend_main():
 
 def _close_backend_kernel(backend) -> None:
     try:
-        backend.kernel.close()
+        backend.deps.kernel.close()
     except Exception:
         pass

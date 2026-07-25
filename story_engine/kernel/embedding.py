@@ -1,18 +1,18 @@
 """Embedder — 本地 bge-small-zh-v1.5（Phase 2 / Module 2.2 L0 向量层）
 
-蓝图 docs/Story_Engine_工程蓝图.md 技术栈：sqlite-vec + bge-small-zh。
-用户决策：在线 embedding API 有问题，改走本地模型，经 HF-Mirror 下载。
+蓝图技术栈：sqlite-vec + bge-small-zh。
+使用 FastEmbed（ONNX Runtime）替代 sentence-transformers，
+无需 PyTorch，安装体积从 ~2GB 降到 ~30MB，CPU 推理更快。
 
 环境变量：
   STORY_ENGINE_EMBED_MODE=local|dummy          # 默认 local；无模型时自动退到 dummy
   STORY_ENGINE_EMBED_MODEL=BAAI/bge-small-zh-v1.5
   STORY_ENGINE_EMBED_DIMENSIONS=512            # bge-small-zh-v1.5 固有维度
-  STORY_ENGINE_EMBED_DEVICE=cuda|cpu|auto      # 默认 auto
   HF_ENDPOINT=https://hf-mirror.com            # 国内镜像（建议写进 .env）
 
 成本控制：
   - 本地缓存（LRU + 可选落盘）：同一文本不重复 encode
-  - embed_batch：sentence-transformers 原生批处理
+  - embed_batch：fastembed 原生批处理
   - dummy 模式：hash 伪向量，测试无 GPU/无模型也能跑
 """
 from __future__ import annotations
@@ -39,7 +39,7 @@ class EmbedderError(Exception):
 
 
 class Embedder:
-    """本地文本向量客户端 — SentenceTransformer(bge-small-zh-v1.5) + dummy 兜底"""
+    """本地文本向量客户端 — FastEmbed(bge-small-zh-v1.5, ONNX) + dummy 兜底"""
 
     def __init__(
         self,
@@ -158,19 +158,18 @@ class Embedder:
         # 确保镜像端点
         os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
         try:
-            from sentence_transformers import SentenceTransformer
+            from fastembed import TextEmbedding
         except ImportError as e:
             raise EmbedderError(
-                "缺少 sentence-transformers。请 pip install sentence-transformers"
+                "缺少 fastembed。请 pip install fastembed"
             ) from e
 
-        device = None if self.device == "auto" else self.device
         t0 = time.perf_counter()
-        self._model = SentenceTransformer(self.model_name, device=device)
-        # 校准维度（模型固有维度优先）
+        self._model = TextEmbedding(model_name=self.model_name)
+        # 校准维度（模型固有维度优先）：fastembed 首次 embed 触发模型下载
         try:
-            probe = self._model.encode(["ping"], normalize_embeddings=True)
-            actual = int(probe.shape[-1])
+            probe = list(self._model.embed(["ping"]))
+            actual = int(probe[0].shape[-1])
             if actual != self.dimensions:
                 self.dimensions = actual
         except Exception:
@@ -195,9 +194,8 @@ class Embedder:
         def _encode():
             self._ensure_model()
             assert self._model is not None
-            arr = self._model.encode(
-                texts, normalize_embeddings=True, show_progress_bar=False)
-            return [list(map(float, row)) for row in arr]
+            arrs = list(self._model.embed(texts))
+            return [list(map(float, row)) for row in arrs]
 
         vecs = await asyncio.to_thread(_encode)
         self.call_log.append({

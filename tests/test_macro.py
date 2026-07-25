@@ -113,7 +113,7 @@ def test_mock_fallback_produces_valid_plan():
     assert len(plan.episode_outlines) == 10
     assert len(plan.arc_schedule.characters) == 1
     assert plan.arc_schedule.characters[0].name == "陆明"
-    assert len(plan.foreshadow_blueprint.threads) == 2
+    assert len(plan.foreshadow_blueprint.threads) >= 2  # P1-2: 骨架现在生成5条多样化伏笔
     assert len(plan.act_structure.acts) == 4
 
 

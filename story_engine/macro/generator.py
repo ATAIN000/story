@@ -59,7 +59,7 @@ async def generate_macro_plan(
                            template_name, total_episodes, conflict_warnings)
     try:
         resp = await kernel.llm_call(
-            prompt, purpose="macro_plan", temperature=0.7, max_tokens=8192)
+            prompt, purpose="macro_plan", temperature=0.7, max_tokens=16384)
         text = getattr(resp, "text", "") or ""
         parsed = _parse_yaml(text)
         if parsed and _validate(parsed, total_episodes):
@@ -106,7 +106,7 @@ async def regenerate_component(
     try:
         resp = await kernel.llm_call(
             prompt, purpose=f"macro_regen_{component}",
-            temperature=0.7, max_tokens=4096)
+            temperature=0.7, max_tokens=16384)
         text = getattr(resp, "text", "") or ""
         parsed = _parse_yaml(text)
         if parsed:
@@ -565,7 +565,13 @@ _REQUIRED_KEYS = {
 
 
 def _validate(parsed: dict, total_episodes: int) -> bool:
-    """校验：必填键齐全 + 集数匹配 + beat 位置在范围内"""
+    """校验：必填键齐全 + 集数匹配 + beat 位置在范围内 + 内容充实度。
+
+    内容充实度（P23.4 质量加固）：拦截 LLM 返回的空模板/骨架兜底产物。
+    骨架 _generate_skeleton 会生成"第N集：beat描述"格式的占位 synopsis，
+    以及 logline="一个xxx的主角，在xxx的世界中学会xxx"——这些无剧情价值，
+    不该通过验证拿来开工。
+    """
     # 必填键
     if not _REQUIRED_KEYS <= set(parsed.keys()):
         return False
@@ -590,6 +596,35 @@ def _validate(parsed: dict, total_episodes: int) -> bool:
             if isinstance(er, list) and len(er) == 2:
                 if er[0] < 1 or er[1] > total_episodes + 1:
                     return False
+
+    # ---- 内容充实度（P23.4）----
+    bp = parsed.get("story_blueprint", {})
+    if not isinstance(bp, dict):
+        return False
+    # logline 太短 = 空模板/骨架兜底
+    logline = str(bp.get("logline", ""))
+    if len(logline) < 20:
+        return False
+    # central_conflict 的 want/need 不能是占位符
+    cc = bp.get("central_conflict", {})
+    if isinstance(cc, dict):
+        _PLACEHOLDER_VALUES = {"达成目标", "理解他人的价值", "阻止达成目标"}
+        for k in ("protagonist_want", "protagonist_need", "antagonist_want"):
+            v = str(cc.get(k, ""))
+            if len(v) < 5 or v in _PLACEHOLDER_VALUES:
+                return False
+    # 每集 synopsis 不能是纯模板文（"第N集：xxx"且 xxx 是 beat 通用描述）
+    if isinstance(outlines, list):
+        for o in outlines:
+            if not isinstance(o, dict):
+                continue
+            syn = str(o.get("synopsis", ""))
+            if len(syn) < 15:
+                return False
+            # 骨架格式："第N集：beat_desc"（beat_desc 来自模板，非 LLM 创作）
+            ep = o.get("episode", "")
+            if syn.startswith(f"第{ep}集：") and len(syn) < 30:
+                return False
 
     return True
 
@@ -771,27 +806,58 @@ def _generate_skeleton(bundle, worldview_profile, cast_profile,
             milestones=milestones,
         ))
 
-    # ---- Foreshadow Blueprint（2 条基础伏笔）----
+    # ---- Foreshadow Blueprint（5 条多样化伏笔，不同类型 + 具体化 form）----
+    main_name = main_char.get("name", "主角")
     threads = [
         ForeshadowThread(
-            id="FS_001", name="主线悬念", type="main_mystery",
+            id="FS_001", name="主线核心悬念", type="main_mystery",
             plant_episodes=[1, max(1, total_episodes // 3)],
             harvest_episode=max(1, total_episodes * 4 // 5),
             salience_ladder=[
-                SaliencePoint(ep=1, level=0.2, form="初次暗示"),
-                SaliencePoint(ep=max(1, total_episodes // 3), level=0.5, form="线索浮现"),
-                SaliencePoint(ep=max(1, total_episodes * 4 // 5), level=1.0, form="真相揭露"),
+                SaliencePoint(ep=1, level=0.2, form=f"{main_name}初遇异常现象但未深究"),
+                SaliencePoint(ep=max(1, total_episodes // 3), level=0.5, form="线索重现，与其他事件产生关联"),
+                SaliencePoint(ep=max(1, total_episodes * 4 // 5), level=1.0, form="真相揭露，呼应开篇异常"),
             ],
             spacing_rule="max_5_eps", status="planned"),
         ForeshadowThread(
-            id="FS_002", name="角色秘密", type="character_secret",
+            id="FS_002", name="关键人物的秘密过去", type="character_secret",
             plant_episodes=[max(1, total_episodes // 4)],
             harvest_episode=max(1, total_episodes * 3 // 4),
             salience_ladder=[
-                SaliencePoint(ep=max(1, total_episodes // 4), level=0.3, form="一个细节"),
-                SaliencePoint(ep=max(1, total_episodes * 3 // 4), level=1.0, form="秘密揭露"),
+                SaliencePoint(ep=max(1, total_episodes // 4), level=0.3, form="一个不经意的回避或异常反应"),
+                SaliencePoint(ep=max(1, total_episodes * 3 // 4), level=1.0, form="秘密揭露，改变关系格局"),
             ],
             spacing_rule="max_8_eps", status="planned"),
+        ForeshadowThread(
+            id="FS_003", name="被忽视的信物", type="hidden_object",
+            plant_episodes=[1],
+            harvest_episode=max(1, total_episodes - 1),
+            salience_ladder=[
+                SaliencePoint(ep=1, level=0.15, form=f"{main_name}获得的看似无关紧要的物品"),
+                SaliencePoint(ep=max(1, total_episodes // 2), level=0.4, form="物品意外发挥作用但未引起注意"),
+                SaliencePoint(ep=max(1, total_episodes - 1), level=1.0, form="信物成为破局关键"),
+            ],
+            spacing_rule="max_6_eps", status="planned"),
+        ForeshadowThread(
+            id="FS_004", name="权力格局的暗流", type="political_undercurrent",
+            plant_episodes=[max(1, total_episodes // 3)],
+            harvest_episode=max(1, total_episodes * 4 // 5),
+            salience_ladder=[
+                SaliencePoint(ep=max(1, total_episodes // 3), level=0.25, form="一个不合理的人事安排或资源分配"),
+                SaliencePoint(ep=max(1, total_episodes * 2 // 3), level=0.6, form="多方势力意图逐渐浮现"),
+                SaliencePoint(ep=max(1, total_episodes * 4 // 5), level=1.0, form="暗流涌动化为正面冲突"),
+            ],
+            spacing_rule="max_4_eps", status="planned"),
+        ForeshadowThread(
+            id="FS_005", name="预言与命运的纠葛", type="prophecy",
+            plant_episodes=[max(1, total_episodes // 5)],
+            harvest_episode=total_episodes,
+            salience_ladder=[
+                SaliencePoint(ep=max(1, total_episodes // 5), level=0.2, form="一个模糊的预言或传说被提及"),
+                SaliencePoint(ep=max(1, total_episodes // 2), level=0.5, form="事件发展与预言部分吻合"),
+                SaliencePoint(ep=total_episodes, level=1.0, form="预言的真正含义揭晓"),
+            ],
+            spacing_rule="max_7_eps", status="planned"),
     ]
 
     # ---- Pacing Curve（模板锚点插值）----

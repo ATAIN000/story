@@ -9,6 +9,7 @@ import { ref, onMounted } from 'vue'
 import { api } from '../api/api'
 import { toProjectsVM, displayName } from '../api/adapters'
 import { useToast } from '../composables/useToast'
+import { useGeneration } from '../composables/useGeneration'
 import AppIcon from '../components/AppIcon.vue'
 import EmptyState from '../components/EmptyState.vue'
 
@@ -19,6 +20,7 @@ const props = defineProps({
 const emit = defineEmits(['refresh', 'navigate'])
 
 const { toast, toastError } = useToast()
+const { generating } = useGeneration()   // P23.3：生成中禁止切项目（后端持锁，前端禁用入口）
 const dn = (id) => displayName(props.config, id)
 
 const projects = ref([])
@@ -71,6 +73,7 @@ async function onImportFile(e) {
    刷新后落在默认写作台视图）；失败停留本页（列表不变，可重试） */
 async function openProject(p) {
   if (p.current || opening.value) return
+  if (generating.value) { toast('生成进行中，请等待完成后切换项目'); return }
   opening.value = p.name
   try {
     await api.openProject(p.name)
@@ -114,8 +117,9 @@ async function openProject(p) {
         <div class="proj-meta">{{ dn(p.culture) || '—' }} · 第 {{ p.chapterCount }} 章 · tick {{ p.headTick }}</div>
         <div class="proj-time">最后打开 {{ p.lastOpened || '—' }}</div>
         <div class="proj-act">
-          <button class="btn-main" :disabled="p.current || !!opening"
+          <button class="btn-main" :disabled="p.current || !!opening || generating"
                   data-testid="project-continue"
+                  :title="generating ? '生成进行中，暂不可切换' : ''"
                   :aria-label="p.current ? `项目 ${p.name} 正在进行中` : `继续项目 ${p.name}，切换并跳到写作台`"
                   @click="openProject(p)">
             {{ opening === p.name ? '切换中…' : (p.current ? '进行中' : '继续') }}

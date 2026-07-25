@@ -1,18 +1,34 @@
 # StoryOS · 故事引擎
 
+**[简体中文](README.md) · [English](README.en.md)**
+
 > 核心哲学：**LLM 从"作者"降级为"语言层"，一致性的责任交给结构化世界模拟层。**
 > 一个可视化、可干预的 AI 长篇小说写作台：315 题材 × 20 层世界观向导 × 宏观规划 × 章节生成管线，每一步都能看见、能改、能回滚。
 
-## 30 秒上手
+> ⚠️ **单用户部署**：本系统是个人写作台，engine/kernel 为进程级单例，不支持多人同时在线（会串数据）。适合本地自用或 Docker 自部署。
+
+## 快速上手
+
+**Windows**：双击 `start.bat`
+**macOS / Linux**：`bash start.sh`
+
+脚本会自动：创建 `.venv` 虚拟环境 → 检测国内网络走阿里源 → 安装依赖 → 启动服务。
+
+> 首次启动会自动下载 embedding 模型（BAAI/bge-small-zh-v1.5，约 100 MB，经 HF-Mirror），
+> 之后启动是秒级的。Embedding 用 FastEmbed（ONNX Runtime），无需 PyTorch。
+
+首次启动是 **Mock 演示模式**（离线剧本，零 API 成本，全功能可逛）。
+要用真实 LLM 写作：**左侧「设置」→ LLM 接入卡**：选 provider（Moonshot / Kimi Code / GLM / DeepSeek / OpenAI 任选）→ 粘贴 API key → 测试连接 → 保存。即时生效，无需重启；勾选「写回 .env」则重启后仍生效。
+
+手动启动（不用脚本）：
 
 ```bash
+python -m venv .venv
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 python -m uvicorn backend.main:app --port 8111
 # 打开 http://localhost:8111
 ```
-
-首次启动是 **Mock 演示模式**（离线剧本，零 API 成本，全功能可逛）。
-要用真实 LLM 写作：**左侧「设置」→ LLM 接入卡**：选 provider（Moonshot / Kimi Code / GLM / DeepSeek / OpenAI 任选）→ 粘贴 API key → 测试连接 → 保存。即时生效，无需重启；勾选「写回 .env」则重启后仍生效。
 
 然后：**左侧「抽卡开局」** → 搜一个题材（315 个：无限流/霸总/规则怪谈/修仙…）→ 选世界观骨架 → 世界观+语言向导 → 人物原型 → 宏观规划（流式生成）→ 确认开工 → 写作台开始写第一章。
 
@@ -43,6 +59,11 @@ docker run -p 8111:8111 storyos
 
 ## 主要功能
 
+<p align="center">
+  <img src="docs/抽卡开局.png" alt="抽卡开局" width="80%"><br>
+  <sub>抽卡开局：315 题材搜索 → 世界观骨架推荐</sub>
+</p>
+
 | 模块 | 说明 |
 |---|---|
 | 抽卡开局 | 315 题材搜索/筛选/分页 → 骨架推荐（三轴亲和检测）→ 20 层世界观向导（100 参数 + 107 条级联谓词）→ 人物原型 → 宏观规划流式生成 → 冲突检测 C1-C6 |
@@ -51,6 +72,26 @@ docker run -p 8111:8111 storyos
 | 多项目 | 一项目一目录独立 DB，项目页开新/续旧/导出 zip/导入 zip |
 | 插件 | 98 素材包 + 315 题材包只读浏览，技能结晶训练信号 |
 | 设置 | LLM 在线配置（先测后存）/ 自评与 IR-first 开关 / LLM ping |
+
+### 写作台
+
+<p align="center">
+  <img src="docs/写作台.png" alt="写作台" width="80%"><br>
+  <sub>章节生成 + 段落四操作（改字/记一笔/重写/诊断）</sub>
+</p>
+
+<p align="center">
+  <img src="docs/决策卡.png" alt="Showrunner 决策卡" width="80%"><br>
+  <sub>章节生成前先看 Showrunner 10 步决策卡，透明可干预</sub>
+</p>
+
+### 规划图
+
+<p align="center">
+  <img src="docs/规划图1.png" alt="规划图 — 蓝图与幕结构" width="80%">&nbsp;&nbsp;
+  <img src="docs/规划图2.png" alt="规划图 — 弧光与伏笔" width="80%"><br>
+  <sub>宏观计划 Dashboard：蓝图 / 幕结构 / 分集 / 弧光 / 伏笔 / 节奏可视化 + 偏差检测</sub>
+</p>
 
 ## LLM 接入
 
@@ -77,11 +118,28 @@ python -m uvicorn backend.main:app --reload --port 8111
 cd frontend && npm install && npm run dev
 # 前端构建：npm run build
 
-# 测试（273 + 74 subtests）
+# 测试（281 + 74 subtests）
 python -m pytest tests/ -q
 ```
 
 ## 架构速览
+
+核心循环（生成/检查/修正三通道分离）：
+
+```mermaid
+flowchart LR
+    M["宏观规划<br/>蓝图·幕·分集·弧光·伏笔·节奏"] --> SR
+    SR["Showrunner 决策卡<br/>10 步 control loop"] --> GEN
+    GEN["Actor 群像 /<br/>LLM 生成初稿"] --> EXT["事件抽取"]
+    EXT --> VAL{"7 步硬约束验证<br/>时序/物理/认知/因果/意图/Z3/软判定"}
+    VAL -->|违规| FIX["LLM 修正"]
+    FIX --> EXT
+    VAL -->|通过| COMMIT["commit 事件<br/>事件溯源"]
+    COMMIT --> CFPG["伏笔池更新"]
+    CFPG --> SR
+```
+
+代码组织：
 
 ```
 story_engine/            纯 Python 核心包（不依赖 Web 框架）
@@ -95,18 +153,16 @@ story_engine/            纯 Python 核心包（不依赖 Web 框架）
 ├── worldview/           20 层 100 参数 · 107 谓词级联 · 十骨架
 ├── meta/                Meta-Generator · 抽卡 · genre taxonomy(315) · codegen
 └── plugins/             genres×315 · cultures×12 · packs×98
-backend/main.py          FastAPI 36 端点（契约见 docs/接口规范_part1/2.md）
+backend/main.py          FastAPI 端点（薄 Web 层，业务逻辑全在 story_engine 核心包）
 frontend/                Vue 3 SPA（10 视图，editorial 双主题）
 data/projects/<name>/    一项目一目录（story.db + chapters.json + 配置落盘）
 ```
 
 ## 文档
 
-- `docs/项目竣工现状与拓展基础图.md` — 当前竣工总账 + 拓展挂点（新人入口）
-- `docs/Story_Engine_工程蓝图.md` — 设计蓝图
-- `docs/接口规范_part1/2.md` — API 契约
 - `docs/前端自动化测试指引.md` — 前端操作测试（71 个 data-testid）
-- `docs/前后端启动操作说明.md` — 详细启动说明
+
+> 更多背景（设计蓝图、API 契约、拓展挂点）正在整理中，欢迎在 Issues 区提问。
 
 ## 日志
 
@@ -116,7 +172,7 @@ loguru 全链路：控制台 INFO + `logs/story_engine.log` DEBUG（按天轮转
 
 ## 致谢
 
-感谢 **凡事皆可短剧** 团队（交流群二维码见应用内左侧导航「关于」页，
+感谢 **凡事皆可** 短剧团队（交流群二维码见应用内左侧导航「关于」页，
 或把图片放到 `frontend/public/group-qr.png` 后自行构建）。
 
 ## License

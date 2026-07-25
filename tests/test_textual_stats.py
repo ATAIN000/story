@@ -126,7 +126,7 @@ class TestTrainingStats(unittest.TestCase):
                 '{"chapter": 1}\n{"chapter": 2}\n', encoding="utf-8")
             (tdir / "style.jsonl").write_text(
                 '{"chapter": 1}\n' * 3, encoding="utf-8")
-            snap = backend.training_stats_snapshot(reg, tdir)
+            snap = backend.routers.project.training_stats_snapshot(reg, tdir)
             self.assertEqual(snap["skills"], 2)
             self.assertEqual(snap["preferences"], 2)
             self.assertEqual(snap["style"], 3)
@@ -139,7 +139,7 @@ class TestTrainingStats(unittest.TestCase):
                 "created_at": "2026-07-20T00:00:02"})
 
             # 空目录/空 registry：零值不崩
-            zero = backend.training_stats_snapshot(
+            zero = backend.routers.project.training_stats_snapshot(
                 ExtensionRegistry(), tmp / "不存在")
             self.assertEqual(zero, {"skills": 0, "preferences": 0,
                                     "style": 0, "recent_skills": []})

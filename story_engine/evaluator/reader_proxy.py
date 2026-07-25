@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 # LLM 调用参数（蓝图 6.4：temperature=0.5）
 _TEMPERATURE = 0.5
-_MAX_TOKENS = 512
+_MAX_TOKENS = 16384
 
 
 class ReaderProxy:

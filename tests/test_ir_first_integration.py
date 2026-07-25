@@ -161,7 +161,7 @@ def test_structural_intervene_via_api_regenerates():
         assert body["regenerated"] is True
 
         # 章节被重跑：旧记录 superseded、新第 1 章记录顶上
-        chapters = backend.engine._read_chapters()
+        chapters = backend.deps.engine._read_chapters()
         ch1 = [c for c in chapters if c["chapter"] == 1]
         assert len(ch1) == 2
         assert ch1[0]["superseded"] is True
@@ -169,7 +169,7 @@ def test_structural_intervene_via_api_regenerates():
 
         # 被删事件（及其下游）active=False；重生成的章节重新提交了事件
         by_id = {e["event_id"]: e
-                 for e in backend.kernel.query_world("all_events")}
+                 for e in backend.deps.kernel.query_world("all_events")}
         assert by_id[target_id]["active"] is False
         assert ch1[1]["final"]["committed_events"]
 

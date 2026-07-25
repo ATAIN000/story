@@ -57,7 +57,8 @@ class LLMPool:
         return self.mode == "mock" or not self.api_key
 
     async def call(self, prompt: str, *, purpose: str = "generate",
-                   temperature: float = 0.7, max_tokens: int = 8192) -> LLMResponse:
+                   temperature: float = 0.7, max_tokens: int = 16384,
+                   no_retry: bool = False) -> LLMResponse:
         tag = "[LLM][MOCK]" if self.is_mock else "[LLM]"
         logger.debug(
             "{} 调用 | purpose={} | model={} | temp={} | max_tokens={} | "
@@ -68,7 +69,8 @@ class LLMPool:
                 resp = await self._mock_call(prompt, purpose)
             else:
                 resp = await self._openai_call(prompt, temperature, max_tokens)
-                if not resp.text.strip() and purpose != "_retry":
+                if not resp.text.strip() and purpose != "_retry" \
+                        and not no_retry:
                     resp = await self._openai_call(
                         prompt, temperature, max(max_tokens * 2, 16384),
                         force_thinking=True)
@@ -91,7 +93,7 @@ class LLMPool:
 
     async def call_stream(
         self, prompt: str, *, purpose: str = "generate",
-        temperature: float = 0.7, max_tokens: int = 8192,
+        temperature: float = 0.7, max_tokens: int = 16384,
     ) -> AsyncGenerator[str, None]:
         """流式调用 LLM，逐 chunk yield delta text（P20）。
 

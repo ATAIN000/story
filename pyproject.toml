@@ -1,0 +1,37 @@
+[project]
+name = "story-engine"
+version = "0.1.0"
+description = "StoryOS · 故事引擎 — 可视化、可干预的 AI 长篇小说写作台"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.11"
+authors = [{ name = "StoryOS" }]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+# 存量巨型文件暂不一次性格式化，避免大范围无意义 diff；
+# 新代码请保持规范（见 CONTRIBUTING.md）。
+extend-exclude = [
+    "story_engine/worldview/layers.py",
+    "story_engine/worldview/presets.py",
+    "story_engine/engine.py",
+    "backend/main.py",
+]
+
+[tool.ruff.lint]
+# 起步只开一组温和的规则，避免存量代码海量告警。
+# 后续可逐步收紧（加 F、UP、B 等）。
+select = ["E", "W", "I"]
+ignore = [
+    "E501",  # 行长由 formatter 管，避免对存量代码噪声
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E402"]  # 测试里 conftest 路径注入可能打乱 import 顺序
+
+[tool.ruff.format]
+# 默认风格即可，与 black 兼容
+
+# 注：pytest 不在此声明配置——现有 281 passed 是在无 pytest.ini 的默认配置下跑通的，
+# 引入额外配置反而可能改变行为。保持最小改动。

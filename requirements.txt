@@ -1,13 +1,14 @@
 fastapi>=0.115
-uvicorn>=0.32
+uvicorn[standard]>=0.32
+python-multipart>=0.0.9
 z3-solver>=4.13
 httpx>=0.28
 pydantic>=2.10
+fastembed>=0.4
+onnxruntime>=1.20,<1.27
 pyyaml>=6.0
 numpy>=1.26
 pytest>=8.3
 pytest-asyncio>=0.24
 sqlite-vec>=0.1.9
-sentence-transformers>=3.0
-huggingface_hub>=0.24
 loguru>=0.7

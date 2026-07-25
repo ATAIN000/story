@@ -95,6 +95,7 @@ class CharacterActor:
         self._idle.set()  # 初始空闲
         self.last_actions: list[dict] = []   # 最近提交的事件摘要（测试/汇总用）
         self.error_count = 0
+        self.chapter_context: str = ""  # P0-1: 上一章情节上下文，engine 每章设置
 
     # ---------- lifecycle ----------
     def start(self) -> ActorRef:
@@ -271,26 +272,45 @@ class CharacterActor:
         return f"角色人设：{'；'.join(parts)}。\n"
 
     async def _propose_actions(self, world_state: Any, chapter: int) -> list[ActionCandidate]:
-        """LLM 一次生成候选行动；失败则用规则兜底"""
+        """LLM 一次生成候选行动；失败则用规则兜底
+
+        P0-1/P0-2: 注入上一章上下文 + few-shot 示例 + 衔接约束，
+        解决 Actor 每章"失忆"导致的情节断裂。
+        """
         goals = "、".join(self.goals) or "完成当前职责"
         scene = ""
         if isinstance(world_state, WorldState):
             scene = world_state.narrative.current_scene
+        elif isinstance(world_state, dict):
+            scene = (world_state.get("narrative") or {}).get("current_scene", "")
         persona_ctx = self._persona_prompt()
+        ctx = self.chapter_context or "（第一章，无前情）"
         prompt = (
             f"你是角色「{self.id}」。{self.voice.prompt_snippet()}\n"
             f"{persona_ctx}"
+            f"=== 上一章发生了什么 ===\n{ctx}\n\n"
             f"活跃目标：{goals}\n"
             f"当前场景：{scene or '未知'}\n"
             f"工作记忆：\n{self.working.as_prompt() or '（空）'}\n\n"
-            "请提出 2-3 个可能的下一步行动。只输出 JSON 数组，每项：\n"
+            "基于上一章的结局，提出 2-3 个**自然承接**的下一步行动。\n"
+            "**关键要求**：\n"
+            "1. 行动必须衔接上一章结尾的情境——角色在哪、在做什么、面对什么\n"
+            "2. 不能突然跳到与上一章无关的新场景\n"
+            "3. motivation 必须解释为什么这个行动是上一章结局的自然延续\n\n"
+            "好的示例：\n"
+            '{"action":"为伤者检查伤势，发现伤口中有异常能量残留",'
+            '"summary":"检查伤势时发现异常","serves_goal":"揭示真相",'
+            '"motivation":"上一章结尾刚把伤者救下，自然要检查伤势——这与上章结尾自然衔接"}\n\n'
+            "不好的示例（禁止）：\n"
+            '{"action":"主角去集市买东西"} ← 与上一章（在矿坑底）完全脱节\n\n'
+            "只输出 JSON 数组，每项：\n"
             '{"action":"...","summary":"一句话","serves_goal":"...","motivation":"...",'
             '"effects":{"learn":{"角色":["事实"]}}}\n'
             "不要解释。"
         )
         try:
             resp = await self.kernel.llm_call(
-                prompt, purpose=f"propose:{self.id}", temperature=0.6, max_tokens=1024)
+                prompt, purpose=f"propose:{self.id}", temperature=0.6, max_tokens=16384)
             text = resp.text if hasattr(resp, "text") else str(resp)
             data = self._parse_json_array(text)
             out = []
@@ -378,7 +398,7 @@ class CharacterActor:
             resp = await self.kernel.llm_call(
                 f"用一句话总结角色「{self.id}」从这些事件中学到的洞察：\n"
                 + "\n".join(f"- {t}" for t in texts),
-                purpose=f"reflect:{self.id}", temperature=0.3, max_tokens=256)
+                purpose=f"reflect:{self.id}", temperature=0.3, max_tokens=16384)
             text = (resp.text if hasattr(resp, "text") else str(resp)).strip()
             if text:
                 summary = text[:200]

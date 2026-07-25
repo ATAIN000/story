@@ -216,6 +216,40 @@ class _ChapterClosingKernelView:
         return getattr(self._kernel, name)
 
 
+# ============================================================
+# P23.4 质量加固：章节正文质检工具函数
+# ============================================================
+import re as _re_qa  # 质检专用 re，避免与函数内 import re 冲突
+
+MIN_CHAPTER_CHARS = 600   # 章节正文硬下限：低于此值视为生成失败
+MAX_GEN_RETRIES = 2       # 章节生成最大重试次数
+
+
+def _is_narrative_text(text: str) -> bool:
+    """判别产出是否是叙事文本（非动作日志/结构化数据）。
+
+    Actor 路径 Realizer 失败时，旧逻辑回退 _render_actor_chapter 产出
+    "角色名：角色名围制…取判断"格式的动作日志，这不是小说正文。
+    本函数检测此类非叙事模式，供门禁B/E使用。
+    """
+    if not text or len(text.strip()) < 100:
+        return False
+    lines = [l for l in text.split("\n") if l.strip()]
+    if not lines:
+        return False
+    # 动作日志模式："XXX：XXX取判断/取行动/围制/serves_goal"
+    action_log = sum(
+        1 for l in lines
+        if _re_qa.search(r"[:：].*(取判断|取行动|围制|serves_goal|motivation)", l))
+    if action_log > len(lines) * 0.3:
+        return False
+    # 结构化数据残留：JSON / YAML / IR 骨架
+    stripped = text.strip()
+    if stripped.startswith(("{", "[", "---", "[beat")):
+        return False
+    return True
+
+
 class StoryEngine:
     def __init__(self, kernel_or_dir, llm_client=None,
                  genre_name=None, culture_name=None):
@@ -322,6 +356,15 @@ class StoryEngine:
         # 键：eval_enabled / ir_first / eval_max_rounds；值为 None 表示未覆盖（落 env）。
         # mock/剧本路径不受影响（_eval_enabled/_ir_first_enabled 仍检查 SCRIPTED_DEMO/llm.is_mock）。
         self._runtime_overrides: dict[str, object | None] = {}
+        self._progress_callback = None  # P1-1: 进度回调，backend 设置后 engine 在关键节点调用
+
+    def _progress(self, stage: str, detail: str = "") -> None:
+        """P1-1: 进度上报（供前端实时显示生成步骤）。backend 设 callback 后生效。"""
+        if self._progress_callback:
+            try:
+                self._progress_callback(stage, detail)
+            except Exception:
+                pass  # 进度上报失败不影响生成
 
     # ============ P7.4 L5：world.rule 素材包引用合并 ============
     def _merge_world_rule_packs(self, genre_params: dict) -> dict:
@@ -577,8 +620,21 @@ class StoryEngine:
                     "或在时间线面板回滚到任意快照重新生成。")
 
             # Actor 路径（STORY_ENGINE_SCRIPTED_DEMO=0）
-            return await self._generate_chapter_actor_path(
-                chapter_no, state, t0, mode=mode)
+            # P23.4 门禁E：质量不达标时重试（最多 MAX_GEN_RETRIES 次）
+            last_err = None
+            for attempt in range(MAX_GEN_RETRIES + 1):
+                try:
+                    return await self._generate_chapter_actor_path(
+                        chapter_no, state, t0, mode=mode)
+                except StoryEngineError as e:
+                    last_err = e
+                    if attempt < MAX_GEN_RETRIES:
+                        _llog.warning(
+                            "第{}章生成不达标(尝试{}/{})，重试: {}",
+                            chapter_no, attempt + 1, MAX_GEN_RETRIES, e)
+                        continue
+                    raise  # 重试用完仍失败 → 报错，不落盘
+            raise last_err  # 不可达（循环必 return 或 raise），保险
 
     # ============ P6.2：两阶段生成（plan + confirm） ============
     def plan_chapter(self) -> dict:
@@ -736,6 +792,17 @@ class StoryEngine:
         if not final_text.strip():
             raise StoryEngineError(
                 "生成结果为空 — 模型可能额度不足或思考预算耗尽。未提交任何事件，世界状态未变。")
+        # P23.4 门禁C/E：字数下限 + 叙事文本质检（仅 _quality_gate_enabled 生效；
+        # 测试/mock 宽松，因 fake LLM 产出可能短/结构化）
+        if self._quality_gate_enabled():
+            if len(final_text.strip()) < MIN_CHAPTER_CHARS:
+                raise StoryEngineError(
+                    f"第{chapter_no}章正文仅 {len(final_text.strip())} 字"
+                    f"（下限 {MIN_CHAPTER_CHARS}）— 生成质量不达标，未落盘。")
+            if not _is_narrative_text(final_text):
+                raise StoryEngineError(
+                    f"第{chapter_no}章最终正文未通过叙事文本质检"
+                    f"（疑似动作日志/结构化数据），未落盘。")
         if not final_events:
             raise StoryEngineError(
                 "事件抽取为空 — 生成文本无法解析出世界事件。未提交任何事件，世界状态未变。")
@@ -763,15 +830,26 @@ class StoryEngine:
         snapshot_id = self.kernel.snapshot()
         head = self.kernel.query_world("head_tick")
 
-        # 标题解析（剧本章用剧本标题；真实模式从正文首行「标题：XXX」解析）
+        # 标题解析（剧本章用剧本标题；真实模式从正文首行解析）。
+        # 接受三种格式（与 process_gates L5 一致）：
+        #   「标题：XXXX」（引擎约定，全角冒号）/ 「# XXXX」（markdown）/ 「第N章 XXXX」（纯文本）
         title = mock_script.CHAPTER_TITLES.get(chapter_no)
         if not scripted:
             import re as _re
-            m = _re.match(r"\s*标题[:：]\s*(.+)", final_text)
+            # P0-4: 跳过开头的 --- 分隔线
+            _body = _re.sub(r"^\s*---\s*\n+", "", final_text)
+            if _body != final_text:
+                final_text = _body
+                draft_text = _re.sub(r"^\s*---\s*\n+", "", draft_text)
+            m = (_re.match(r"\s*标题[:：]\s*(.+)", final_text)
+                 or _re.match(r"\s*##?\s+(.+)", final_text)
+                 or _re.match(r"\s*(第[一二三四五六七八九十百零\d]+章[^\n]*)", final_text))
             if m:
                 title = m.group(1).strip()[:12]
                 final_text = final_text[m.end():].lstrip("\n")
-                draft_m = _re.match(r"\s*标题[:：]\s*(.+)", draft_text)
+                draft_m = (_re.match(r"\s*标题[:：]\s*(.+)", draft_text)
+                           or _re.match(r"\s*##?\s+(.+)", draft_text)
+                           or _re.match(r"\s*(第[一二三四五六七八九十百零\d]+章[^\n]*)", draft_text))
                 if draft_m:
                     draft_text = draft_text[draft_m.end():].lstrip("\n")
 
@@ -875,27 +953,96 @@ class StoryEngine:
                 return text
         return await self._llm_generate_draft(chapter_no, card, state)
 
-    def _ir_recap(self) -> str | None:
-        """P5.12 ②：IR-first Realizer prompt 的前情 recap（章节连续性上下文）。
+    def _ir_recap(self, chapter_no: int = 1) -> str | None:
+        """IR-first Realizer prompt 的前情 recap（章节连续性上下文）。
 
-        数据源复用 _real_generate_prompt 的既有口径：chapters.json 未
-        superseded 章（最近 1-3 章，各取结尾 ~200 字）+ WorldState 伏笔池
-        未回收列表。首章（无已定稿前情）→ None（narrate 收到 None 时 prompt
-        与现状逐字一致）。
+        复用 _build_chapter_context 的完整上下文（蓝图+人物状态+前情+伏笔），
+        让 Realizer 拥有和 Actor 同等的上下文信息，保证正文衔接质量。
         """
-        chapters = [c for c in self._read_chapters() if not c.get("superseded")]
-        if not chapters:
-            return None
-        parts = [
-            f"第{c['chapter']}章《{c['title']}》结尾：{c['final']['text'][-200:]}"
-            for c in chapters[-3:]
-        ]
+        ctx = self._build_chapter_context(chapter_no)
+        return ctx if ctx else None
+
+    def _build_chapter_context(self, chapter_no: int) -> str:
+        """为 Actor propose 和 Realizer 提供完整情节上下文。
+
+        利用百万上下文窗口，注入全部可用上下文：
+        - 故事蓝图（logline/central_conflict/thematic_argument）
+        - 宏观计划：当前集 synopsis + key_events
+        - 人物状态（每角色 knows/secrets/goals + physical 位置）
+        - 前情概要（最近 3 章标题+摘要+结尾关键句）
+        - 未回收伏笔
+        """
+        parts: list[str] = []
+
+        # ---- 1. 故事蓝图 ----
+        plan = self._read_macro_plan()
+        if plan:
+            bp = plan.get("blueprint", {})
+            if isinstance(bp, dict):
+                parts.append(f"=== 故事蓝图 ===")
+                ll = bp.get("logline", "")
+                if ll:
+                    parts.append(f"主线：{ll}")
+                cc = bp.get("central_conflict", {})
+                if isinstance(cc, dict):
+                    w = cc.get("protagonist_want", "")
+                    n = cc.get("protagonist_need", "")
+                    if w or n:
+                        parts.append(f"主角想要：{w}；需要学会：{n}")
+                ta = bp.get("thematic_argument", {})
+                if isinstance(ta, dict) and ta.get("lie"):
+                    parts.append(f"主题：从「{ta.get('lie','')}」到「{ta.get('truth','')}」")
+
+        # ---- 2. 宏观计划：当前集 ----
+        macro_ctx = self._build_macro_context(chapter_no)
+        if macro_ctx:
+            syn = str(macro_ctx.get("synopsis") or macro_ctx.get("beat_synopsis") or "")
+            if syn:
+                parts.append(f"\n=== 本章宏观方向（第{chapter_no}集）===")
+                parts.append(syn[:200])
+
+        # ---- 3. 人物状态 ----
         state = self.kernel.query_world("current_state")
+        char_lines: list[str] = []
+        for cid in sorted(state.minds):
+            m = state.minds[cid]
+            meta = state.characters.get(cid, {})
+            role = meta.get("role", "")
+            goals = "、".join(m.goals[:3]) if m.goals else "无"
+            knows = [f for f, v in list(m.beliefs.items()) if v][:5]
+            secrets = list(m.secrets)[:2]
+            line = f"  {cid}（{role}）：目标=[{goals}]"
+            if knows:
+                line += f"；已知={knows}"
+            if secrets:
+                line += f"；秘密={secrets}"
+            char_lines.append(line)
+        # physical 状态（位置等）
+        phys = sorted(k for k, v in state.physical.items() if v)
+        if phys:
+            char_lines.append(f"  世界状态：{phys[:10]}")
+        if char_lines:
+            parts.append("\n=== 人物状态 ===")
+            parts.extend(char_lines)
+
+        # ---- 4. 前情概要（最近 3 章）----
+        chapters = [c for c in self._read_chapters() if not c.get("superseded")]
+        if chapters:
+            recent = chapters[-3:]
+            parts.append("\n=== 前情概要 ===")
+            for c in recent:
+                t = c.get("final", {}).get("text", "")
+                tail = t[-150:].replace("\n", " ") if t else ""
+                parts.append(f"第{c['chapter']}章《{c.get('title','')}》：…{tail}")
+
+        # ---- 5. 未回收伏笔 ----
         pending = [f for f in state.narrative.foreshadow_pool if not f.payed_off]
         if pending:
-            parts.append("未回收伏笔：" + "；".join(
-                f"{f.foreshadow_id}：{f.content}（触发：{f.trigger_condition}）"
-                for f in pending))
+            parts.append("\n=== 未回收伏笔 ===")
+            for f in pending:
+                parts.append(f"  {f.foreshadow_id}：{f.content}（触发：{f.trigger_condition}）")
+
+        return "\n".join(parts) if parts else ""
         return "\n".join(parts)
 
     async def _ir_first_narrate(self, chapter_no: int, card,
@@ -931,7 +1078,7 @@ class StoryEngine:
             fabula = FabulaBuilder().build(active)
             sjuzhet = SjuzhetSelector().select(fabula, self.bundle)
             text = await Narrativizer(self.kernel, self.bundle).narrate(
-                ir, sjuzhet, recap=self._ir_recap(),
+                ir, sjuzhet, recap=self._ir_recap(chapter_no),
                 worldview_text=self._worldview_prompt_text(),
                 macro_text=self._card_macro_text(card))
             _llog.info("IR-first 产出 | 章={} | beats={} | events={}", chapter_no,
@@ -948,10 +1095,11 @@ class StoryEngine:
                 "P5.6 IR-first 产出空稿（Realizer LLM 故障），回退旧文本产出路径",
                 stacklevel=2)
             return None, None
-        # P5.11 评审传导1：Realizer 只输出正文（不产标题行），而 L5 gate 与引擎
-        # 标题解析（本文件 import re as _re 两处）均约定首行「标题：XXX」——
-        # 此处补上（LLM 首行已带标题则保留），否则真实 IR-first 路径 L5
-        # title_format 恒 FAIL、每章保底多烧一轮修正
+        # 标题行约定：Realizer prompt 现要求首行产「标题：XXXX」（4-8 字真实标题，
+        # 非第N章）。此处做三件事：
+        # 1. 若 LLM 没产标题行（未遵守 prompt）→ 兜底补「第N章」（保 L5 gate 不 FAIL）
+        # 2. 若 LLM 产了半角冒号「标题:」→ 归一化为全角「标题：」（L5 只认全角）
+        # 3. LLM 已产合格标题行 → 原样保留
         import re as _re
         first_line = text.lstrip().splitlines()[0] if text.strip() else ""
         if not _re.match(r"^标题[:：]\S", first_line):
@@ -992,6 +1140,15 @@ class StoryEngine:
         if ov is not None:
             return bool(ov)
         return os.environ.get("STORY_ENGINE_EVAL_ENABLED", "1") != "0"
+
+    def _quality_gate_enabled(self) -> bool:
+        """P23.4 质量门禁开关：默认开（生产路径生效）；STORY_ENGINE_QUALITY_GATE=0 关。
+
+        与 _eval_enabled 的区别：_eval_enabled 是自评迭代开关（测试也开），
+        _quality_gate_enabled 是硬质量门禁开关（测试默认关，避免 fake LLM 产出
+        被误拦）。生产环境两者都开；测试设 QUALITY_GATE=0 跑通管线。
+        """
+        return os.environ.get("STORY_ENGINE_QUALITY_GATE", "1") != "0"
 
     def _eval_max_rounds(self) -> int:
         """EVAL_MAX_ROUNDS 默认 3，钳 [1, 5] 防失控（决策5）。
@@ -1143,6 +1300,10 @@ class StoryEngine:
         reactions = controller.reactions  # P5.12 ⑤：公开只读 accessor，不再碰 _reactions
         reaction = reactions[idx] if idx < len(reactions) else None
         curves = reader.get_reaction_curve() if reader else None
+        score = asdict(scorer.score(best.critiques, curves))
+        # P23.4 门禁D：critic 低分 → quality_flag 标记（不阻塞，供前端/用户识别）
+        overall = score.get("overall", 0) if isinstance(score, dict) else 0
+        quality_flag = "low_score" if isinstance(overall, (int, float)) and overall < 60 else None
         return {
             "rounds": max(v.round for v in versions) + 1,
             "best_round": best.round,
@@ -1150,8 +1311,9 @@ class StoryEngine:
             "critiques": [asdict(c) for c in best.critiques],
             "revision": asdict(best.revision) if best.revision else None,
             "reader": asdict(reaction) if reaction else None,
-            "score": asdict(scorer.score(best.critiques, curves)),
+            "score": score,
             "reader_predictions": predictions,
+            "quality_flag": quality_flag,
         }
 
     async def _generate_chapter_actor_path(
@@ -1170,18 +1332,26 @@ class StoryEngine:
         card = await self.showrunner.attach_creative_seed(card, chapter_no)
         await self._ensure_character_actors()
 
+        # P0-1: 为每个 Actor 设置上一章情节上下文（解决情节断裂）
+        chapter_ctx = self._build_chapter_context(chapter_no)
+        for actor in self.kernel.scheduler._character_actors.values():
+            actor.chapter_context = chapter_ctx
+
+        max_ticks = int(os.environ.get("STORY_ENGINE_ACTOR_MAX_TICKS", "5"))
+        self._progress("actor_tick", f"角色决策中（{max_ticks}轮）")
+
         # 写入本章 brief，供角色 recall
         await self._seed_chapter_memory(chapter_no, card, state)
 
         pre_state = copy.deepcopy(state)
         tick_start = self.kernel.query_world("next_tick")
-        max_ticks = int(os.environ.get("STORY_ENGINE_ACTOR_MAX_TICKS", "5"))
         all_actions: list[dict] = []
-        for _ in range(max(1, max_ticks)):
+        for tick_i in range(max(1, max_ticks)):
             cur = self.kernel.query_world("current_state")
             batch = await self.kernel.scheduler.tick_all(
                 cur, chapter=chapter_no, timeout=120.0)
             all_actions.extend(batch)
+            self._progress("actor_tick", f"角色决策 {tick_i+1}/{max_ticks}（累计 {len(all_actions)} 行动）")
         _llog.info("Actor tick 完成 | 章={} | 行动数={}", chapter_no,
                    len(all_actions))
 
@@ -1206,11 +1376,22 @@ class StoryEngine:
         narrative_ir = None
         draft_text = None
         if self._ir_first_enabled():
+            self._progress("realizing", "正文生成中（LLM 创作）")
             draft_text, narrative_ir = await self._ir_first_narrate(
                 chapter_no, card, close_chapter=True)
-        if draft_text is None:
+        # P23.4 门禁B：Realizer 失败/产出非叙事文本时的处理。
+        # 生产路径（_quality_gate_enabled）：报错让上层重试（动作日志不是小说正文）。
+        # 测试/mock 路径：保留回退 _render_actor_chapter（测试 fake LLM 设 is_mock=False
+        #   以过自评门控，但其 Realizer 产出非真实叙事，不该被门禁拦）。
+        if draft_text is None or not _is_narrative_text(draft_text):
+            if self._quality_gate_enabled():
+                raise StoryEngineError(
+                    f"第{chapter_no}章叙事化失败：Realizer 未产出有效正文"
+                    f"（LLM 异常或返回空/动作日志）。")
+            # 非生产路径回退（保留旧行为供测试管线跑通）
             draft_text = self._render_actor_chapter(chapter_no, card, all_actions)
 
+        self._progress("verifying", f"验证事件一致性（{len(draft_events)} 个事件）")
         draft_results = self._validate_event_sequence(draft_events, pre_state) if draft_events else []
         violations = [
             {"event": r["event_summary"], "check": c["label"], "reason": c["reason"]}
@@ -1272,16 +1453,23 @@ class StoryEngine:
 
         title = f"第{chapter_no}章"
         import re as _re
-        # 接受多种标题格式：标题：xxx / # 第N章 xxx / 第N章 xxx
+        # P0-4: 跳过开头的 --- 分隔线（LLM 常在 markdown 标题前加 ---）
+        _body = _re.sub(r"^\s*---\s*\n+", "", final_text)
+        if _body != final_text:
+            final_text = _body
+        # 接受多种标题格式：标题：xxx / # XXX / # 第N章 xxx / 第N章 xxx
         m = _re.match(r"\s*标题[:：]\s*(.+)", final_text)
+        if not m:
+            m = _re.match(r"\s*##?\s+(.+)", final_text)   # 纯 markdown 标题 # XXX / ## XXX
         if not m:
             m = _re.match(r"\s*#\s*(第.+章[^\n]*)", final_text)
         if not m:
             m = _re.match(r"\s*(第.+章[^\n]*)", final_text)
         if m:
             title = m.group(1).strip()[:30]
-            # 去掉已匹配的标题行（保留正文）
-            final_text = _re.sub(r"^\s*(?:标题[:：]|#\s*)?第.+章[^\n]*\n+", "", final_text, count=1)
+            # 去掉已匹配的标题行（保留正文）；兼容 标题:/# /第N章/纯markdown 多格式
+            final_text = _re.sub(
+                r"^\s*(?:标题[:：]\s*.+|##?\s+.+|第.+章[^\n]*)\n+", "", final_text, count=1)
 
         record = {
             "chapter": chapter_no,
@@ -1518,6 +1706,23 @@ class StoryEngine:
             f"角色活跃目标：{goals}\n\n"
             f"=== 章节文本 ===\n{text[:3000]}\n\n只输出 JSON 数组，不要解释。")
 
+    def _world_rule_correction_hint(self) -> str:
+        """按文化 supernatural_tolerance 生成「世界规则违规」的修正指引。
+
+        公案/现代（低容忍）：超自然只作氛围，破案/解谜走证据链。
+        修仙/玄幻/神话（高容忍）：超自然是核心设定，保持其体系自洽即可。
+        中间值：超自然允许但需有体系约束。
+        """
+        try:
+            tol = float(self.culture.params.get("supernatural_tolerance", 0.5))
+        except (TypeError, ValueError):
+            tol = 0.5
+        if tol >= 0.7:
+            return "超自然力量是本世界核心设定，保持其体系自洽（代价/来源/限制一致）"
+        if tol <= 0.4:
+            return "超自然只作氛围，关键推进走证据链/合理调查"
+        return "超自然元素允许，但需有内在体系约束，不可随意破规"
+
     async def _llm_correct(self, chapter_no: int, draft_text: str,
                            violations: list[dict], state: WorldState,
                            feedback: list[str] | None = None,
@@ -1536,6 +1741,10 @@ class StoryEngine:
             fb_txt = ("自评反馈（必须逐条处理）：\n"
                       + "\n".join(f"- {f}" for f in feedback) + "\n\n")
             task_line = "修正上述违规与自评反馈，保持叙事质量与篇幅。规则：\n"
+        # 世界规则违规修正指引：按文化 supernatural_tolerance 动态生成。
+        # 旧实现硬编码「超自然只作氛围，破案改走证据链」——这是公案专属规则，
+        # 对修仙/玄幻/神话会错误压制超自然元素（那些题材超自然是核心非氛围）。
+        wrule = self._world_rule_correction_hint()
         prompt = (
             f"【CHAPTER={chapter_no}】\n"
             f"以下是世界状态（检查基准）：\n{self._world_state_digest(state)}\n\n"
@@ -1545,7 +1754,7 @@ class StoryEngine:
             f"{task_line}"
             "- 认知违规：改为合法获知渠道（调查/证词/物证），或删去该信息\n"
             "- 物理违规：补上必要的位置转移过程\n"
-            "- 世界规则违规：超自然只作氛围，破案改走证据链\n"
+            f"- 世界规则违规：{wrule}\n"
             "只输出修正后的正文（保留首行标题）。")
         if self._scripted(chapter_no):
             note = mock_script.CORRECTIONS[chapter_no]["note"]

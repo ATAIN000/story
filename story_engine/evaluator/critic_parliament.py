@@ -119,8 +119,8 @@ DIMENSION_GUIDE: dict[str, tuple[str, str, str]] = {
 
 # LLM 调用参数（蓝图：critique 低温更确定）
 _TEMPERATURE = 0.3
-_JUDGE_MAX_TOKENS = 2048
-_CRITIC_MAX_TOKENS = 1024
+_JUDGE_MAX_TOKENS = 16384
+_CRITIC_MAX_TOKENS = 16384
 
 
 @dataclass

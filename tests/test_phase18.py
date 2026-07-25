@@ -164,7 +164,7 @@ def test_macro_progress_endpoint_structure():
     from fastapi.testclient import TestClient
     with TestClient(backend.app) as c:
         # 写入 macro_plan.json 到 engine.project_dir
-        plan_path = Path(backend.engine.project_dir) / "macro_plan.json"
+        plan_path = Path(backend.deps.engine.project_dir) / "macro_plan.json"
         plan_path.write_text(json.dumps(plan, ensure_ascii=False), encoding="utf-8")
         resp = c.get("/api/macro/progress")
     assert resp.status_code == 200

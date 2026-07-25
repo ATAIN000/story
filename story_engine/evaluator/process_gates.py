@@ -130,7 +130,8 @@ class ProcessGate:
         - 「标题：XXXX」（引擎级约定，全角冒号）
         - 「# 第X章…」（markdown 标题，LLM 常见产出）
         - 「第X章…」（纯文本标题）
-        字数检查放宽 ±50% 容差（LLM 不精确控制篇幅）。
+        字数检查放宽容差 lo×0.4 / hi×2.0（LLM 不精确控制篇幅，且网文章节
+        篇幅差异大；1500字题材合法区间 [600, 3000]）。
         """
         failures: dict[str, str] = {}
         stripped = (text or "").strip()
@@ -140,14 +141,17 @@ class ProcessGate:
                 or re.match(r"^#\s*.+", first_line)
                 or re.match(r"^第.+章", first_line)):
             failures["title_format"] = "首行标题格式不符（要求「标题：XXXX」或 markdown 标题或「第X章」）"
-        # 字数检查：±50% 容差（LLM 不精确控制篇幅，硬上下限各放宽 50%）
+        # 字数检查：放宽容差（LLM 不精确控制篇幅，且网文章节篇幅差异大）。
+        # 旧实现下限 lo×0.5 / 上限 hi×1.5（1500字题材→[500,2250]），上限偏紧，
+        # 2500+ 章节会被误判违规多烧一轮修正。放宽到 lo×0.4 / hi×2.0
+        # （1500字题材→[600,3000]，覆盖网文常见篇幅）。
         lo, hi = parse_word_range(self.style)
-        margin_lo = max(50, int(lo * 0.5))
-        margin_hi = int(hi * 1.5)
+        margin_lo = max(50, int(lo * 0.4))
+        margin_hi = int(hi * 2.0)
         n_chars = len(re.sub(r"\s", "", stripped))
         if not (lo - margin_lo <= n_chars <= margin_hi):
             failures["word_count"] = (
-                f"字数 {n_chars} 超出容差区间 [{lo - margin_lo}, {margin_hi}]（genre style {lo}-{hi}，±50% 容差）")
+                f"字数 {n_chars} 超出容差区间 [{lo - margin_lo}, {margin_hi}]（genre style {lo}-{hi}，容差 lo×0.4/hi×2.0）")
         if stripped and stripped[-1] not in SENTENCE_ENDINGS:
             failures["truncated"] = f"结尾无句末标点（疑半截句）：…{stripped[-10:]}"
         return Gate(layer="L5", passed=not failures, failures=failures)

@@ -65,15 +65,15 @@ class TestProjectsApi(unittest.TestCase):
 
     def _with_projects_root(self, root: Path, fn):
         """临时把扫描根指到测试目录（模块级常量，用完还原）"""
-        saved = backend.PROJECTS_ROOT
-        backend.PROJECTS_ROOT = root
+        saved = backend.deps.PROJECTS_ROOT
+        backend.deps.PROJECTS_ROOT = root
         try:
             return fn()
         finally:
-            backend.PROJECTS_ROOT = saved
+            backend.deps.PROJECTS_ROOT = saved
 
     def test_1_list_contains_yupei_and_backfills_project_json(self):
-        meta_path = backend.PROJECTS_ROOT / "yupei" / "project.json"
+        meta_path = backend.deps.PROJECTS_ROOT / "yupei" / "project.json"
         pre_existed = meta_path.exists()
         r = self.client.get("/api/projects")
         self.assertEqual(r.status_code, 200)
@@ -96,9 +96,9 @@ class TestProjectsApi(unittest.TestCase):
         # 首次补写（文件原先不存在）时口径：yupei 非当前项目（测试单例项目
         # 目录是临时目录）→ env/内置默认；是当前项目 → engine.genre/culture
         if not pre_existed:
-            if backend.engine.project_dir.name == "yupei":
-                self.assertEqual(meta["genre"], backend.engine.genre.name)
-                self.assertEqual(meta["culture"], backend.engine.culture.name)
+            if backend.deps.engine.project_dir.name == "yupei":
+                self.assertEqual(meta["genre"], backend.deps.engine.genre.name)
+                self.assertEqual(meta["culture"], backend.deps.engine.culture.name)
             else:
                 self.assertEqual(
                     meta["genre"],
@@ -218,15 +218,15 @@ class TestProjectOpenAndConfirmSwitch(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.client = TestClient(backend.app)
-        cls.orig_dir = Path(backend.engine.project_dir)
-        cls.orig_genre = backend.engine.genre.name
-        cls.orig_culture = backend.engine.culture.name
-        cls.saved_root = backend.PROJECTS_ROOT
+        cls.orig_dir = Path(backend.deps.engine.project_dir)
+        cls.orig_genre = backend.deps.engine.genre.name
+        cls.orig_culture = backend.deps.engine.culture.name
+        cls.saved_root = backend.deps.PROJECTS_ROOT
 
     def _restore_backend(self):
         """切回共享 backend 项目并还原扫描根/题材（finally 中调用）。"""
-        backend.PROJECTS_ROOT = self.saved_root
-        backend._switch_to(self.orig_dir)
+        backend.deps.PROJECTS_ROOT = self.saved_root
+        backend.helpers._switch_to(self.orig_dir)
         self.client.post("/api/project/init",
                          json={"genre": self.orig_genre,
                                "culture": self.orig_culture})
@@ -242,7 +242,7 @@ class TestProjectOpenAndConfirmSwitch(unittest.TestCase):
 
     def test_4_open_switches_between_projects_and_404(self):
         with tempfile.TemporaryDirectory() as root:
-            backend.PROJECTS_ROOT = Path(root)
+            backend.deps.PROJECTS_ROOT = Path(root)
             try:
                 # alpha：非默认题材（isekai-romance）
                 r = self._session_confirm("alpha", genre="isekai-romance")
@@ -262,7 +262,7 @@ class TestProjectOpenAndConfirmSwitch(unittest.TestCase):
                 self.assertEqual(body["project"]["genre"], "isekai-romance")
                 self.assertEqual(body["project"]["chapter_count"], 1)
                 # engine 单例同步恢复
-                self.assertEqual(backend.engine.genre.name, "isekai-romance")
+                self.assertEqual(backend.deps.engine.genre.name, "isekai-romance")
                 snap = self.client.get("/api/project").json()
                 self.assertEqual(snap["meta"]["project"], "alpha")
                 self.assertEqual(len(snap["chapters"]), 1)
@@ -278,7 +278,7 @@ class TestProjectOpenAndConfirmSwitch(unittest.TestCase):
 
     def test_5_confirm_with_project_name_creates_switches_and_writes_meta(self):
         with tempfile.TemporaryDirectory() as root:
-            backend.PROJECTS_ROOT = Path(root)
+            backend.deps.PROJECTS_ROOT = Path(root)
             try:
                 r = self._session_confirm("gamma")
                 self.assertEqual(r.status_code, 200, r.text)
@@ -297,7 +297,7 @@ class TestProjectOpenAndConfirmSwitch(unittest.TestCase):
                 for k in ("created_at", "last_opened_at"):
                     self.assertTrue(meta.get(k))
                 # 当前已切换
-                self.assertEqual(backend.engine.project_dir, proj)
+                self.assertEqual(backend.deps.engine.project_dir, proj)
                 snap = self.client.get("/api/project").json()
                 self.assertEqual(snap["meta"]["project"], "gamma")
                 self.assertEqual(snap["meta"]["genre"], "mystery")
@@ -306,7 +306,7 @@ class TestProjectOpenAndConfirmSwitch(unittest.TestCase):
 
     def test_6_confirm_existing_409_and_endpoints_use_new_stack(self):
         with tempfile.TemporaryDirectory() as root:
-            backend.PROJECTS_ROOT = Path(root)
+            backend.deps.PROJECTS_ROOT = Path(root)
             try:
                 r = self._session_confirm("delta")
                 self.assertEqual(r.status_code, 200, r.text)
@@ -314,7 +314,7 @@ class TestProjectOpenAndConfirmSwitch(unittest.TestCase):
                 r = self._session_confirm("delta")
                 self.assertEqual(r.status_code, 409, r.text)
                 self.assertIn("已存在", r.json()["detail"])
-                self.assertEqual(backend.engine.project_dir,
+                self.assertEqual(backend.deps.engine.project_dir,
                                  Path(root) / "delta")
                 # 非法项目名 → 422
                 r2 = self.client.post("/api/gacha/begin",
@@ -351,14 +351,14 @@ class TestChineseNameAndImport(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.client = TestClient(backend.app)
-        cls.orig_dir = Path(backend.engine.project_dir)
-        cls.orig_genre = backend.engine.genre.name
-        cls.orig_culture = backend.engine.culture.name
-        cls.saved_root = backend.PROJECTS_ROOT
+        cls.orig_dir = Path(backend.deps.engine.project_dir)
+        cls.orig_genre = backend.deps.engine.genre.name
+        cls.orig_culture = backend.deps.engine.culture.name
+        cls.saved_root = backend.deps.PROJECTS_ROOT
 
     def _restore_backend(self):
-        backend.PROJECTS_ROOT = self.saved_root
-        backend._switch_to(self.orig_dir)
+        backend.deps.PROJECTS_ROOT = self.saved_root
+        backend.helpers._switch_to(self.orig_dir)
         self.client.post("/api/project/init",
                          json={"genre": self.orig_genre,
                                "culture": self.orig_culture})
@@ -398,7 +398,7 @@ class TestChineseNameAndImport(unittest.TestCase):
     def test_9_chinese_project_name_confirm_open_export(self):
         """中文名全链路：session confirm 建项目 → open 切换 → 导出 zip RFC5987。"""
         with tempfile.TemporaryDirectory() as root:
-            backend.PROJECTS_ROOT = Path(root)
+            backend.deps.PROJECTS_ROOT = Path(root)
             try:
                 name = "末日情缘一号"
                 r = self._session_confirm(name)
@@ -423,7 +423,7 @@ class TestChineseNameAndImport(unittest.TestCase):
     def test_10_import_project_zip(self):
         """导入：合法 zip → 200 + 可 open + 重名 409；穿越/缺 story.db → 422。"""
         with tempfile.TemporaryDirectory() as root:
-            backend.PROJECTS_ROOT = Path(root)
+            backend.deps.PROJECTS_ROOT = Path(root)
             try:
                 payload = self._zip_bytes({
                     "story.db": b"",
@@ -467,7 +467,7 @@ class TestChineseNameAndImport(unittest.TestCase):
     def test_11_project_name_validation_security(self):
         """名校验：中文/空格/-/_ 放行；保留名/分隔符/穿越/首尾白点/超长/
         控制字符全拒；session confirm 集成面 422。"""
-        v = backend.validate_project_name
+        v = backend.helpers.validate_project_name
         for ok in ("末日情缘一号", "alpha", "my story", "a-b_c", "故事 2 号",
                    "x" * 40):
             self.assertTrue(v(ok), ok)
@@ -476,7 +476,7 @@ class TestChineseNameAndImport(unittest.TestCase):
                     "lpt9", "a\tb", "a\nb"):
             self.assertFalse(v(bad), bad)
         with tempfile.TemporaryDirectory() as root:
-            backend.PROJECTS_ROOT = Path(root)
+            backend.deps.PROJECTS_ROOT = Path(root)
             try:
                 for bad in ("CON", "aux", "a/b"):
                     r1 = self.client.post("/api/gacha/begin",

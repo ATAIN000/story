@@ -121,7 +121,7 @@ class TestGachaDraw(unittest.TestCase):
         from fastapi.testclient import TestClient
         from conftest import import_backend_main
         backend = import_backend_main()
-        pool = backend.engine.kernel.llm
+        pool = backend.deps.engine.kernel.llm
         saved_mode = pool.mode
         pool.mode = "mock"
         try:
@@ -287,7 +287,7 @@ class TestGachaSessionFlow(unittest.TestCase):
     def _restore(self, backend, orig_dir):
         """切回原项目（兼清临时项目 kernel）。"""
         from fastapi.testclient import TestClient
-        backend._switch_to(orig_dir)
+        backend.helpers._switch_to(orig_dir)
 
     def test_begin_creates_session_and_confirm_creates_project(self):
         """begin → 拿到 session_id → confirm 建新项目并切换。"""
@@ -295,13 +295,13 @@ class TestGachaSessionFlow(unittest.TestCase):
         from fastapi.testclient import TestClient
         from conftest import import_backend_main
         backend = self._backend()
-        orig_dir = Path(backend.engine.project_dir)
-        orig_genre = backend.engine.genre.name
-        orig_culture = backend.engine.culture.name
-        saved_root = backend.PROJECTS_ROOT
+        orig_dir = Path(backend.deps.engine.project_dir)
+        orig_genre = backend.deps.engine.genre.name
+        orig_culture = backend.deps.engine.culture.name
+        saved_root = backend.deps.PROJECTS_ROOT
         c = TestClient(backend.app)
         with tempfile.TemporaryDirectory() as root:
-            backend.PROJECTS_ROOT = Path(root)
+            backend.deps.PROJECTS_ROOT = Path(root)
             try:
                 # begin
                 r = c.post("/api/gacha/begin",
@@ -320,10 +320,10 @@ class TestGachaSessionFlow(unittest.TestCase):
                 self.assertEqual(body2["project"]["name"], "test-proj")
                 self.assertTrue((Path(root) / "test-proj" / "story.db").exists())
                 # engine 已切换
-                self.assertEqual(backend.engine.genre.name, "mystery")
+                self.assertEqual(backend.deps.engine.genre.name, "mystery")
             finally:
                 self._restore(backend, orig_dir)
-                backend.PROJECTS_ROOT = saved_root
+                backend.deps.PROJECTS_ROOT = saved_root
                 c.post("/api/project/init",
                        json={"genre": orig_genre, "culture": orig_culture})
 
@@ -350,13 +350,13 @@ class TestGachaSessionFlow(unittest.TestCase):
         from fastapi.testclient import TestClient
         from conftest import import_backend_main
         backend = self._backend()
-        orig_dir = Path(backend.engine.project_dir)
-        orig_genre = backend.engine.genre.name
-        orig_culture = backend.engine.culture.name
-        saved_root = backend.PROJECTS_ROOT
+        orig_dir = Path(backend.deps.engine.project_dir)
+        orig_genre = backend.deps.engine.genre.name
+        orig_culture = backend.deps.engine.culture.name
+        saved_root = backend.deps.PROJECTS_ROOT
         c = TestClient(backend.app)
         with tempfile.TemporaryDirectory() as root:
-            backend.PROJECTS_ROOT = Path(root)
+            backend.deps.PROJECTS_ROOT = Path(root)
             try:
                 r = c.post("/api/gacha/begin", json={"genre_name": "mystery"})
                 sid = r.json()["session_id"]
@@ -384,6 +384,6 @@ class TestGachaSessionFlow(unittest.TestCase):
                 assert cast[0]["persona"]["pearson_primary"] == "seeker"
             finally:
                 self._restore(backend, orig_dir)
-                backend.PROJECTS_ROOT = saved_root
+                backend.deps.PROJECTS_ROOT = saved_root
                 c.post("/api/project/init",
                        json={"genre": orig_genre, "culture": orig_culture})

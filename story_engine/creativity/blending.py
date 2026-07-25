@@ -117,7 +117,7 @@ class ConceptualBlending:
             "只输出第三步的阐述文本，不要分析过程，不要分点，不要超过 200 字。")
         try:
             resp = await self._llm_call(
-                prompt, purpose="creative_blend", temperature=0.9, max_tokens=512)
+                prompt, purpose="creative_blend", temperature=0.9, max_tokens=16384)
             emergent = (getattr(resp, "text", "") or "").strip()
         except Exception:
             return None  # LLM 异常/超时 → 不附 seed（决策7 兜底约束）

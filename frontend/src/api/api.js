@@ -37,6 +37,13 @@ export const api = {
   plan: () => post('/api/project/plan'),
   deletePlan: () => req('/api/project/plan', { method: 'DELETE' }),
 
+  /* --- 异步生成（P23.3：切走再回来状态丢失修复） --- */
+  /* generateAsync 立即返回 {started, chapter_no}；generationStatus 轮询查进度；
+     generateAwait 长轮询等完成（可选）。前端走 async + 轮询 status 恢复进度态。 */
+  generateAsync: (mode = 'confirm') => post('/api/project/generate/async', { mode }),
+  generationStatus: () => req('/api/project/generation-status'),
+  generateAwait: () => post('/api/project/generate/await'),
+
   /* --- HITL 介入（P5.10 / P6.1） --- */
   intervene: (type, payload = {}, reason = '') =>
     post('/api/intervene', { type, payload, reason }),
@@ -118,6 +125,7 @@ export const api = {
   macroTemplates: (genre = '') =>
     req('/api/macro/templates' + (genre ? `?genre=${encodeURIComponent(genre)}` : '')),
   macroPlanGet: () => req('/api/macro/plan'),
+  exportBible: () => post('/api/macro/export-bible'),
 
   /* P18.1: 跨层冲突检测 — 已迁移到 session 端点（gachaSessionCrossCheck） */
 

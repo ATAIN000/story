@@ -159,13 +159,13 @@ def test_confirm_with_worldview_persists_and_rejects_violations():
     from fastapi.testclient import TestClient
     from conftest import import_backend_main
     backend = import_backend_main()
-    orig_dir = Path(backend.engine.project_dir) if hasattr(backend.engine, 'project_dir') else None
-    orig_genre = backend.engine.genre.name
-    orig_culture = backend.engine.culture.name
-    saved_root = backend.PROJECTS_ROOT
+    orig_dir = Path(backend.deps.engine.project_dir) if hasattr(backend.deps.engine, 'project_dir') else None
+    orig_genre = backend.deps.engine.genre.name
+    orig_culture = backend.deps.engine.culture.name
+    saved_root = backend.deps.PROJECTS_ROOT
     c = TestClient(backend.app)
     with tempfile.TemporaryDirectory() as root:
-        backend.PROJECTS_ROOT = Path(root)
+        backend.deps.PROJECTS_ROOT = Path(root)
         try:
             # begin session
             r = c.post("/api/gacha/begin", json={"genre_name": "mystery"})
@@ -199,9 +199,9 @@ def test_confirm_with_worldview_persists_and_rejects_violations():
             # 清理 session
             c.post(f"/api/gacha/{sid2}/cancel")
         finally:
-            backend.PROJECTS_ROOT = saved_root
+            backend.deps.PROJECTS_ROOT = saved_root
             if orig_dir:
-                backend._switch_to(orig_dir)
+                backend.helpers._switch_to(orig_dir)
             c.post("/api/project/init",
                    json={"genre": orig_genre, "culture": orig_culture})
 
@@ -361,13 +361,13 @@ def test_confirm_with_persona_persists_cast_json():
     from fastapi.testclient import TestClient
     from conftest import import_backend_main
     backend = import_backend_main()
-    orig_dir = Path(backend.engine.project_dir)
-    orig_genre = backend.engine.genre.name
-    orig_culture = backend.engine.culture.name
-    saved_root = backend.PROJECTS_ROOT
+    orig_dir = Path(backend.deps.engine.project_dir)
+    orig_genre = backend.deps.engine.genre.name
+    orig_culture = backend.deps.engine.culture.name
+    saved_root = backend.deps.PROJECTS_ROOT
     c = TestClient(backend.app)
     with tempfile.TemporaryDirectory() as root:
-        backend.PROJECTS_ROOT = Path(root)
+        backend.deps.PROJECTS_ROOT = Path(root)
         try:
             r = c.post("/api/gacha/begin", json={"genre_name": "mystery"})
             sid = r.json()["session_id"]
@@ -388,7 +388,7 @@ def test_confirm_with_persona_persists_cast_json():
             assert len(cast_data) == 2
             assert cast_data[0]["persona"]["pearson_primary"] == "seeker"
         finally:
-            backend.PROJECTS_ROOT = saved_root
-            backend._switch_to(orig_dir)
+            backend.deps.PROJECTS_ROOT = saved_root
+            backend.helpers._switch_to(orig_dir)
             c.post("/api/project/init",
                    json={"genre": orig_genre, "culture": orig_culture})

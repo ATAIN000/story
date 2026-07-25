@@ -507,6 +507,8 @@ async function generateMacro() {
     /* P20: WebSocket 流式生成（Vite 需 ws:true 代理；关闭/超时必须 settle Promise） */
     macroPlan.value = await new Promise((resolve, reject) => {
       let settled = false
+      let errorSeen = false   /* 收到后端 error 帧：complete 会跟随（带兜底骨架），
+                                 此窗口内 onclose/onerror 不立即 reject，等 complete */
       const finish = (fn, arg) => {
         if (settled) return
         settled = true
@@ -533,14 +535,27 @@ async function generateMacro() {
             macroStreamText.value = ''
             finish(resolve, msg.plan)
           } else if (msg.type === 'error') {
-            /* 错误但可能有 mock 兜底（complete 会跟随） */
-            toastError(msg.msg || '宏观生成出错')
+            /* 错误但后端会发 complete 带兜底骨架计划（gacha.py 兜底逻辑）。
+               标记 errorSeen，给 complete 一个窗口；窗口内 onclose/onerror 不 reject */
+            errorSeen = true
+            toastError(msg.msg || '宏观生成出错（将使用骨架兜底）')
+            setTimeout(() => {
+              /* 兜底：complete迟迟未到（后端兜底也失败）才 reject */
+              if (!settled) finish(reject, new Error('兜底计划也未送达，宏观生成失败'))
+            }, 5000)
           }
         } catch { /* ignore parse errors */ }
       }
-      ws.onerror = () => finish(reject, new Error('WebSocket 连接失败'))
+      ws.onerror = () => {
+        /* errorSeen 窗口内：连接错误可能在 error 帧之后发生，等 complete，不立即 reject */
+        if (errorSeen) return
+        finish(reject, new Error('WebSocket 连接失败'))
+      }
       ws.onclose = () => {
         if (!settled) {
+          /* errorSeen 窗口内：close 可能先于 complete 处理，给短缓冲；
+             若 complete 已在消息队列则会被拿到（settled 已 true 时此分支不进） */
+          if (errorSeen) return
           finish(reject, new Error(
             macroStreamText.value ? '流式生成未完成' : 'WebSocket 已断开'))
         }
@@ -590,6 +605,7 @@ const macroTemplateLoading = ref(false)
 const selectedTemplate = ref('save_the_cat_15')
 const macroPlan = ref(null)           // 生成的 MacroPlan dict
 const macroGenerating = ref(false)
+const expandedMacroSection = ref('')  // 宏观预览展开的区段（blueprint/acts/episodes...）
 
 /* 角色卡persona的字段分组（来自 CHARACTER_LAYERS schema） */
 const charParamsByLayer = computed(() => {

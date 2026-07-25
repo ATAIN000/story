@@ -3,7 +3,7 @@
 // 步骤回放 → 审读 → 归档/回滚）+ 零章冷启动空态 + 生成失败路径 + 全局生成锁。
 // 三栏布局照 story.html :466-483；只消费 adapter VM（project=toProjectVM，
 // plan=toCardVM，report=toGenReportVM），API 原始字段不进模板。
-import { ref, computed, watch, nextTick } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { api } from '../api/api'
 import { toCardVM, toGenReportVM } from '../api/adapters'
 import { useToast } from '../composables/useToast'
@@ -22,7 +22,7 @@ const props = defineProps({
 const emit = defineEmits(['refresh', 'navigate'])
 
 const { toast, toastError } = useToast()
-const { generating, runGeneration } = useGeneration()
+const { generating, genState, runGeneration, syncFromBackend } = useGeneration()
 const { fsSize } = useFontSize()
 
 /* ---- 流程状态机：idle → planned → generating → review →（归档/回滚）→ idle ---- */
@@ -33,6 +33,7 @@ const genError = ref('')
 const activeNo = ref(null)      // 手稿当前章
 const confirmingRollback = ref(false)
 const busy = ref(false)         // plan/discard 短操作自锁
+const genLogs = ref([])         // P1-1: WS 推送的进度日志
 
 /* 「审读中」章号集：前端本地状态（brief 口径），sessionStorage 记忆防切视图丢失 */
 const REVIEW_KEY = 'storyos.reviewing'
@@ -103,14 +104,46 @@ watch(() => props.project, (p) => {
     activeNo.value = (alive.at(-1) ?? chapters.value.at(-1))?.no ?? null
   }
   if (flow.value === 'idle') {
-    if (p.pendingPlan) {
+    if (genState.value.busy) {
+      flow.value = 'generating'   // 后端有进行中生成 → 恢复进度态
+    } else if (p.pendingPlan) {
       planPreview.value = p.pendingPlan
       flow.value = 'planned'
-    } else if (reviewing.value.size) {
+    } else if (reviewing.value.size && hasChapters.value) {
+      // P23.6: 只有项目有章节时才恢复审读态（防跨项目 sessionStorage 残留）
       flow.value = 'review'
+    } else if (reviewing.value.size && !hasChapters.value) {
+      // 新项目无章节但 sessionStorage 有残留 → 清掉
+      setReviewing(new Set())
     }
   }
 }, { immediate: true })
+
+/* P23.3：组件 mount 时从后端同步生成态（切走再回来恢复"第 N 章生成中"）。
+   syncFromBackend 内部会启动轮询；onFinish 在轮询到 finished 时收尾进 review。 */
+onMounted(() => {
+  syncFromBackend(async (finalSnap) => {
+    /* 生成完成收尾 */
+    const rec = finalSnap.result
+    if (!rec || rec._mock_ended || rec._error) {
+      emit('refresh')
+      if (rec?._error) toastError(`生成失败：${rec.detail}`)
+      return
+    }
+    genLogs.value = []   // 清理日志
+    genReport.value = toGenReportVM(rec)
+    setReviewing(new Set([rec.chapter]))
+    activeNo.value = rec.chapter
+    planPreview.value = null
+    flow.value = 'review'
+    emit('refresh')
+  }, (progressMsg) => {
+    /* WS progress 帧回调：收集到滚动日志 */
+    genLogs.value.push(progressMsg)
+  }).then((restored) => {
+    if (restored) flow.value = 'generating'
+  })
+})
 
 /* ---- 1. 看方案：POST /api/project/plan → 决策卡预览 ---- */
 async function startPlan() {
@@ -144,27 +177,42 @@ async function discardPlan() {
   }
 }
 
-/* ---- 2/3. 批准生成：confirm + 全局锁 → 步骤回放 ---- */
+/* ---- 2/3. 批准生成：async 后台任务 + 轮询 → 步骤回放（P23.3） ---- */
 async function confirmGenerate() {
   genError.value = ''
   const episode = planPreview.value?.episode ?? nextNo.value
   try {
-    const r = await runGeneration(async () => {
-      flow.value = 'generating'
-      const rec = await api.generate('confirm')
-      genReport.value = toGenReportVM(rec)
-      setReviewing(new Set([rec.chapter]))
-      activeNo.value = rec.chapter
-      planPreview.value = null   // confirm 已消费缓存卡，预览同步收口
-      flow.value = 'review'
-      emit('refresh')   // 新章落盘后刷新快照（binder/手稿/世界态）
-      return rec
-    }, `第 ${episode} 章 · 生成中`)
-    if (r === GEN_REJECTED) toast('正在生成中，请稍候')   // P6.5 传导：重入拒绝标记
+    const r = await runGeneration(
+      { async: true, mode: 'confirm', stageLabel: `第 ${episode} 章 · 生成中` },
+      null,
+      async (finalSnap) => {
+        /* 生成完成收尾：finalSnap.result 是章节记录。
+           剧本完结 / 失败：finalSnap.result 带 _mock_ended 或 _error 标记 */
+        const rec = finalSnap.result
+        if (rec && rec._mock_ended) {
+          flow.value = 'idle'
+          genError.value = rec.detail
+          toastError(`生成结束：${rec.detail}`)
+          return rec
+        }
+        if (rec && rec._error) {
+          flow.value = 'planned'
+          genError.value = rec.detail
+          toastError(`生成失败：${rec.detail}`)
+          try { planPreview.value = toCardVM(await api.plan()) } catch { /* 补卡失败保留旧预览 */ }
+          return rec
+        }
+        genReport.value = toGenReportVM(rec)
+        setReviewing(new Set([rec.chapter]))
+        activeNo.value = rec.chapter
+        planPreview.value = null   // confirm 已消费缓存卡
+        flow.value = 'review'
+        emit('refresh')   // 新章落盘后刷新快照
+        return rec
+      })
+    if (r === GEN_REJECTED) toast('正在生成中，请稍候')
   } catch (e) {
-    /* 失败路径（brief）：错误 toast + 保留 plan 预览（不消失）+ 可重试。
-       后端 confirm 命中缓存卡即清除（engine._resolve_decision_card），故补一张
-       同集方案让预览/重试有凭据（同集重复产卡幂等，P6.2 调查结论）。 */
+    /* 启动失败（409 等）或收尾异常 */
     flow.value = 'planned'
     genError.value = e.message
     toastError(`生成失败：${e.message}`)
@@ -283,6 +331,8 @@ function onParagraphTextUpdated() {
                   :error="genError" :busy="busy" :generating="generating"
                   :confirming-rollback="confirmingRollback"
                   :review-no="reviewNo" :rollback-tick="rollbackTick"
+                  :gen-stage="genState?.stage || ''"
+                  :gen-logs="genLogs"
                   @plan="startPlan" @discard="discardPlan" @confirm="confirmGenerate"
                   @archive="archive" @goto-review="gotoReview"
                   @rollback-request="confirmingRollback = true"
