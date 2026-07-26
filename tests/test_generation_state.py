@@ -87,9 +87,16 @@ class GenerateAsyncHTTPTest(unittest.IsolatedAsyncioTestCase):
 
     @classmethod
     def setUpClass(cls):
+        cls._orig_generate = deps.engine.generate_chapter
         _patch_engine_async(1)
         from backend.main import app
         cls.app = app
+
+    @classmethod
+    def tearDownClass(cls):
+        # 共享单例善后：还原 generate_chapter（字母序靠后的
+        # test_ir_first_integration 等依赖真实生成路径，不还原会污染）
+        deps.engine.generate_chapter = cls._orig_generate
 
     async def asyncSetUp(self):
         gen_state.clear()

@@ -107,6 +107,20 @@ class GachaConfirmReq(BaseModel):
     worldview: dict | None = None
     cast: list | None = None
     macro_plan: dict | None = None
+    total_episodes: int | None = None
+
+
+# 集数约定合法区间（短剧 1 集 ~ 长篇 500 集）
+TOTAL_EPISODES_MIN, TOTAL_EPISODES_MAX = 1, 500
+
+
+def _coerce_total_episodes(value, default: int = 12) -> int:
+    """WS 请求里的 total_episodes 宽容解析：非 int / 越界 → 回落 default。"""
+    try:
+        n = int(value)
+    except (TypeError, ValueError):
+        return default
+    return n if TOTAL_EPISODES_MIN <= n <= TOTAL_EPISODES_MAX else default
 
 
 # ---------- genre 浏览 ----------
@@ -178,7 +192,9 @@ def gacha_begin(req: GachaBeginReq):
     except Exception:
         genre_title = genre_name
     resp = {"session_id": sid, "genre_title": genre_title,
-            "genre": genre_name, "culture": sess_engine.culture.name}
+            "genre": genre_name, "culture": sess_engine.culture.name,
+            "target_length": getattr(sess_engine.bundle,
+                                     "target_length", 12)}
     taxon = taxon_by_id(genre_name)
     if taxon is not None:
         resp["recommended_presets"] = list(presets_for_genre(genre_name))
@@ -223,6 +239,10 @@ def gacha_session_confirm(sid: str, req: GachaConfirmReq):
     if not validate_project_name(req.project_name):
         _fail(f"项目名非法：{req.project_name!r}（允许中文/字母/数字/空格/-/_，"
               "1-40 字符；不含路径分隔符/.. /Windows 保留名）")
+    if req.total_episodes is not None and not (
+            TOTAL_EPISODES_MIN <= req.total_episodes <= TOTAL_EPISODES_MAX):
+        _fail(f"total_episodes 须在 {TOTAL_EPISODES_MIN}-"
+              f"{TOTAL_EPISODES_MAX} 之间")
     target_dir = deps.PROJECTS_ROOT / req.project_name
     if target_dir.exists() and any(target_dir.iterdir()):
         _fail(f"项目已存在：{req.project_name}", code=409)
@@ -263,7 +283,16 @@ def gacha_session_confirm(sid: str, req: GachaConfirmReq):
     except OSError:
         shutil.move(str(tmp_dir), str(target_dir))
     _gacha_sessions.pop(sid, None)
-    _switch_to(target_dir, genre_name=genre_name, culture_name=culture)
+    # 集数约定：宏观计划蓝图里的 total_episodes 优先（与落盘 artifact 一致，
+    # 防"生成后改了集数却没重摇"导致 plan 与引擎集数分叉），其次用户显式约定
+    plan_eps = None
+    if isinstance(req.macro_plan, dict):
+        bp_eps = (req.macro_plan.get("blueprint") or {}).get("total_episodes")
+        if isinstance(bp_eps, int) and bp_eps > 0:
+            plan_eps = bp_eps
+    eff_episodes = plan_eps or req.total_episodes
+    _switch_to(target_dir, genre_name=genre_name, culture_name=culture,
+               target_length=eff_episodes)
     now = datetime.now().isoformat(timespec="seconds")
     _write_project_meta(target_dir, name=req.project_name, genre=genre_name,
                         culture=culture, created_at=now, last_opened_at=now)
@@ -301,6 +330,12 @@ def gacha_session_confirm(sid: str, req: GachaConfirmReq):
                    "total_episodes": macro_plan_data.get("blueprint", {})
                                       .get("total_episodes", 0),
                    "has_plan": True})
+    elif req.total_episodes:
+        # 跳过宏观计划也落盘集数约定（写作台/宏观导出/重开项目均依赖它）
+        _write_project_meta(
+            target_dir,
+            macro={"template": "", "total_episodes": req.total_episodes,
+                   "has_plan": False})
     deps.engine.reset()
     deps.engine.discard_plan()
     return {"ok": True, "project": {"name": req.project_name,
@@ -378,7 +413,8 @@ def _generate_skeleton_macro(bundle, worldview_profile, cast_profile,
 def _parse_and_validate_macro(text, template_name, total_episodes):
     from story_engine.macro.generator import _parse_yaml, _validate, _build_plan
     parsed = _parse_yaml(text)
-    if parsed and _validate(parsed, total_episodes):
+    if parsed and _validate(parsed, total_episodes,
+                            template_name=template_name):
         return _build_plan(parsed, template_name, total_episodes)
     return None
 
@@ -407,7 +443,7 @@ async def macro_stream(ws: WebSocket, sid: str):
         await ws.close()
         return
     template = req_data.get("template_name", "save_the_cat_15")
-    if template not in MACRO_TEMPLATES:
+    if template not in MACRO_TEMPLATES and template != "ai_custom":
         await ws.send_json({"type": "error",
                             "msg": f"未知幕结构模板：{template}"})
         await ws.close()
@@ -425,7 +461,9 @@ async def macro_stream(ws: WebSocket, sid: str):
     conflict_warnings = req_data.get("conflict_warnings")
     if not isinstance(conflict_warnings, list):
         conflict_warnings = None
-    total_episodes = getattr(bundle, "target_length", 12)
+    total_episodes = _coerce_total_episodes(
+        req_data.get("total_episodes"),
+        getattr(bundle, "target_length", 12))
     try:
         if sess_kernel.llm.is_mock:
             plan = _generate_skeleton_macro(
@@ -442,11 +480,12 @@ async def macro_stream(ws: WebSocket, sid: str):
         prompt = _build_macro_prompt(
             bundle, wv_profile, cast_profile, template, total_episodes,
             conflict_warnings)
+        from story_engine.macro.generator import macro_max_tokens
         full_text = ""
         try:
             async for chunk in sess_kernel.llm.call_stream(
                     prompt, purpose="macro_plan", temperature=0.7,
-                    max_tokens=8192):
+                    max_tokens=macro_max_tokens(total_episodes)):
                 full_text += chunk
                 await ws.send_json({"type": "delta", "text": chunk})
         except Exception as e:

@@ -90,7 +90,9 @@ def open_project(req: ProjectOpenReq):
         deps.engine.kernel.registry.validate_combo(genre, culture)
     except StoryEngineError as e:
         raise HTTPException(status_code=422, detail=str(e))
-    _switch_to(project_dir, genre_name=genre, culture_name=culture)
+    _switch_to(project_dir, genre_name=genre, culture_name=culture,
+               target_length=(meta.get("macro") or {}).get("total_episodes")
+               or None)
     _write_project_meta(
         project_dir, name=req.name, genre=genre, culture=culture,
         last_opened_at=datetime.now().isoformat(timespec="seconds"))

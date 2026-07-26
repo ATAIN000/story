@@ -152,7 +152,9 @@ def test_c6_affinity_warning_on_mismatch():
     assert is_preset_compatible("xianxia-ascension", "xianxia_cultivation")
     assert not is_preset_compatible("xianxia-ascension", "cthulhu_mythos")
     assert "xianxia_cultivation" in presets_for_genre("xianxia-ascension")
-    assert "save_the_cat_15" in macro_templates_for_genre("infinite-rule-game")
+    # P24.5：规则怪谈无限流 → 子套路级推荐 rule_horror_8 首选
+    assert macro_templates_for_genre("infinite-rule-game") == (
+        "rule_horror_8", "dtg_50_30")
 
 
 # ---------- 用例6：begin 响应带三轴推荐 ----------
@@ -177,3 +179,79 @@ def test_begin_response_has_taxonomy_fields():
         recommended = [t["name"] for t in tpls if t["recommended"]]
         assert set(recommended) == set(
             macro_templates_for_genre("infinite-rule-game"))
+
+
+# ---------- P24：幕结构推荐全覆盖 ----------
+
+def test_macro_templates_all_taxa_valid():
+    """全部题材行（legacy+base+hot+fusion）的推荐模板都存在于模板库。"""
+    from story_engine.macro import TEMPLATES
+    for t in all_taxa():
+        assert t.macro_templates, f"{t.id} 无推荐幕结构模板"
+        for name in t.macro_templates:
+            assert name in TEMPLATES, f"{t.id} 推荐了不存在的模板 {name}"
+
+
+def test_macro_for_covers_all_profiles():
+    """23 个 track_profile 均有品类专用推荐（不再落默认救猫+三幕）。"""
+    from story_engine.meta.genre_taxonomy import _FAMILIES, _macro_for
+    default = ("save_the_cat_15", "three_act_classic")
+    profiles = {fam[3] for fam in _FAMILIES.values()}
+    assert len(profiles) == 23
+    for profile in profiles:
+        rec = _macro_for(profile)
+        assert rec != default, f"profile {profile} 仍落默认推荐"
+        assert len(rec) == 2
+
+
+def test_legacy_profile_inference():
+    """legacy 29 既有插件按 id 关键词推断品类推荐，不再一律按推理。"""
+    from story_engine.meta.genre_taxonomy import _legacy_profile, _macro_for
+    assert _legacy_profile("apocalypse-romance") == "romance"
+    assert _legacy_profile("horror-comedy") == "horror"
+    assert _legacy_profile("wuxia-steampunk") == "martial"
+    assert _legacy_profile("cyberpunk-xianxia") == "cultivation"
+    assert _legacy_profile("isekai-detective") == "mystery"
+    assert _legacy_profile("system-isekai") == "system"
+    assert _legacy_profile("game-reality-invasion") == "system"
+    assert _legacy_profile("palace-intrigue") == "mystery"  # 无关键词→兜底
+    assert _macro_for(_legacy_profile("apocalypse-romance"))[0] == "romance_beat"
+
+
+# ---------- P24.5：子套路级 + 调性级幕结构推荐 ----------
+
+def test_subtrope_macro_overrides():
+    """子套路 override 命中：复仇/规则怪谈/快穿/种田/谍战等精准推荐。"""
+    cases = {
+        "wuxia-path-revenge-xia": "revenge_arc_8",
+        "short-drama-revenge-queen": "revenge_arc_8",
+        "horror-rule": "rule_horror_8",
+        "infinite-quick-pass": "unit_loop_6",
+        "historical-farming": "farming_build_6",
+        "mystery-family-spy": "spy_undercover_8",
+        "xianxia-academy": "academy_growth_7",
+        "high-fantasy-dungeon-delve": "dungeon_crawl_6",
+        "urban-life-entertainment": "showbiz_rise_7",
+        "mystery-family-forensic": "procedural_case_6",
+        "historical-ming": "court_career_8",
+        "romance-cn-chase": "angst_romance_9",
+        "xianxia-ascension": "tribulation_9",
+    }
+    for gid, first in cases.items():
+        rec = macro_templates_for_genre(gid)
+        assert rec and rec[0] == first, f"{gid} → {rec}（期望首选 {first}）"
+
+
+def test_tone_macro_prepends():
+    """调性行：爽/虐/烧脑/治愈/搞笑模板前置，次选保留子套路推荐。"""
+    from story_engine.meta.genre_taxonomy import taxon_by_id
+    tone_cases = {  # (genre_id, 期望首选, 期望次选)
+        "romance-cn-chase-nue": ("angst_romance_9", "romance_beat"),
+        "infinite-quick-pass-shuang": ("dtg_50_30", "unit_loop_6"),
+    }
+    for gid, (first, second) in tone_cases.items():
+        t = taxon_by_id(gid)
+        if t is None:
+            continue  # 该调性组合未生成（_TONE_ALLOWED 限制）则跳过
+        assert t.macro_templates[0] == first, f"{gid} → {t.macro_templates}"
+        assert t.macro_templates[1] == second, f"{gid} → {t.macro_templates}"

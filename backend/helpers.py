@@ -238,7 +238,8 @@ def _make_lazy_genesis(stack: dict):
 
 # ---------- 栈管理 ----------
 def _build_stack(project_dir: Path, genre_name: str | None = None,
-                 culture_name: str | None = None) -> dict:
+                 culture_name: str | None = None,
+                 target_length: int | None = None) -> dict:
     """项目栈工厂：kernel/engine/meta_gen/pipeline/router 一处构造。"""
     from story_engine.engine import StoryEngine
     from story_engine.hitl import InterventionRouter, TrainingPipeline
@@ -249,7 +250,8 @@ def _build_stack(project_dir: Path, genre_name: str | None = None,
     kernel = Kernel(project_dir, plugin_dir=deps.ROOT / "story_engine" / "plugins",
                     initial_state_factory=_make_lazy_genesis(stack))
     engine = StoryEngine(kernel, genre_name=genre_name,
-                         culture_name=culture_name)
+                         culture_name=culture_name,
+                         target_length=target_length)
     meta_gen = MetaGenerator(kernel)
     pipeline = TrainingPipeline(kernel, project_dir)
     stack.update({"kernel": kernel, "engine": engine, "meta_gen": meta_gen,
@@ -261,11 +263,13 @@ def _build_stack(project_dir: Path, genre_name: str | None = None,
 
 
 def _switch_to(project_dir: Path, genre_name: str | None = None,
-               culture_name: str | None = None) -> dict:
+               culture_name: str | None = None,
+               target_length: int | None = None) -> dict:
     """项目切换核心：旧 kernel 尽力 close → _build_stack 整栈重建 →
     重绑 deps 全部引用，不留旧栈引用。"""
     new_stack = _build_stack(Path(project_dir), genre_name=genre_name,
-                             culture_name=culture_name)
+                             culture_name=culture_name,
+                             target_length=target_length)
     old_kernel = deps.kernel
     old_engine_runtime = getattr(deps.engine, "_runtime_overrides", {})
     try:

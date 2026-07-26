@@ -9,7 +9,8 @@ from .plan import (
     MacroContext, MacroPlan, PacingCurve, SaliencePoint, StoryBlueprint,
     TensionPoint, ThematicArgument, macro_plan_to_dict,
 )
-from .templates import TEMPLATES, compute_acts
+from .templates import (
+    AI_CUSTOM_TEMPLATE, TEMPLATES, compute_acts, compute_ai_custom_acts)
 from .generator import generate_macro_plan, regenerate_component
 from .conflict_check import ConflictWarning, check_cross_layer
 
@@ -23,7 +24,7 @@ __all__ = [
     "TensionPoint", "PacingCurve",
     "MacroPlan", "MacroContext", "macro_plan_to_dict",
     # templates.py
-    "TEMPLATES", "compute_acts",
+    "TEMPLATES", "compute_acts", "AI_CUSTOM_TEMPLATE", "compute_ai_custom_acts",
     # generator.py
     "generate_macro_plan", "regenerate_component",
     # conflict_check.py

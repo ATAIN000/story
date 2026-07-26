@@ -113,13 +113,15 @@ class WorldviewProfile:
                           "desc": "世界观无超自然力量",
                           "expr": "not(has_supernatural)"})
         elif pe in {"universal", "common", "rare", "unique", "dormant"}:
-            # P23.5: 超自然存在是设定不是违规。这条规则只检查 has_supernatural
-            # 字段是否存在（缺失=事件未声明），不再因 has_supernatural=True 报违规。
-            # 旧逻辑：expr="has_supernatural" → 事件未设时判 False → 误报违规。
-            # 新逻辑：只在事件明确声明 has_supernatural=False 时报矛盾。
-            rules.append({"id": "wv_has_supernatural", "kind": "bool",
-                          "desc": f"世界观存在超自然力量（{option_label('power_existence', pe)}）",
-                          "expr": "True"})  # 宽松：超自然世界中超自然存在是常态，不判违规
+            # P23.5: 超自然存在是设定不是违规。旧逻辑 expr="has_supernatural"
+            # → 事件未声明该字段时判 False → 每条事件误报违规。
+            # P23.6 曾改 expr="True"，但 "True" 过不了 check_rule_expr 加载门
+            # （编译结果非 z3.BoolRef），规则被消毒拒载并刷 warning。
+            # 修正：改发 narrative 信息性规则（无 expr，分流进 prompt 作 LLM
+            # 提示），验证层零约束 = 超自然世界中超自然存在不判违规。
+            rules.append({"id": "wv_has_supernatural", "kind": "narrative",
+                          "desc": f"世界观存在超自然力量（{option_label('power_existence', pe)}）："
+                                  "超自然存在是常态设定，不作违规约束"})
 
         # 2. narrator_is_killer 等 3 个事实词汇仍无参数映射（5 事实词汇表覆盖留白）
         # 3. case_age_days / introduces_new_key_clue（悬疑专用，本批不覆盖）

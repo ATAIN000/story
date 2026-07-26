@@ -417,15 +417,161 @@ def _secondary_for(preset: str) -> tuple[str, ...]:
 
 
 def _macro_for(profile: str) -> tuple[str, ...]:
-    if profile == "romance":
-        return ("romance_beat", "save_the_cat_15")
-    if profile in ("martial", "cultivation"):
-        return ("wuxia_classic", "save_the_cat_15")
-    if profile == "mystery":
-        return ("save_the_cat_15", "three_act_classic")
-    if profile in ("infinite", "system"):
-        return ("dtg_50_30", "save_the_cat_15")
-    return ("save_the_cat_15", "three_act_classic")
+    """track_profile → 推荐幕结构模板（首选 + 次选）。
+
+    P24：23 个 profile 全覆盖——此前 17 个 profile 落进默认分支，
+    315 个正式题材行绝大多数只推荐「救猫十五拍+经典三幕」。
+    """
+    table = {
+        "romance": ("romance_beat", "save_the_cat_15"),
+        "martial": ("wuxia_classic", "save_the_cat_15"),
+        "cultivation": ("tribulation_9", "wuxia_classic"),
+        "mystery": ("mystery_fairplay_8", "save_the_cat_15"),
+        "infinite": ("dtg_50_30", "save_the_cat_15"),
+        "system": ("dtg_50_30", "urban_rise_8"),
+        "fantasy": ("hero_journey_12", "story_circle_8"),
+        "horror": ("horror_descent_7", "mystery_fairplay_8"),
+        "apocalypse": ("apocalypse_survival_6", "dtg_50_30"),
+        "cyber": ("story_circle_8", "dtg_50_30"),
+        "steampunk": ("story_circle_8", "dtg_50_30"),
+        "mecha": ("story_circle_8", "war_campaign_6"),
+        "space": ("war_campaign_6", "story_circle_8"),
+        "urban": ("urban_rise_8", "save_the_cat_15"),
+        "workplace": ("urban_rise_8", "freytag_5"),
+        "historical": ("freytag_5", "palace_intrigue_9"),
+        "palace": ("palace_intrigue_9", "freytag_5"),
+        "isekai": ("isekai_adapt_8", "hero_journey_12"),
+        "military": ("war_campaign_6", "freytag_5"),
+        "slice": ("kishotenketsu_4", "comedy_escalation_6"),
+        "myth": ("hero_journey_12", "wuxia_classic"),
+        "sports": ("sports_league_7", "urban_rise_8"),
+        "comedy": ("comedy_escalation_6", "kishotenketsu_4"),
+    }
+    return table.get(profile, ("save_the_cat_15", "three_act_classic"))
+
+
+# ---------- P24.5：子套路级推荐 override ----------
+# key = "族:子套路"；命中则整组替代 profile 级推荐
+_SUBTROPE_MACRO: dict[str, tuple[str, ...]] = {
+    # 复仇
+    "wuxia-path:revenge-xia": ("revenge_arc_8", "wuxia_classic"),
+    "romance-cn:rebirth-revenge": ("revenge_arc_8", "romance_beat"),
+    "short-drama:revenge-queen": ("revenge_arc_8", "dtg_50_30"),
+    # 虐恋（替身/追妻/暗黑）
+    "romance-cn:chase": ("angst_romance_9", "romance_beat"),
+    "romance-cn:stand-in": ("angst_romance_9", "romance_beat"),
+    "romance-cn:dark": ("angst_romance_9", "romance_beat"),
+    # 种田/经营
+    "historical:farming": ("farming_build_6", "freytag_5"),
+    "historical:merchant": ("farming_build_6", "freytag_5"),
+    "slice:farming-modern": ("farming_build_6", "kishotenketsu_4"),
+    "apocalypse:base": ("farming_build_6", "apocalypse_survival_6"),
+    "food-biz:street-food": ("farming_build_6", "kishotenketsu_4"),
+    "food-biz:restaurant": ("farming_build_6", "kishotenketsu_4"),
+    "food-biz:isekai-cuisine": ("farming_build_6", "isekai_adapt_8"),
+    "food-biz:immortal-kitchen": ("farming_build_6", "tribulation_9"),
+    "food-biz:chef-duel": ("sports_league_7", "farming_build_6"),
+    # 规则怪谈
+    "horror:rule": ("rule_horror_8", "horror_descent_7"),
+    "infinite:rule-game": ("rule_horror_8", "dtg_50_30"),
+    # 快穿/单元循环
+    "infinite:quick-pass": ("unit_loop_6", "dtg_50_30"),
+    "infinite:book-world": ("unit_loop_6", "dtg_50_30"),
+    "infinite:movie-world": ("unit_loop_6", "dtg_50_30"),
+    "infinite:myriad": ("unit_loop_6", "hero_journey_12"),
+    "mystery-family:cozy": ("unit_loop_6", "mystery_fairplay_8"),
+    "myth:journey": ("unit_loop_6", "hero_journey_12"),
+    # 谍战/窃案
+    "mystery-family:spy": ("spy_undercover_8", "mystery_fairplay_8"),
+    "palace:spy-palace": ("spy_undercover_8", "palace_intrigue_9"),
+    "low-fantasy:heist": ("spy_undercover_8", "mystery_fairplay_8"),
+    # 学院
+    "xianxia:academy": ("academy_growth_7", "tribulation_9"),
+    "high-fantasy:academy-magic": ("academy_growth_7", "hero_journey_12"),
+    "mecha:school-mecha": ("academy_growth_7", "war_campaign_6"),
+    "urban-life:campus": ("academy_growth_7", "urban_rise_8"),
+    # 地下城/探险
+    "high-fantasy:dungeon-delve": ("dungeon_crawl_6", "hero_journey_12"),
+    "litrpg:raid": ("dungeon_crawl_6", "dtg_50_30"),
+    "xuanhuan:forbidden": ("dungeon_crawl_6", "tribulation_9"),
+    "adventure:treasure": ("dungeon_crawl_6", "hero_journey_12"),
+    "adventure:survival-island": ("apocalypse_survival_6", "dungeon_crawl_6"),
+    # 娱乐圈
+    "urban-life:entertainment": ("showbiz_rise_7", "urban_rise_8"),
+    "urban-life:live": ("showbiz_rise_7", "urban_rise_8"),
+    # 刑侦/律政
+    "mystery-family:modern": ("procedural_case_6", "mystery_fairplay_8"),
+    "mystery-family:forensic": ("procedural_case_6", "mystery_fairplay_8"),
+    "legal-medical:prosecutor": ("procedural_case_6", "freytag_5"),
+    "legal-medical:defense": ("procedural_case_6", "freytag_5"),
+    # 朝堂仕途
+    "historical:period": ("court_career_8", "freytag_5"),
+    "historical:ming": ("court_career_8", "freytag_5"),
+    "historical:qing": ("court_career_8", "freytag_5"),
+    "historical:three-kingdoms": ("war_campaign_6", "court_career_8"),
+    "palace:female-official": ("court_career_8", "palace_intrigue_9"),
+    "palace:workplace-palace": ("court_career_8", "palace_intrigue_9"),
+    "low-fantasy:political": ("court_career_8", "freytag_5"),
+    # 其余精准修正
+    "infinite:puzzle": ("mystery_fairplay_8", "dtg_50_30"),
+    "litrpg:pvp": ("sports_league_7", "dtg_50_30"),
+    "cosmic:investigator": ("mystery_fairplay_8", "horror_descent_7"),
+    "cosmic:academic": ("mystery_fairplay_8", "horror_descent_7"),
+    "wuxia-path:xia-romance": ("romance_beat", "wuxia_classic"),
+    "wuxia-path:xia-mystery": ("mystery_fairplay_8", "wuxia_classic"),
+    "apocalypse:sweet": ("romance_beat", "apocalypse_survival_6"),
+    "horror:comedy-horror": ("comedy_escalation_6", "horror_descent_7"),
+    "supernatural-biz:haunted-hotel": ("horror_descent_7", "urban_rise_8"),
+    "supernatural-biz:livestream-ghost": ("horror_descent_7", "showbiz_rise_7"),
+    "short-drama:hidden-identity": ("urban_rise_8", "romance_beat"),
+}
+
+# 调性级推荐前置（hot 行）：调性模板优先于子套路/profile 首选
+_TONE_MACRO: dict[str, str] = {
+    "shuang": "dtg_50_30",
+    "nue": "angst_romance_9",
+    "burn": "mystery_fairplay_8",
+    "heal": "kishotenketsu_4",
+    "gag": "comedy_escalation_6",
+}
+
+
+def _resolve_macro(profile: str, fam: str = "", sub_id: str = "",
+                   tone: str = "") -> tuple[str, ...]:
+    """子套路 > 品类的两级推荐 + 调性前置（P24.5）。"""
+    base = _SUBTROPE_MACRO.get(f"{fam}:{sub_id}") or _macro_for(profile)
+    t = _TONE_MACRO.get(tone)
+    if t and t != base[0]:
+        return (t, base[0])
+    return base
+
+
+# legacy 既有插件 id → track_profile 关键词推断（ legacy 行无 profile，
+# 此前一律按 mystery 推荐，宫斗/言情/恐怖全拿到推理模板）
+_LEGACY_PROFILE_RULES: tuple[tuple[str, str], ...] = (
+    ("romance", "romance"), ("romantasy", "romance"),
+    ("horror", "horror"), ("cthulhu", "horror"),
+    ("wuxia", "martial"),
+    ("xianxia", "cultivation"), ("cultivation", "cultivation"),
+    ("mystery", "mystery"), ("detective", "mystery"),
+    ("infinite", "infinite"), ("dungeon", "infinite"),
+    ("system", "system"), ("game", "system"),
+    ("isekai", "isekai"),
+    ("historical", "historical"),
+    ("sports", "sports"),
+    ("workplace", "workplace"), ("business", "workplace"),
+    ("management", "workplace"),
+    ("apocalypse", "apocalypse"),
+    ("comedy", "comedy"),
+    ("tomb", "mystery"),
+)
+
+
+def _legacy_profile(lid: str) -> str:
+    for kw, profile in _LEGACY_PROFILE_RULES:
+        if kw in lid:
+            return profile
+    return "mystery"
 
 
 # legacy 29 的展示名/一句话（取自各插件 params.title + resolution_pattern，
@@ -505,7 +651,7 @@ def expand_taxonomy() -> list[GenreTaxon]:
             default_culture=culture, primary_preset=preset,
             secondary_presets=_secondary_for(preset),
             track_profile="legacy", vibe=vibe,
-            legacy=True, macro_templates=_macro_for("mystery"),
+            legacy=True, macro_templates=_macro_for(_legacy_profile(lid)),
         ))
         seen.add(lid)
 
@@ -522,7 +668,7 @@ def expand_taxonomy() -> list[GenreTaxon]:
                 secondary_presets=_secondary_for(preset),
                 track_profile=profile,
                 vibe=f"{fam_title}品类下的「{sub_title}」叙事发动机",
-                macro_templates=_macro_for(profile),
+                macro_templates=_resolve_macro(profile, fam, sub_id),
             ))
             seen.add(gid)
 
@@ -545,7 +691,8 @@ def expand_taxonomy() -> list[GenreTaxon]:
                         secondary_presets=_secondary_for(preset),
                         track_profile=profile,
                         vibe=f"{title}的{tone_title}调性变体",
-                        macro_templates=_macro_for(profile),
+                        macro_templates=_resolve_macro(
+                            profile, fam, sub_id, tone_id),
                     ))
                     seen.add(tid)
 

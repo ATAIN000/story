@@ -280,11 +280,19 @@ def test_worldview_to_world_rules_passes_validator_check():
         assert ConsistencyValidator.check_rule_expr(r["expr"]), \
             f"expr 非法：{r['expr']}"
 
-    # power_existence=common → has_supernatural=True
+    # power_existence=common → P23.5 放宽：超自然存在是设定不是违规，
+    # 不发 bool 约束规则（改发 narrative 信息规则，验证层零约束），
+    # 剩余 bool 规则仍须全部过加载校验
     p2 = WorldviewProfile(layers={"L3": {"power_existence": "common"}})
-    exprs = [r["expr"] for r in p2.to_world_rules() if r.get("kind") == "bool"]
-    assert "has_supernatural" in exprs
-    assert ConsistencyValidator.check_rule_expr("has_supernatural")
+    rules2 = p2.to_world_rules()
+    bool_rules2 = [r for r in rules2 if r.get("kind") == "bool"]
+    assert not any(r["id"] == "wv_has_supernatural" for r in bool_rules2), \
+        "超自然世界不应再有 has_supernatural bool 约束（误报源）"
+    assert any(r["id"] == "wv_has_supernatural" and r["kind"] == "narrative"
+               for r in rules2), "应保留 narrative 信息规则供 LLM 提示"
+    for r in bool_rules2:
+        assert ConsistencyValidator.check_rule_expr(r["expr"]), \
+            f"expr 非法：{r['expr']}"
 
 
 # ---------- P12.4 十骨架预设（2 核心） ----------

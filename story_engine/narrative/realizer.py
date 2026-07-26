@@ -247,6 +247,13 @@ class LanguageRealizer:
         macro_txt = (
             f"=== 本章宏观指导 ===\n{macro_text}\n\n"
             if macro_text else "")
+        # P23.6 章节衔接约束：只在有前情提要时有意义（recap 缺席则整句缺席，
+        # 否则 prompt 凭空引用「前情提要」）
+        bridge_txt = (
+            "**章节衔接**：正文开头必须自然承接前情提要的结尾。"
+            "如果前情提到角色在矿坑底，本章开头不能突然让角色在别处——"
+            "必须解释场景如何转换、时间如何推移。"
+            if recap else "")
         return (
             f"你是{pcfg['role']}。背景：{pcfg['setting']}。\n"
             f"人物：{pcfg['characters']}。\n\n"
@@ -261,9 +268,7 @@ class LanguageRealizer:
             "不要用「第N章」这种无信息量标题），空一行后接正文。\n"
             "**段落节奏**：每 2-4 句必须分段，禁止一整段超过 5 句。"
             "用空行分隔场景转换、视角切换、时间跳转。读者需要呼吸感。\n"
-            "**章节衔接**：正文开头必须自然承接前情提要的结尾。"
-            "如果前情提到角色在矿坑底，本章开头不能突然让角色在别处——"
-            "必须解释场景如何转换、时间如何推移。")
+            f"{bridge_txt}")
 
     def _ir_summary(self, ir: NarrativeIR, sjuzhet=None) -> str:
         """beats/events/dialogue 的概念级紧凑摘要（≤800 字，截断标注）。
@@ -432,6 +437,14 @@ class EnglishRealizer(LanguageRealizer):
         macro_txt = (
             f"=== Macro Guidance ===\n{macro_text}\n\n"
             if macro_text else "")
+        # P23.6 chapter-continuity constraint only makes sense with a recap;
+        # absent when recap is None (avoids referencing a nonexistent recap)
+        bridge_txt = (
+            "**Chapter continuity**: The opening must naturally connect to the "
+            "recap's ending. If the recap says characters are in a mine pit, "
+            "this chapter cannot suddenly place them elsewhere — explain any "
+            "scene or time transition."
+            if recap else "")
         return (
             f"You are {pcfg['role']}. Setting: {pcfg['setting']}.\n"
             f"Characters: {pcfg['characters']}.\n\n"
@@ -449,10 +462,7 @@ class EnglishRealizer(LanguageRealizer):
             "First line: Title: XXXX (XXXX is a 4-8 word chapter title evoking "
             "this chapter's core event or image; avoid generic titles like "
             "'Chapter N'). Leave one blank line, then the prose.\n"
-            "**Chapter continuity**: The opening must naturally connect to the "
-            "recap's ending. If the recap says characters are in a mine pit, "
-            "this chapter cannot suddenly place them elsewhere — explain any "
-            "scene or time transition.")
+            f"{bridge_txt}")
 
     def _paragraph_prompt(self, *, ir_context: str, original: str,
                           prev_para: str | None, next_para: str | None,

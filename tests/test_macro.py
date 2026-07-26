@@ -1,6 +1,6 @@
 """tests/test_macro.py — P17.1 + P17.2 核心测试（≤6 用例）
 
-P17.1: compute_acts 映射 / MacroPlan round-trip / 全 7 模板合法
+P17.1: compute_acts 映射 / MacroPlan round-trip / 全模板合法
 P17.2: mock 兜底产出合法 MacroPlan / prompt 含世界观+人物上下文 / 解析失败→兜底
 """
 from __future__ import annotations
@@ -64,8 +64,8 @@ def test_macro_plan_round_trip():
     assert "revision_log" in d
 
 
-def test_all_seven_templates_produce_valid_structures():
-    """全部 7 模板 × 不同总集数 → act/beats 非空、episode_range 连续、beat 在 act 范围内"""
+def test_all_templates_produce_valid_structures():
+    """全部模板 × 不同总集数 → act/beats 非空、episode_range 连续、beat 在 act 范围内"""
     for name in TEMPLATES:
         struct = compute_acts(name, 24)
         assert struct.template == name
@@ -161,18 +161,25 @@ def test_parse_failure_falls_back_to_skeleton():
 # ============================================================
 
 def test_macro_templates_endpoint():
-    """GET /api/macro/templates → 7 模板，每项含 name + beat_count"""
+    """GET /api/macro/templates → 32 内置模板 + AI 定制卡，每项含 name + beat_count"""
     backend = import_backend_main()
     from fastapi.testclient import TestClient
     with TestClient(backend.app) as c:
         resp = c.get("/api/macro/templates")
     assert resp.status_code == 200
     items = resp.json()["templates"]
-    assert len(items) == 7
+    assert len(items) == 33
     names = {t["name"] for t in items}
     assert "save_the_cat_15" in names
+    assert "hero_journey_12" in names
+    assert "revenge_arc_8" in names
+    assert "ai_custom" in names
     for t in items:
-        assert t["beat_count"] >= 1
+        if t["name"] == "ai_custom":
+            assert t["beat_count"] == 0       # LLM 现场设计，无固定拍点
+            assert t["recommended"] is False  # 永不标推荐
+        else:
+            assert t["beat_count"] >= 1
 
 
 def test_macro_plan_generate_endpoint():
@@ -333,3 +340,252 @@ def test_build_macro_context_none_without_plan():
         engine.project_dir = Path(td)
         ctx = engine._build_macro_context(1)
     assert ctx is None
+
+
+# ============================================================
+# 集数约定（total_episodes 贯通：begin 回传默认值 → WS 生成
+# 按约定集数 → confirm 落盘 project.json → open/confirm 后引擎
+# bundle.target_length 同步）
+# ============================================================
+
+def test_gacha_begin_returns_target_length():
+    """POST /api/gacha/begin 响应带 target_length（前端集数输入默认值来源）"""
+    backend = import_backend_main()
+    from fastapi.testclient import TestClient
+    with TestClient(backend.app) as c:
+        r = c.post("/api/gacha/begin", json={"genre_name": "mystery"})
+        assert r.status_code == 200, r.text
+        assert r.json()["target_length"] == 12
+        c.post(f"/api/gacha/{r.json()['session_id']}/cancel")
+
+
+def test_macro_stream_respects_total_episodes():
+    """WS macro/stream 携带 total_episodes=6 → 计划按 6 集生成（而非默认 12）"""
+    backend = import_backend_main()
+    from fastapi.testclient import TestClient
+    with TestClient(backend.app) as c:
+        r = c.post("/api/gacha/begin", json={"genre_name": "mystery"})
+        assert r.status_code == 200, r.text
+        sid = r.json()["session_id"]
+        with c.websocket_connect(f"/api/gacha/{sid}/macro/stream") as ws:
+            ws.send_json({"template_name": "save_the_cat_15",
+                          "total_episodes": 6})
+            plan = None
+            for _ in range(500):
+                msg = ws.receive_json()
+                if msg.get("type") == "complete":
+                    plan = msg.get("plan")
+                    break
+            assert plan is not None, "未收到 complete"
+            assert plan["blueprint"]["total_episodes"] == 6
+            assert len(plan["episode_outlines"]) == 6
+
+
+def test_macro_stream_invalid_total_episodes_falls_back():
+    """WS macro/stream 携带非法 total_episodes → 回落 bundle.target_length(12)"""
+    backend = import_backend_main()
+    from fastapi.testclient import TestClient
+    with TestClient(backend.app) as c:
+        r = c.post("/api/gacha/begin", json={"genre_name": "mystery"})
+        sid = r.json()["session_id"]
+        with c.websocket_connect(f"/api/gacha/{sid}/macro/stream") as ws:
+            ws.send_json({"template_name": "save_the_cat_15",
+                          "total_episodes": "abc"})
+            plan = None
+            for _ in range(500):
+                msg = ws.receive_json()
+                if msg.get("type") == "complete":
+                    plan = msg.get("plan")
+                    break
+            assert plan is not None, "未收到 complete"
+            assert plan["blueprint"]["total_episodes"] == 12
+
+
+def test_gacha_confirm_persists_and_applies_total_episodes():
+    """confirm 携带 total_episodes（跳过宏观计划）：落盘 project.json macro
+    元数据，且切换后的引擎 bundle.target_length 同步；再次 open 项目仍生效。"""
+    import json as _json
+    import tempfile
+    from pathlib import Path
+    from fastapi.testclient import TestClient
+    backend = import_backend_main()
+    orig_dir = Path(backend.deps.engine.project_dir)
+    orig_genre = backend.deps.engine.genre.name
+    orig_culture = backend.deps.engine.culture.name
+    saved_root = backend.deps.PROJECTS_ROOT
+    c = TestClient(backend.app)
+    with tempfile.TemporaryDirectory() as root:
+        backend.deps.PROJECTS_ROOT = Path(root)
+        try:
+            r = c.post("/api/gacha/begin", json={"genre_name": "mystery"})
+            assert r.status_code == 200, r.text
+            sid = r.json()["session_id"]
+            r1 = c.post(f"/api/gacha/{sid}/confirm", json={
+                "project_name": "eps-test", "total_episodes": 20})
+            assert r1.status_code == 200, r1.text
+            # 落盘：跳过宏观计划也有集数约定
+            meta = _json.loads(
+                (Path(root) / "eps-test" / "project.json").read_text(
+                    encoding="utf-8"))
+            assert meta["macro"]["total_episodes"] == 20
+            assert meta["macro"]["has_plan"] is False
+            # confirm 切换后的引擎立即生效
+            assert backend.deps.engine.bundle.target_length == 20
+            # 重新 open 项目（走 projects/open 路径）仍生效
+            r2 = c.post("/api/projects/open", json={"name": "eps-test"})
+            assert r2.status_code == 200, r2.text
+            assert backend.deps.engine.bundle.target_length == 20
+        finally:
+            backend.deps.PROJECTS_ROOT = saved_root
+            backend.helpers._switch_to(orig_dir)
+            c.post("/api/project/init",
+                   json={"genre": orig_genre, "culture": orig_culture})
+
+
+def test_gacha_confirm_rejects_out_of_range_total_episodes():
+    """confirm 携带越界 total_episodes → 422"""
+    import tempfile
+    from pathlib import Path
+    from fastapi.testclient import TestClient
+    backend = import_backend_main()
+    saved_root = backend.deps.PROJECTS_ROOT
+    c = TestClient(backend.app)
+    with tempfile.TemporaryDirectory() as root:
+        backend.deps.PROJECTS_ROOT = Path(root)
+        try:
+            r = c.post("/api/gacha/begin", json={"genre_name": "mystery"})
+            sid = r.json()["session_id"]
+            r1 = c.post(f"/api/gacha/{sid}/confirm", json={
+                "project_name": "eps-bad", "total_episodes": 0})
+            assert r1.status_code == 422, r1.text
+        finally:
+            backend.deps.PROJECTS_ROOT = saved_root
+
+
+# ============================================================
+# P24.5: AI 定制幕结构（ai_custom）
+# ============================================================
+
+_AI_CUSTOM_ACTS_YAML = {
+    "acts": [
+        {"id": "a1", "name": "起势", "function": "建置", "start_pct": 0,
+         "end_pct": 30, "beats": [
+             {"name": "hook", "pct": 5, "desc": "开场钩子"},
+             {"name": "turn", "pct": 28, "desc": "转折"}]},
+        {"id": "a2", "name": "缠斗", "function": "对抗", "start_pct": 30,
+         "end_pct": 70, "beats": [
+             {"name": "mid", "pct": 50, "desc": "中点"}]},
+        {"id": "a3", "name": "终局", "function": "收束", "start_pct": 70,
+         "end_pct": 100, "beats": [
+             {"name": "end", "pct": 95, "desc": "结局"}]},
+    ],
+}
+
+
+def test_parse_ai_custom_act_defs_valid():
+    """ai_custom 百分比幕结构 → raw 定义（合法输入）"""
+    from story_engine.macro.generator import _parse_ai_custom_act_defs
+    raw = _parse_ai_custom_act_defs({"act_structure": _AI_CUSTOM_ACTS_YAML})
+    assert raw is not None and len(raw) == 3
+    assert raw[0][0] == "a1" and raw[0][3] == (0.0, 30.0)
+    assert raw[0][4][1] == ("turn", 28.0, "转折")
+
+
+def test_parse_ai_custom_act_defs_rejects_bad():
+    """ai_custom 非法结构 → None（走报错重试，不兜底骨架）"""
+    from story_engine.macro.generator import _parse_ai_custom_act_defs
+    base = _AI_CUSTOM_ACTS_YAML["acts"]
+    # 单幕
+    assert _parse_ai_custom_act_defs(
+        {"act_structure": {"acts": base[:1]}}) is None
+    # 首幕不从 0 开始
+    bad = [dict(a) for a in base]
+    bad[0] = {**bad[0], "start_pct": 10}
+    assert _parse_ai_custom_act_defs({"act_structure": {"acts": bad}}) is None
+    # 区间倒挂
+    bad2 = [dict(a) for a in base]
+    bad2[1] = {**bad2[1], "start_pct": 60, "end_pct": 40}
+    assert _parse_ai_custom_act_defs({"act_structure": {"acts": bad2}}) is None
+    # beat 越出本幕区间
+    bad3 = [dict(a) for a in base]
+    bad3[0] = {**bad3[0], "beats": [{"name": "x", "pct": 55, "desc": "d"}]}
+    assert _parse_ai_custom_act_defs({"act_structure": {"acts": bad3}}) is None
+    # 覆盖不到 100
+    bad4 = [dict(a) for a in base]
+    bad4[2] = {**bad4[2], "end_pct": 80}
+    assert _parse_ai_custom_act_defs({"act_structure": {"acts": bad4}}) is None
+
+
+def test_build_plan_ai_custom_uses_llm_acts():
+    """ai_custom：_build_plan 用 LLM 自设计结构（百分比→集数映射）"""
+    from story_engine.macro.generator import _build_plan
+    parsed = {
+        "story_blueprint": {"logline": "x", "thematic_argument": {},
+                            "central_conflict": {}, "total_episodes": 10},
+        "act_structure": _AI_CUSTOM_ACTS_YAML,
+        "episode_outlines": [{"episode": 1, "title": "t"}],
+        "arc_schedule": {"characters": []},
+        "foreshadow_blueprint": {"threads": []},
+        "pacing_curve": {"key_tension_points": []},
+    }
+    plan = _build_plan(parsed, "ai_custom", 10)
+    assert plan.act_structure.template == "ai_custom"
+    assert [a.name for a in plan.act_structure.acts] == ["起势", "缠斗", "终局"]
+    assert plan.act_structure.acts[0].episode_range == [1, 3]
+    assert plan.act_structure.acts[-1].episode_range[1] == 10
+    assert plan.act_structure.acts[0].beats[1].ep == "3"  # 28% of 10 → 3
+
+
+def test_validate_ai_custom_requires_acts():
+    """ai_custom 走 _validate：无合法自设计幕结构 → False"""
+    from story_engine.macro.generator import _validate
+    good = {
+        "story_blueprint": {
+            "logline": "沈昭在雨夜赌坊查出刘伯已死，真凶另有其人",
+            "thematic_argument": {},
+            "central_conflict": {
+                "protagonist_want": "查明玉佩失窃案真相",
+                "protagonist_need": "学会信任他人",
+                "antagonist_want": "掩盖账本灭口"},
+            "total_episodes": 10},
+        "act_structure": _AI_CUSTOM_ACTS_YAML,
+        "episode_outlines": [
+            {"episode": 1, "synopsis": "沈昭夜探聚宝赌坊，发现刘伯暴毙于账房"},
+        ],
+        "arc_schedule": {"characters": []},
+        "foreshadow_blueprint": {"threads": []},
+        "pacing_curve": {"key_tension_points": []},
+    }
+    assert _validate(good, 10, template_name="ai_custom") is True
+    bad = {**good, "act_structure": {"acts": []}}
+    assert _validate(bad, 10, template_name="ai_custom") is False
+
+
+def test_macro_stream_ai_custom_mock_completes():
+    """WS macro/stream template=ai_custom：mock 骨架路径不崩，收到 complete。"""
+    backend = import_backend_main()
+    from fastapi.testclient import TestClient
+    with TestClient(backend.app) as c:
+        r = c.post("/api/gacha/begin", json={"genre_name": "mystery"})
+        assert r.status_code == 200, r.text
+        sid = r.json()["session_id"]
+        with c.websocket_connect(f"/api/gacha/{sid}/macro/stream") as ws:
+            ws.send_json({"template_name": "ai_custom", "total_episodes": 8})
+            plan = None
+            for _ in range(500):
+                msg = ws.receive_json()
+                if msg.get("type") == "complete":
+                    plan = msg.get("plan")
+                    break
+            assert plan is not None, "未收到 complete"
+            assert plan["act_structure"]["template"] == "ai_custom"
+            assert len(plan["act_structure"]["acts"]) >= 2
+            assert plan["blueprint"]["total_episodes"] == 8
+
+
+def test_macro_max_tokens_scales_with_episodes():
+    """宏观生成输出上限按集数动态放大（修：90 集流式 8192 硬截断）。"""
+    from story_engine.macro.generator import macro_max_tokens
+    assert macro_max_tokens(12) == 16384          # 小集数保底 16k
+    assert macro_max_tokens(90) == 4096 + 36000   # 90 集 ≈ 40K（实测 380+/集）
+    assert macro_max_tokens(500) == 131072        # 封顶 128K（GLM-5.2 输出上限）

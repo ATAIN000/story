@@ -21,6 +21,32 @@ TEMPLATES_META = {
     "dtg_50_30": ("短剧 50+30", "80 集短剧节奏（前 50 爽感+后 30 收线）"),
     "wuxia_classic": ("武侠章回", "金圣叹评书体，武侠/公案专用"),
     "romance_beat": ("言情节拍", "言情/甜宠标准结构"),
+    "hero_journey_12": ("英雄之旅", "Campbell/Vogler 十二站，奇幻/冒险/神话"),
+    "kishotenketsu_4": ("起承转合", "东方四段式，日常/治愈/无强冲突"),
+    "freytag_5": ("弗莱塔格金字塔", "古典五幕剧，正剧/历史/权谋"),
+    "story_circle_8": ("丹·哈蒙故事环", "八步循环，科幻/赛博/机甲"),
+    "mystery_fairplay_8": ("本格公平竞技", "线索全公开的推理结构，挑战读者"),
+    "horror_descent_7": ("恐怖递进", "异样→规则→显形→终局，恐怖/克苏鲁"),
+    "apocalypse_survival_6": ("末日生存", "崩塌→求生→立足→新秩序"),
+    "urban_rise_8": ("都市逆袭", "蛰伏→打脸→博弈→登顶，都市/职场"),
+    "palace_intrigue_9": ("宫廷权谋", "入局→结网→大案→登顶，宫斗/朝堂"),
+    "war_campaign_6": ("战争战役", "集结→鏖战→转折→终战，军事/星际"),
+    "sports_league_7": ("竞技赛季", "选拔→磨合→崛起→决赛"),
+    "isekai_adapt_8": ("异界立足", "穿越→立足→世界真相→抉择"),
+    "comedy_escalation_6": ("喜剧升级", "日常→荒诞→翻车→暖收"),
+    "tribulation_9": ("修仙渡劫", "引气→筑基→金丹→心魔→渡劫飞升"),
+    "revenge_arc_8": ("复仇弧", "血仇→隐忍→清算→了结"),
+    "farming_build_6": ("种田经营", "落脚→开荒→危机→兴旺"),
+    "rule_horror_8": ("规则怪谈", "规则发布→试探→崩坏→破解"),
+    "unit_loop_6": ("单元循环", "快穿/诸天/单元案：框架→历练→收束→终局"),
+    "angst_romance_9": ("虐恋", "甜→裂→虐→愈，追妻火葬场标配"),
+    "spy_undercover_8": ("谍战潜伏", "受命→潜伏→暴露危机→归队"),
+    "academy_growth_7": ("学院试炼", "入学→试炼→竞赛→毕业"),
+    "dungeon_crawl_6": ("地下城攻略", "集结→下潜→深层→通关"),
+    "showbiz_rise_7": ("娱乐圈星途", "起步→出道→翻红→顶流"),
+    "procedural_case_6": ("刑侦程序", "案发→排查→转机→结案"),
+    "court_career_8": ("朝堂仕途", "入仕→理政→中枢→拜相"),
+    "ai_custom": ("✦ AI 定制结构", "LLM 按题材+世界观+集数现场生成专属幕结构"),
     "custom": ("自定义", "用户自定义幕结构"),
 }
 
@@ -45,6 +71,7 @@ def _macro_imports():
 @router.get("/api/macro/templates")
 def macro_templates(genre: str = ""):
     MACRO_TEMPLATES, macro_templates_for_genre = _macro_imports()
+    from story_engine.macro import AI_CUSTOM_TEMPLATE
     recommended = set(macro_templates_for_genre(genre)) if genre else set()
     items = []
     for name, acts in MACRO_TEMPLATES.items():
@@ -57,6 +84,15 @@ def macro_templates(genre: str = ""):
             "beat_count": beat_count,
             "recommended": name in recommended,
         })
+    # AI 定制结构：不在内置模板库（无固定拍点），卡片固定追加、永不标推荐
+    meta = TEMPLATES_META[AI_CUSTOM_TEMPLATE]
+    items.append({
+        "name": AI_CUSTOM_TEMPLATE,
+        "title": meta[0],
+        "description": meta[1],
+        "beat_count": 0,
+        "recommended": False,
+    })
     return {"templates": items}
 
 

@@ -61,9 +61,12 @@ class TestBet1HardConstraints(unittest.TestCase):
         r = self.v.validate(ev({"story_time": "第2日·午时"}), self.state)
         self.assertTrue(r.passed)
 
-    def test_causal_fail(self):
+    def test_causal_relaxed_pass(self):
+        # P23.5 放宽：causal_links 是事后 projection（Actor 刚 commit 时还没
+        # 更新），严格检查导致每条都误报；现动机非空即通过（Actor SOAR
+        # evaluate 已评估动机）。本用例锁定放宽后的行为。
         r = self.v.validate(ev({"agent": "包拯", "motivation": "无端猜疑"}), self.state)
-        self.assertFalse(r.passed)
+        self.assertTrue(r.passed)
 
     def test_causal_and_intention_pass(self):
         r = self.v.validate(ev({"agent": "包拯", "motivation": "玉佩失窃",

@@ -19,7 +19,19 @@ from .plan import (
     MacroPlan, PacingCurve, SaliencePoint, StoryBlueprint, TensionPoint,
     ThematicArgument,
 )
-from .templates import TEMPLATES, compute_acts
+from .templates import (
+    AI_CUSTOM_TEMPLATE, TEMPLATES, compute_acts, compute_ai_custom_acts)
+
+
+def macro_max_tokens(total_episodes: int) -> int:
+    """宏观计划 LLM 输出上限：按集数动态放大。
+
+    实测值（GLM-5.2，90 集案例）：蓝图+幕结构约 2.5K，每条分集梗概
+    （synopsis+key_events+hook+arc_focus）约 380 token —— 按 400/集计，
+    90 集 ≈ 40K。GLM-5.2 输出封顶 128K，本函数同上限。
+    此前 gacha WS 写死 8192 → 大集数（>20 集）流式输出被硬截断。
+    """
+    return min(131072, max(16384, 4096 + int(total_episodes) * 400))
 
 
 # ============================================================
@@ -59,10 +71,12 @@ async def generate_macro_plan(
                            template_name, total_episodes, conflict_warnings)
     try:
         resp = await kernel.llm_call(
-            prompt, purpose="macro_plan", temperature=0.7, max_tokens=16384)
+            prompt, purpose="macro_plan", temperature=0.7,
+            max_tokens=macro_max_tokens(total_episodes))
         text = getattr(resp, "text", "") or ""
         parsed = _parse_yaml(text)
-        if parsed and _validate(parsed, total_episodes):
+        if parsed and _validate(parsed, total_episodes,
+                                template_name=template_name):
             return _build_plan(parsed, template_name, total_episodes)
     except Exception:
         pass  # 任何失败 → 兜底
@@ -106,7 +120,7 @@ async def regenerate_component(
     try:
         resp = await kernel.llm_call(
             prompt, purpose=f"macro_regen_{component}",
-            temperature=0.7, max_tokens=16384)
+            temperature=0.7, max_tokens=macro_max_tokens(total_episodes))
         text = getattr(resp, "text", "") or ""
         parsed = _parse_yaml(text)
         if parsed:
@@ -172,9 +186,28 @@ def _build_prompt(bundle, worldview_profile, cast_profile,
     ]
     cast_name_list = "、".join(cast_names) if cast_names else ""
 
-    # 模板 beat 结构
-    act_structure = compute_acts(template_name, total_episodes)
-    beat_text = _beat_summary(act_structure)
+    # 模板 beat 结构（ai_custom：不套模板，由 LLM 现场设计专属幕结构）
+    if template_name == AI_CUSTOM_TEMPLATE:
+        beat_section = (
+            "【幕结构设计（AI 定制——不套用现成模板）】\n"
+            "请你根据本题材调性、世界观与人物弧光，自行设计 3-6 幕的专属幕结构：\n"
+            "- 每幕含 id/name/function/start_pct/end_pct（百分比；首幕 "
+            "start_pct=0，末幕 end_pct=100，区间连续、不重叠、不倒挂）\n"
+            "- 每幕 1-4 个 beats（name/pct/desc），pct 落在本幕 [start_pct, "
+            "end_pct] 区间内\n"
+            "- 节拍密度与张力安排须匹配题材节奏（如短剧爽点前置、悬疑揭示后置、"
+            "修仙大境界卡点）")
+        act_req = (f'2. act_structure: template="{AI_CUSTOM_TEMPLATE}", '
+                   "acts（每幕含 id/name/start_pct/end_pct/function/beats，"
+                   "beats 含 name/pct/desc，desc 必须具体化到本故事的人物和处境）")
+    else:
+        act_structure = compute_acts(template_name, total_episodes)
+        beat_section = (
+            "【幕结构 beat 位置（剧情节奏骨架，必须遵循）】\n"
+            + _beat_summary(act_structure))
+        act_req = (f'2. act_structure: template="{template_name}", '
+                   "acts（每幕含 id/name/episode_range/function/beats，"
+                   "beats 的 name 和 desc 必须具体化到本故事的人物和处境）")
 
     # P18.2: 冲突标记约束段
     conflict_block = ""
@@ -212,8 +245,7 @@ def _build_prompt(bundle, worldview_profile, cast_profile,
 【人物阵容（用户自定义的原型与弧光）】
 {cast_text or '（未提供自定义人物，请基于题材阵容推导主角和配角，赋予完整的弧光定义）'}
 
-【幕结构 beat 位置（剧情节奏骨架，必须遵循）】
-{beat_text}
+{beat_section}
 {conflict_block}
 【输出要求】
 输出完整 YAML，包含以下六个顶层键（均不可省略）：
@@ -226,7 +258,7 @@ def _build_prompt(bundle, worldview_profile, cast_profile,
    - total_episodes: {total_episodes}
    - target_pace: 节奏定调
 
-2. act_structure: template="{template_name}", acts（每幕含 id/name/episode_range/function/beats，beats 的 name 和 desc 必须具体化到本故事的人物和处境）
+{act_req}
 
 3. episode_outlines: {total_episodes} 条，每条含 episode/synopsis（2-3 句具体梗概，提到人物名和事件）/purpose（对应 beat 名）/key_events（3-5 个本章必须发生的具体事件）/ends_with_hook（章末钩子）/character_arc_focus（本章角色弧光焦点）
 
@@ -319,7 +351,7 @@ def _plan_from_dict(d: dict, template_name: str, total_episodes: int) -> MacroPl
     if act_dict.get("acts"):
         act_structure = _acts_from_dict(act_dict)
     else:
-        act_structure = compute_acts(template_name, total_episodes)
+        act_structure = _acts_for(template_name, total_episodes)
     # episode_outlines
     outlines = []
     for o in (d.get("episode_outlines") or []):
@@ -403,7 +435,7 @@ def _build_plan_partial(parsed: dict, component: str,
     """从单组件 LLM 输出构建只含该组件的 MacroPlan（其余为默认空值）"""
     plan = MacroPlan(
         blueprint=StoryBlueprint(),
-        act_structure=compute_acts(template_name, total_episodes),
+        act_structure=_acts_for(template_name, total_episodes),
         episode_outlines=[], arc_schedule=ArcSchedule(),
         foreshadow_blueprint=ForeshadowBlueprint(),
         pacing_curve=PacingCurve(),
@@ -564,13 +596,66 @@ _REQUIRED_KEYS = {
 }
 
 
-def _validate(parsed: dict, total_episodes: int) -> bool:
+def _parse_ai_custom_act_defs(parsed: dict) -> list | None:
+    """ai_custom：LLM 输出的百分比幕结构 → 内置模板同款 raw 定义。
+
+    校验规则：≥2 幕；首幕 start_pct≈0，末幕 end_pct≈100；区间单调不重叠；
+    每幕 ≥1 个 beat 且 pct 落在本幕区间内。任一不满足 → None
+    （走 P23.4「报错重试、不兜底骨架」路径）。
+    """
+    acts = (parsed.get("act_structure") or {}).get("acts")
+    if not isinstance(acts, list) or len(acts) < 2:
+        return None
+    raw: list = []
+    prev_end = 0.0
+    for i, a in enumerate(acts):
+        if not isinstance(a, dict):
+            return None
+        name = str(a.get("name") or "").strip()
+        try:
+            s = float(a.get("start_pct"))
+            e = float(a.get("end_pct"))
+        except (TypeError, ValueError):
+            return None
+        if not name or not (0 <= s < e <= 100):
+            return None
+        if i == 0 and s > 1:
+            return None
+        if s < prev_end - 0.01:  # 与上一幕重叠/倒挂
+            return None
+        beats_raw = a.get("beats")
+        if not isinstance(beats_raw, list) or not beats_raw:
+            return None
+        beats = []
+        for b in beats_raw:
+            if not isinstance(b, dict):
+                return None
+            b_name = str(b.get("name") or "").strip()
+            try:
+                b_pct = float(b.get("pct"))
+            except (TypeError, ValueError):
+                return None
+            if not b_name or not (s - 0.01 <= b_pct <= e + 0.01):
+                return None
+            beats.append((b_name, b_pct, str(b.get("desc") or "")))
+        raw.append((str(a.get("id") or f"act_{i + 1}"), name,
+                    str(a.get("function") or ""), (s, e), beats))
+        prev_end = e
+    if prev_end < 99:  # 必须覆盖到 100
+        return None
+    return raw
+
+
+def _validate(parsed: dict, total_episodes: int,
+              template_name: str | None = None) -> bool:
     """校验：必填键齐全 + 集数匹配 + beat 位置在范围内 + 内容充实度。
 
     内容充实度（P23.4 质量加固）：拦截 LLM 返回的空模板/骨架兜底产物。
     骨架 _generate_skeleton 会生成"第N集：beat描述"格式的占位 synopsis，
     以及 logline="一个xxx的主角，在xxx的世界中学会xxx"——这些无剧情价值，
     不该通过验证拿来开工。
+
+    template_name=ai_custom 时附加校验：LLM 自设计幕结构（百分比）合法。
     """
     # 必填键
     if not _REQUIRED_KEYS <= set(parsed.keys()):
@@ -626,12 +711,26 @@ def _validate(parsed: dict, total_episodes: int) -> bool:
             if syn.startswith(f"第{ep}集：") and len(syn) < 30:
                 return False
 
+    # ai_custom：LLM 自设计幕结构必须合法
+    if template_name == AI_CUSTOM_TEMPLATE:
+        if _parse_ai_custom_act_defs(parsed) is None:
+            return False
+
     return True
 
 
 # ============================================================
 # 从解析的 dict 构建 MacroPlan
 # ============================================================
+
+def _acts_for(template_name: str, total_episodes: int) -> ActStructure:
+    """按模板名取幕结构；ai_custom 无内置模板时借 custom 骨架（仅兜底路径用，
+    主路径 ai_custom 用 LLM 自设计结构，见 _build_plan）。"""
+    if template_name == AI_CUSTOM_TEMPLATE:
+        base = compute_acts("custom", total_episodes)
+        return ActStructure(template=AI_CUSTOM_TEMPLATE, acts=base.acts)
+    return compute_acts(template_name, total_episodes)
+
 
 def _build_plan(parsed: dict, template_name: str, total_episodes: int) -> MacroPlan:
     """从 LLM 解析的 dict 构建 MacroPlan"""
@@ -654,9 +753,17 @@ def _build_plan(parsed: dict, template_name: str, total_episodes: int) -> MacroP
         target_pace=bp.get("target_pace", "fast_escalation"),
     )
 
-    # act_structure：优先用模板计算（保证位置正确），叠加 LLM 的 desc
-    act_structure = compute_acts(template_name, total_episodes)
-    _merge_act_descs(act_structure, parsed.get("act_structure", {}))
+    # act_structure：ai_custom 用 LLM 自设计结构（主路径已过 _validate 校验；
+    # 单组件重摇等无 acts 的 partial 构建走兜底）；其余用模板计算（保证位置
+    # 正确），叠加 LLM 的 desc
+    if template_name == AI_CUSTOM_TEMPLATE:
+        defs = _parse_ai_custom_act_defs(parsed)
+        act_structure = (compute_ai_custom_acts(defs, total_episodes)
+                         if defs is not None
+                         else _acts_for(template_name, total_episodes))
+    else:
+        act_structure = compute_acts(template_name, total_episodes)
+        _merge_act_descs(act_structure, parsed.get("act_structure", {}))
 
     # episode_outlines
     outlines = []
@@ -775,7 +882,7 @@ def _generate_skeleton(bundle, worldview_profile, cast_profile,
     )
 
     # ---- Act Structure ----
-    act_structure = compute_acts(template_name, total_episodes)
+    act_structure = _acts_for(template_name, total_episodes)
 
     # ---- Episode Outlines（从 beats 展开）----
     outlines: list[EpisodeOutline] = []

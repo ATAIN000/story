@@ -306,6 +306,9 @@ async function goSkeleton() {
     try {
       const res = await api.gachaBegin(genreName)
       sessionId.value = res.session_id
+      if (Number.isInteger(res.target_length) && res.target_length > 0) {
+        totalEpisodes.value = res.target_length   /* 题材默认集数作为约定起点 */
+      }
     } catch (e) {
       toastError(`创建开局会话失败：${e.message}`)
       return
@@ -481,6 +484,13 @@ const macroElapsed = ref(0)
 let macroTimer = null
 const macroStreamText = ref('')   // P20: WebSocket 流式文本累积
 
+/* 集数约定规范化：非法输入回落 12，区间 1-500（与后端 TOTAL_EPISODES 区间一致） */
+function normalizedTotalEpisodes() {
+  const n = parseInt(totalEpisodes.value, 10)
+  if (!Number.isInteger(n) || n < 1 || n > 500) return 12
+  return n
+}
+
 async function generateMacro() {
   if (macroGenerating.value) return
   if (!sessionId.value) {
@@ -497,6 +507,7 @@ async function generateMacro() {
     const castPayload = buildCastPayload()
     const body = {
       template_name: selectedTemplate.value || 'save_the_cat_15',
+      total_episodes: normalizedTotalEpisodes(),
     }
     if (wvPayload) body.worldview = wvPayload
     if (castPayload) body.cast = castPayload
@@ -603,6 +614,7 @@ const deriveLoading = ref(false)
 const macroTemplates = ref([])
 const macroTemplateLoading = ref(false)
 const selectedTemplate = ref('save_the_cat_15')
+const totalEpisodes = ref(12)         // 集数约定（begin 回传的题材默认值起步）
 const macroPlan = ref(null)           // 生成的 MacroPlan dict
 const macroGenerating = ref(false)
 const expandedMacroSection = ref('')  // 宏观预览展开的区段（blueprint/acts/episodes...）
@@ -897,6 +909,7 @@ async function doConfirm() {
     if (wvPayload) extras.worldview = wvPayload
     if (castPayload) extras.cast = castPayload
     if (macroPlan.value) extras.macro_plan = macroPlan.value
+    extras.total_episodes = normalizedTotalEpisodes()   /* 集数约定（跳过宏观也落盘） */
     const res = await api.gachaSessionConfirm(sessionId.value, name, extras)
     sessionId.value = null   /* confirm 后 session 已被后端清理 */
     startOpen.value = false
@@ -1445,8 +1458,20 @@ async function doConfirm() {
                     data-testid="macro-template-recommend-badge">推荐</span>
             </div>
             <div v-if="t.description" class="wv-macro-tmpl-desc">{{ t.description }}</div>
-            <div class="wv-macro-tmpl-beats">{{ t.beat_count }} 拍</div>
+            <div class="wv-macro-tmpl-beats">{{ t.beat_count > 0 ? `${t.beat_count} 拍` : 'LLM 现场设计' }}</div>
           </button>
+        </div>
+
+        <!-- 集数约定：幕拍点按总集数自动定位，确认开工后落盘项目 -->
+        <div class="wv-macro-eps-row">
+          <label class="wv-macro-eps-label" for="macro-total-episodes">总集数约定</label>
+          <input id="macro-total-episodes" v-model.number="totalEpisodes"
+                 type="number" min="1" max="500" step="1"
+                 class="wv-macro-eps-input"
+                 data-testid="macro-total-episodes"
+                 :disabled="macroGenerating"
+                 aria-label="总集数约定（1-500）">
+          <span class="wv-macro-eps-hint">幕拍点按总集数自动定位；修改后请重新生成宏观计划</span>
         </div>
 
         <!-- 生成按钮 -->

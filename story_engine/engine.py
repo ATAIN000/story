@@ -252,13 +252,16 @@ def _is_narrative_text(text: str) -> bool:
 
 class StoryEngine:
     def __init__(self, kernel_or_dir, llm_client=None,
-                 genre_name=None, culture_name=None):
+                 genre_name=None, culture_name=None, target_length=None):
         """两种构造方式（向后兼容）：
         - StoryEngine(kernel: Kernel)              # 推荐：注入外部 kernel
         - StoryEngine(project_dir: str|Path, llm_client=LLMClient())  # 旧式：自建
         genre_name/culture_name（P8.5 可选，只增）：显式指定三正交轴题材/文化；
         缺省（None/空串）回落 env（STORY_ENGINE_GENRE/CULTURE）→ 内置默认，
         与之前行为逐字一致。抽卡 project init 用显式参数做进程内覆盖（不改 env）。
+        target_length（可选，只增）：项目约定总集数；缺省回落 GenreBundle
+        默认 12。抽卡开局「幕结构模板」环节的集数约定由此贯通到
+        Showrunner 决策卡（Snyder 进度映射）与宏观计划再生成。
         """
         if isinstance(kernel_or_dir, Kernel):
             self.kernel = kernel_or_dir
@@ -315,6 +318,7 @@ class StoryEngine:
         # 权威 GenreBundle 构建一次：Showrunner 决策卡与 spawn_director 共用
         self.bundle = GenreBundle(
             genre=genre_name, culture=culture_name,
+            target_length=target_length or 12,
             genre_params=genre_params, culture_params=self.culture.params)
         # P11.1：创世工厂按题材定型的权威接线点（bundle 建成后立即可用）。
         # EventStore 懒调用工厂（event_store.py 空库首次 current_state 才触发），

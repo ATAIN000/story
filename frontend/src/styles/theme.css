@@ -711,6 +711,15 @@ button { font: inherit; cursor: pointer; border: none; background: none; color: 
 .wv-macro-tmpl-desc { font-size: 10px; color: var(--faint); margin-top: 2px; line-height: 1.4; }
 .wv-macro-tmpl-beats { font-size: 11px; color: var(--ink2); margin-top: 4px; }
 .wv-macro-gen-row { text-align: center; }
+/* 集数约定行：模板与生成按钮之间 */
+.wv-macro-eps-row { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; }
+.wv-macro-eps-label { font: 600 13px var(--serif); color: var(--ink); }
+.wv-macro-eps-input {
+  width: 90px; border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px;
+  font-size: 13px; text-align: center; background: var(--s2); color: var(--ink);
+}
+.wv-macro-eps-input:focus { outline: 2px solid var(--primary); outline-offset: -1px; border-color: transparent; }
+.wv-macro-eps-hint { font-size: 11px; color: var(--faint); }
 .wv-macro-progress { margin-top: 12px; display: flex; align-items: flex-start; gap: 8px; justify-content: center; text-align: left; }
 .wv-macro-prog-text { font-size: 12px; color: var(--text-sec, #888); line-height: 1.6; }
 .wv-macro-prog-hint { font-size: 11px; color: var(--text-sec, #aaa); opacity: 0.7; }
