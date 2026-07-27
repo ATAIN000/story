@@ -16,6 +16,7 @@ const runtime = computed(() => {
   const cfg = props.config ?? {}
   const meta = props.project?.meta ?? {}
   return {
+    version: cfg.version || '—',
     llm: cfg.llmMode === 'mock' ? 'Mock 演示模式' : (cfg.llmModel || '—'),
     genre: meta.genre || cfg.axes?.genre || '—',
     culture: meta.culture || cfg.axes?.culture || '—',
@@ -95,6 +96,7 @@ const LINKS = [
         <div class="ab-card-t">
           <AppIcon name="zap" :size="14" /> 当前运行
         </div>
+        <div class="ab-kv"><span>版本</span><b>v{{ runtime.version }}</b></div>
         <div class="ab-kv"><span>LLM</span><b>{{ runtime.llm }}</b></div>
         <div class="ab-kv"><span>当前项目题材</span><b>{{ runtime.genre }}</b></div>
         <div class="ab-kv"><span>文化</span><b>{{ runtime.culture }}</b></div>

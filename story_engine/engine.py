@@ -1342,7 +1342,7 @@ class StoryEngine:
             actor.chapter_context = chapter_ctx
 
         max_ticks = int(os.environ.get("STORY_ENGINE_ACTOR_MAX_TICKS", "5"))
-        self._progress("actor_tick", f"角色决策中（{max_ticks}轮）")
+        self._progress("actor_tick", f"角色决策中（最多{max_ticks}轮）")
 
         # 写入本章 brief，供角色 recall
         await self._seed_chapter_memory(chapter_no, card, state)
@@ -1350,12 +1350,25 @@ class StoryEngine:
         pre_state = copy.deepcopy(state)
         tick_start = self.kernel.query_world("next_tick")
         all_actions: list[dict] = []
+        # P24.6 性能：目标驱动提前退出。每轮 = 一次全员并行 LLM 往返，
+        # 机械跑满 max_ticks 浪费 2-3 倍时延。默认目标 = 2×角色数
+        # （每角色约 2 个有效行动，足够 IR 叙事化），可用
+        # STORY_ENGINE_ACTOR_TARGET_ACTIONS 显式覆盖（0=关闭提前退出）；
+        # 一轮零产出（全员 propose 失败）同样立即止损。
+        actor_count = len(self.kernel.scheduler._character_actors)
+        target_actions = int(os.environ.get(
+            "STORY_ENGINE_ACTOR_TARGET_ACTIONS",
+            str(2 * max(1, actor_count))))
         for tick_i in range(max(1, max_ticks)):
             cur = self.kernel.query_world("current_state")
             batch = await self.kernel.scheduler.tick_all(
                 cur, chapter=chapter_no, timeout=120.0)
             all_actions.extend(batch)
             self._progress("actor_tick", f"角色决策 {tick_i+1}/{max_ticks}（累计 {len(all_actions)} 行动）")
+            if not batch:
+                break
+            if target_actions > 0 and len(all_actions) >= target_actions:
+                break
         _llog.info("Actor tick 完成 | 章={} | 行动数={}", chapter_no,
                    len(all_actions))
 
@@ -2086,13 +2099,35 @@ class StoryEngine:
         realizer = Narrativizer(
             self.kernel, self.bundle, llm_call=llm_call
         ).select_realizer(self.bundle.language)
+        # P24.7 辅助信息：本章定位（标题+宏观梗概/beats）/世界观/上一章结尾
+        # （仅首段重写时携带，保证章间衔接），全部缺省时 prompt 与此前一致
+        chapter_brief = ""
+        macro_ctx = self._build_macro_context(target["chapter"])
+        if macro_ctx:
+            chapter_brief = self._macro_context_text(macro_ctx)
+        prev_tail = None
+        cur_no = target["chapter"]
+        if para_index == 0 and isinstance(cur_no, int) and cur_no > 1:
+            prev = [ch for ch in chapters
+                    if ch.get("chapter") == cur_no - 1
+                    and not ch.get("superseded")
+                    and ch["tick_range"][1] <= head]
+            if prev:
+                prev_paras = self._split_paragraphs(
+                    (prev[-1].get("final") or {}).get("text") or "")
+                if prev_paras:
+                    prev_tail = prev_paras[-1]
         rewritten = await realizer.rewrite_paragraph(
             ir_context=self._chapter_ir_context(target),
             original=paras[para_index],
             prev_para=paras[para_index - 1] if para_index > 0 else None,
             next_para=(paras[para_index + 1]
                        if para_index + 1 < len(paras) else None),
-            direction=direction, bundle=self.bundle)
+            direction=direction, bundle=self.bundle,
+            chapter_title=target.get("title", ""),
+            chapter_brief=chapter_brief,
+            prev_chapter_tail=prev_tail,
+            worldview_text=self._worldview_prompt_text())
         note = None
         if not rewritten:
             note = ("LLM 空稿或调用异常（mock/未配置/网络故障），本次未产出"

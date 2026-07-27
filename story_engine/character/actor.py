@@ -310,7 +310,8 @@ class CharacterActor:
         )
         try:
             resp = await self.kernel.llm_call(
-                prompt, purpose=f"propose:{self.id}", temperature=0.6, max_tokens=16384)
+                prompt, purpose=f"propose:{self.id}", temperature=0.6,
+                max_tokens=2048)
             text = resp.text if hasattr(resp, "text") else str(resp)
             data = self._parse_json_array(text)
             out = []

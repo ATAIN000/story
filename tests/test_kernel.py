@@ -171,5 +171,48 @@ class TestKernelActorScheduler(unittest.TestCase):
         self.assertEqual(self.kernel.scheduler.get_context_budget(ref.actor_id), 16384)
 
 
+class TestLLMThinkingSwitch(unittest.TestCase):
+    """STORY_ENGINE_LLM_THINKING：GLM 等渠道的思考开关（P24.8）。"""
+
+    def _pool(self):
+        from story_engine.kernel.llm_pool import LLMPool
+        pool = LLMPool(mode="mock")
+        pool.base_url = "https://open.bigmodel.cn/api/paas/v4"  # 非 kimi 渠道
+        return pool
+
+    def test_default_on_never_disables(self):
+        import os
+        os.environ.pop("STORY_ENGINE_LLM_THINKING", None)
+        pool = self._pool()
+        for purpose in ("propose:楚擎", "critic_judge", "realize_chapter"):
+            self.assertFalse(pool._thinking_disabled(purpose))
+
+    def test_off_disables_everything(self):
+        import os
+        os.environ["STORY_ENGINE_LLM_THINKING"] = "off"
+        try:
+            pool = self._pool()
+            for purpose in ("propose:楚擎", "realize_chapter", "macro_plan"):
+                self.assertTrue(pool._thinking_disabled(purpose))
+        finally:
+            os.environ.pop("STORY_ENGINE_LLM_THINKING", None)
+
+    def test_creative_keeps_only_creative(self):
+        import os
+        os.environ["STORY_ENGINE_LLM_THINKING"] = "creative"
+        try:
+            pool = self._pool()
+            # 创作型保留思考
+            for purpose in ("realize_chapter", "correct_chapter",
+                            "macro_plan", "rewrite_paragraph"):
+                self.assertFalse(pool._thinking_disabled(purpose), purpose)
+            # 机械性关闭
+            for purpose in ("propose:楚擎", "critic_judge", "reflect:裴无咎",
+                            "reader_profile"):
+                self.assertTrue(pool._thinking_disabled(purpose), purpose)
+        finally:
+            os.environ.pop("STORY_ENGINE_LLM_THINKING", None)
+
+
 if __name__ == "__main__":
     unittest.main()

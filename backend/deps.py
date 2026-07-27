@@ -12,7 +12,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 
 # 常量（不依赖 .env 的）
-PROJECTS_ROOT = ROOT / "data" / "projects"
+PROJECTS_ROOT = Path(os.environ.get(
+    "STORY_ENGINE_PROJECTS_ROOT", str(ROOT / "data" / "projects")))
 PROJECT_META_NAME = "project.json"
 
 # 以下依赖 .env（main._load_dotenv 必须在 import 本模块之前执行）

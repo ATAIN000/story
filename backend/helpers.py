@@ -191,7 +191,10 @@ def _ep_in_range(ep: int, rng: str) -> bool:
 
 
 def _persist_env(updates: dict) -> None:
-    env_path = deps.ROOT / ".env"
+    # 打包分发版：launcher 把 .env 放在 exe 同级（STORY_ENGINE_DOTENV 指定）；
+    # 缺省写仓库根 .env（开发行为不变）
+    env_path = Path(os.environ.get(
+        "STORY_ENGINE_DOTENV", str(deps.ROOT / ".env")))
     if env_path.exists():
         lines = env_path.read_text(encoding="utf-8").splitlines()
     else:

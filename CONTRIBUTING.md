@@ -46,6 +46,18 @@ ruff format .
 4. PR 描述里写清楚**改了什么、为什么改、怎么测的**
 5. 等 CI 跑绿，等 maintainer review
 
+## 发布版本（maintainer）
+
+版本号遵循 SemVer（`主.次.修`），单一事实源是 `story_engine/__init__.py` 的
+`__version__`（pyproject 动态读取；`/api/config`、关于页、包文件名自动跟随）：
+
+1. 改 `story_engine/__init__.py` 的 `__version__`
+2. 在 `CHANGELOG.md` 顶部补该版本的变更条目
+3. 全量测试绿后提交，打 tag：`git tag vX.Y.Z && git push --tags`
+4. Windows 包：`cd frontend && npm run build`，
+   然后 `.venv/Scripts/python.exe scripts/build_windows.py --zip`
+   （产出 `dist/StoryOS-windows-vX.Y.Z.zip`）
+
 ## 代码结构速览
 
 ```

@@ -202,3 +202,47 @@ def test_ir_first_disabled_falls_back(monkeypatch, tmp_path):
     assert "暗访聚宝赌坊查探刘伯行踪" in rec["final"]["text"]
     # 零 Realizer 调用（IR-first 唯一 LLM 入口未触达）
     assert all(purpose != "realize_chapter" for purpose, _ in fake.calls)
+
+
+# ---------- 用例 ④：P24.6 行动数达标提前退出（性能） ----------
+def test_actor_ticks_early_exit(monkeypatch, tmp_path):
+    """max_ticks=5 但行动数达标即停：5 角色 2 轮收工（10 次 propose），
+    未提前退出则需 25 次。"""
+    monkeypatch.setenv("STORY_ENGINE_SCRIPTED_DEMO", "0")
+    monkeypatch.setenv("STORY_ENGINE_IR_FIRST", "1")
+    monkeypatch.setenv("STORY_ENGINE_EVAL_ENABLED", "0")
+    monkeypatch.setenv("STORY_ENGINE_ACTOR_MAX_TICKS", "5")
+    monkeypatch.delenv("STORY_ENGINE_ACTOR_TARGET_ACTIONS", raising=False)
+    fake = ScriptedFakeLLM()
+    eng = StoryEngine(str(tmp_path), llm_client=fake)
+    rec = run(_gen_chapters(eng, 1))[0]
+    eng.kernel.close()
+
+    assert rec["generation_mode"] == "actor"
+    proposes = [purpose for purpose, _ in fake.calls
+                if purpose.startswith("propose:")]
+    n_actors = len({p.split(":", 1)[1] for p in proposes})
+    assert n_actors >= 2, "应至少 2 个角色 Actor"
+    # 提前退出：≤2 轮（2×actors 次 propose）；跑满 5 轮则是 5×actors
+    assert len(proposes) <= 2 * n_actors, \
+        f"未提前退出？propose 次数={len(proposes)}（{n_actors} 角色）"
+
+
+def test_actor_ticks_target_zero_runs_full(monkeypatch, tmp_path):
+    """STORY_ENGINE_ACTOR_TARGET_ACTIONS=0 → 关闭提前退出，跑满 max_ticks。"""
+    monkeypatch.setenv("STORY_ENGINE_SCRIPTED_DEMO", "0")
+    monkeypatch.setenv("STORY_ENGINE_IR_FIRST", "1")
+    monkeypatch.setenv("STORY_ENGINE_EVAL_ENABLED", "0")
+    monkeypatch.setenv("STORY_ENGINE_ACTOR_MAX_TICKS", "3")
+    monkeypatch.setenv("STORY_ENGINE_ACTOR_TARGET_ACTIONS", "0")
+    fake = ScriptedFakeLLM()
+    eng = StoryEngine(str(tmp_path), llm_client=fake)
+    rec = run(_gen_chapters(eng, 1))[0]
+    eng.kernel.close()
+
+    assert rec["generation_mode"] == "actor"
+    proposes = [purpose for purpose, _ in fake.calls
+                if purpose.startswith("propose:")]
+    n_actors = len({p.split(":", 1)[1] for p in proposes})
+    assert len(proposes) == 3 * n_actors, \
+        f"应跑满 3 轮：propose={len(proposes)}（{n_actors} 角色）"

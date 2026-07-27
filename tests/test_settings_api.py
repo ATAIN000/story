@@ -127,3 +127,19 @@ class TestSettingsApi(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_persist_env_respects_dotenv_override(monkeypatch, tmp_path):
+    """_persist_env 写 STORY_ENGINE_DOTENV 指定路径（打包版 exe 同级 .env）。"""
+    import json
+    from backend import helpers
+    target = tmp_path / "custom.env"
+    monkeypatch.setenv("STORY_ENGINE_DOTENV", str(target))
+    helpers._persist_env({"STORY_ENGINE_TEST_KEY_X": "v1"})
+    text = target.read_text(encoding="utf-8")
+    assert "STORY_ENGINE_TEST_KEY_X=v1" in text
+    # 再次写入同键 → 覆盖而非追加
+    helpers._persist_env({"STORY_ENGINE_TEST_KEY_X": "v2"})
+    text2 = target.read_text(encoding="utf-8")
+    assert "STORY_ENGINE_TEST_KEY_X=v2" in text2
+    assert "STORY_ENGINE_TEST_KEY_X=v1" not in text2

@@ -94,3 +94,58 @@ class TestParagraphRewrite(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# ---------- P24.7：段落重写辅助信息 ----------
+
+def test_paragraph_prompt_auxiliary_blocks():
+    """世界观/本章定位/上章结尾可选注入；缺省时整段缺席。"""
+    from story_engine.narrative import ChineseRealizer
+    r = ChineseRealizer(llm_call=None)
+    base = dict(ir_context="骨架摘要", original="原段文字", prev_para="前段",
+                next_para="后段", direction="更紧张", bundle=None)
+    p0 = r._paragraph_prompt(**base)
+    assert "=== 世界观设定 ===" not in p0
+    assert "=== 本章定位" not in p0
+    assert "=== 上一章结尾" not in p0
+    # 缺省也有新增的一致性硬要求
+    assert "不得改名、不得新增人物" in p0
+    assert "不得改丢" in p0
+
+    p1 = r._paragraph_prompt(
+        **base, chapter_title="夜探赌坊",
+        chapter_brief="当前 beat=inciting_incident；集纲=沈昭夜探赌坊",
+        prev_chapter_tail="上一章的最后一段内容。",
+        worldview_text="力量体系：无超自然")
+    for frag in ("=== 世界观设定 ===", "力量体系：无超自然",
+                 "=== 本章定位（宏观规划，改写不得偏离） ===",
+                 "本章标题：夜探赌坊", "当前 beat=inciting_incident",
+                 "=== 上一章结尾（衔接参考，不要改动） ===",
+                 "上一章的最后一段内容。"):
+        assert frag in p1, frag
+
+
+def test_paragraph_prompt_english_auxiliary_blocks():
+    """英文模板同步：辅助段注入与缺省缺席。"""
+    from story_engine.narrative import EnglishRealizer
+    r = EnglishRealizer(llm_call=None)
+    base = dict(ir_context="skeleton", original="original para",
+                prev_para="prev", next_para="next",
+                direction="tenser", bundle=None)
+    p0 = r._paragraph_prompt(**base)
+    assert "=== Worldview ===" not in p0
+    assert "=== Chapter position" not in p0
+    assert "Previous chapter's ending" not in p0
+    assert "do not rename or invent characters" in p0
+
+    p1 = r._paragraph_prompt(
+        **base, chapter_title="Night Raid", chapter_brief="beat=inciting",
+        prev_chapter_tail="Tail of previous chapter.",
+        worldview_text="No supernatural")
+    for frag in ("=== Worldview ===", "No supernatural",
+                 "=== Chapter position (macro plan — do not deviate) ===",
+                 "Chapter title: Night Raid",
+                 "=== Previous chapter's ending (continuity reference, "
+                 "do not change) ===",
+                 "Tail of previous chapter."):
+        assert frag in p1, frag

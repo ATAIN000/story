@@ -173,17 +173,26 @@ class LanguageRealizer:
     async def rewrite_paragraph(self, *, ir_context: str, original: str,
                                 prev_para: str | None = None,
                                 next_para: str | None = None,
-                                direction: str = "", bundle=None) -> str:
+                                direction: str = "", bundle=None,
+                                chapter_title: str = "",
+                                chapter_brief: str = "",
+                                prev_chapter_tail: str | None = None,
+                                worldview_text: str | None = None) -> str:
         """单段重写：本章骨架摘要 + 前后段衔接上下文 + 作者方向 → 重写段文本。
 
         无设施/异常 → ""（同 realize 兜底哲学，由调用方转 note 说明）。
         P6.3 简化决策（成本/延迟）：单段重写不接 critic 自评迭代（章级质量
         门禁仍在 generate 路径）；本方法只产文本不回写——正文回写由前端
         「采用」走 textual 介入通道（P6.1 engine.update_chapter_text）。
+        P24.7：辅助信息增强——本章定位（标题+宏观梗概）/世界观/上一章结尾
+        可选注入，全部缺省时 prompt 与此前逐字一致。
         """
         prompt = self._paragraph_prompt(
             ir_context=ir_context, original=original, prev_para=prev_para,
-            next_para=next_para, direction=direction, bundle=bundle)
+            next_para=next_para, direction=direction, bundle=bundle,
+            chapter_title=chapter_title, chapter_brief=chapter_brief,
+            prev_chapter_tail=prev_chapter_tail,
+            worldview_text=worldview_text)
         if self._llm_call is None:
             return ""
         try:
@@ -196,25 +205,47 @@ class LanguageRealizer:
 
     def _paragraph_prompt(self, *, ir_context: str, original: str,
                           prev_para: str | None, next_para: str | None,
-                          direction: str, bundle) -> str:
+                          direction: str, bundle,
+                          chapter_title: str = "",
+                          chapter_brief: str = "",
+                          prev_chapter_tail: str | None = None,
+                          worldview_text: str | None = None) -> str:
         """单段重写 prompt（中文模板；英文由 EnglishRealizer 覆盖）。
 
         风格要求按 P6.3 落地要点简化为「字数与原段相当 + 插件 style/
         hard_requirements」，不搬整章 texture 8 参数（段级任务用不上全套）。
+        P24.7：本章定位/世界观/上一章结尾为可选辅助段，缺省时整段缺席
+        （硬要求新增两条一致性约束：人物名/视角、伏笔与关键事实）。
         """
         pcfg = _plugin_prompt_config(bundle)
         hard_reqs = [
             "只输出重写后的该段正文本身（不含标题行、不含前后段）",
             f"字数与原段相当（原段约 {len(original)} 字）",
+            "人物名/称谓/叙事视角与上下文保持一致，不得改名、不得新增人物",
+            "保留原段中的伏笔与关键事实细节，不得改丢",
             pcfg["style"],
             *(pcfg.get("hard_requirements") or []),
         ]
         hard_txt = "\n".join(f"{i}. {r}" for i, r in enumerate(hard_reqs, 1))
+        # P24.7 可选辅助段（缺省 → 整段缺席）
+        wv_txt = (f"=== 世界观设定 ===\n{worldview_text}\n\n"
+                  if worldview_text else "")
+        loc_lines = []
+        if chapter_title:
+            loc_lines.append(f"本章标题：{chapter_title}")
+        if chapter_brief:
+            loc_lines.append(chapter_brief)
+        loc_txt = ("=== 本章定位（宏观规划，改写不得偏离） ===\n"
+                   + "\n".join(loc_lines) + "\n\n" if loc_lines else "")
+        tail_txt = (f"=== 上一章结尾（衔接参考，不要改动） ===\n"
+                    f"{prev_chapter_tail}\n\n" if prev_chapter_tail else "")
         return (
             f"你是{pcfg['role']}。背景：{pcfg['setting']}。\n"
             f"人物：{pcfg['characters']}。\n\n"
+            f"{wv_txt}{loc_txt}"
             f"=== 本章故事骨架（IR 概念级摘要，把握走向与衔接） ===\n"
             f"{ir_context}\n\n"
+            f"{tail_txt}"
             f"=== 待重写段落（仅重写此段） ===\n{original}\n\n"
             f"=== 前一段（衔接参考，不要改动） ===\n"
             f"{prev_para or '（本章首段，无前文）'}\n\n"
@@ -466,24 +497,49 @@ class EnglishRealizer(LanguageRealizer):
 
     def _paragraph_prompt(self, *, ir_context: str, original: str,
                           prev_para: str | None, next_para: str | None,
-                          direction: str, bundle) -> str:
+                          direction: str, bundle,
+                          chapter_title: str = "",
+                          chapter_brief: str = "",
+                          prev_chapter_tail: str | None = None,
+                          worldview_text: str | None = None) -> str:
         """P6.3 single-paragraph rewrite prompt (English template). Style rules
         simplified per task brief: match the original length + plugin style/
-        hard_requirements (full texture params not needed at paragraph level)."""
+        hard_requirements (full texture params not needed at paragraph level).
+        P24.7: chapter position/worldview/previous-chapter tail are optional
+        auxiliary blocks and absent when not provided (hard requirements gained
+        two consistency rules: names/POV, foreshadowing/key facts)."""
         pcfg = _plugin_prompt_config(bundle)
         hard_reqs = [
             "Output only the rewritten paragraph itself (no title line, no "
             "neighboring paragraphs)",
             f"Match the original length (~{len(original)} characters)",
+            "Keep character names, forms of address and POV consistent with "
+            "the context — do not rename or invent characters",
+            "Preserve any foreshadowing and key factual details from the "
+            "original paragraph",
             pcfg["style"],
             *(pcfg.get("hard_requirements") or []),
         ]
         hard_txt = "\n".join(f"{i}. {r}" for i, r in enumerate(hard_reqs, 1))
+        wv_txt = (f"=== Worldview ===\n{worldview_text}\n\n"
+                  if worldview_text else "")
+        loc_lines = []
+        if chapter_title:
+            loc_lines.append(f"Chapter title: {chapter_title}")
+        if chapter_brief:
+            loc_lines.append(chapter_brief)
+        loc_txt = ("=== Chapter position (macro plan — do not deviate) ===\n"
+                   + "\n".join(loc_lines) + "\n\n" if loc_lines else "")
+        tail_txt = (f"=== Previous chapter's ending (continuity reference, "
+                    f"do not change) ===\n{prev_chapter_tail}\n\n"
+                    if prev_chapter_tail else "")
         return (
             f"You are {pcfg['role']}. Setting: {pcfg['setting']}.\n"
             f"Characters: {pcfg['characters']}.\n\n"
+            f"{wv_txt}{loc_txt}"
             f"=== Chapter skeleton (concept-level IR summary — for direction "
             f"and continuity) ===\n{ir_context}\n\n"
+            f"{tail_txt}"
             f"=== Paragraph to rewrite (rewrite this one only) ===\n"
             f"{original}\n\n"
             f"=== Previous paragraph (continuity reference, do not change) "

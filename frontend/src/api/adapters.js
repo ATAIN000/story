@@ -217,6 +217,7 @@ export function toConfigVM(cfg) {
   const axes = cfg.axes ?? {}
   const kernel = cfg.kernel ?? {}
   return {
+    version: cfg.version ?? '',
     llmMode: cfg.llm_mode ?? '',
     llmModel: cfg.llm_model ?? '',
     baseUrl: cfg.base_url ?? null,           // mock → null（不编造）

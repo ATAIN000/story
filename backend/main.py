@@ -61,7 +61,7 @@ from fastapi.responses import JSONResponse  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
 from fastapi.responses import FileResponse  # noqa: E402
 
-app = FastAPI(title="Story Engine", version="0.2.0")
+app = FastAPI(title="Story Engine", version=__import__("story_engine").__version__)
 app.add_middleware(CORSMiddleware, allow_origins=["*"],
                    allow_methods=["*"], allow_headers=["*"])
 

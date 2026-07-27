@@ -157,5 +157,7 @@ curl http://localhost:8111/api/macro/progress
 | `STORY_ENGINE_QUALITY_GATE` | 1 | 质量门禁开关（0=测试用关闭） |
 | `STORY_ENGINE_IR_FIRST` | 1 | IR-first 叙事管线 |
 | `STORY_ENGINE_EVAL_ENABLED` | 1 | 自评迭代 |
-| `STORY_ENGINE_ACTOR_MAX_TICKS` | 5 | 每章 Actor 轮次 |
+| `STORY_ENGINE_ACTOR_MAX_TICKS` | 5 | 每章 Actor 轮次上限 |
+| `STORY_ENGINE_ACTOR_TARGET_ACTIONS` | 2×角色数 | 行动数提前退出阈值（0=跑满上限） |
+| `STORY_ENGINE_LLM_THINKING` | on | GLM 等思考开关：off=全关，creative=仅创作保留（推荐） |
 | `STORY_ENGINE_EMBED_MODE` | local | 向量嵌入模式（local=dge-small-zh） |

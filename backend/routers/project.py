@@ -45,8 +45,10 @@ class ParagraphRewriteReq(BaseModel):
 # ---------- config ----------
 @router.get("/api/config")
 def config():
+    from story_engine import __version__
     from story_engine.kernel.registry import EXTENSION_POINTS
     return {
+        "version": __version__,
         "llm_mode": "mock" if deps.llm_client.is_mock else "openai",
         "llm_model": deps.llm_client.model,
         "base_url": deps.llm_client.base_url if not deps.llm_client.is_mock else None,

@@ -495,3 +495,26 @@ class TestChineseNameAndImport(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+# ---------- P25：Windows 打包支持 ----------
+
+def test_projects_root_env_override():
+    """deps.PROJECTS_ROOT 支持 STORY_ENGINE_PROJECTS_ROOT 覆盖（打包数据根外指）。"""
+    import os
+    import subprocess
+    import sys
+    import tempfile
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent
+    with tempfile.TemporaryDirectory() as td:
+        env = dict(os.environ)
+        env["STORY_ENGINE_PROJECTS_ROOT"] = "X:/story_custom_projects"
+        env["STORY_ENGINE_PROJECT_DIR"] = td
+        env["STORY_ENGINE_EMBED_MODE"] = "dummy"
+        r = subprocess.run(
+            [sys.executable, "-X", "utf8", "-c",
+             "import backend.deps as d; print(d.PROJECTS_ROOT)"],
+            capture_output=True, text=True, cwd=root, env=env, timeout=300)
+    assert r.returncode == 0, r.stderr[-500:]
+    assert "story_custom_projects" in r.stdout

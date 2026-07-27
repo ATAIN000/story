@@ -68,12 +68,13 @@ class LLMPool:
             if self.is_mock:
                 resp = await self._mock_call(prompt, purpose)
             else:
-                resp = await self._openai_call(prompt, temperature, max_tokens)
+                resp = await self._openai_call(prompt, temperature, max_tokens,
+                                               purpose=purpose)
                 if not resp.text.strip() and purpose != "_retry" \
                         and not no_retry:
                     resp = await self._openai_call(
                         prompt, temperature, max(max_tokens * 2, 16384),
-                        force_thinking=True)
+                        force_thinking=True, purpose=purpose)
         except Exception:
             logger.exception("{} 异常 | purpose={} | model={}", tag, purpose,
                              self.model)
@@ -125,6 +126,8 @@ class LLMPool:
             body["thinking"] = {"type": "disabled"}
         else:
             body["temperature"] = temperature
+            if self._thinking_disabled(purpose):
+                body["thinking"] = {"type": "disabled"}
         async with httpx.AsyncClient(timeout=300) as client:
             async with client.stream(
                 "POST", f"{self.base_url.rstrip('/')}/chat/completions",
@@ -160,8 +163,34 @@ class LLMPool:
     def _is_kimi_code(self) -> bool:
         return "kimi.com/coding" in self.base_url
 
+    # 创作型 purpose：creative 模式下保留思考（质量敏感）
+    _THINKING_KEEP_PREFIXES = (
+        "realize_chapter", "correct_chapter", "macro_plan",
+        "rewrite_paragraph", "synth",
+    )
+
+    def _thinking_disabled(self, purpose: str) -> bool:
+        """GLM-5.x 等非 kimi-code 渠道的思考开关。
+
+        STORY_ENGINE_LLM_THINKING：
+        - on（默认）：从不下发 thinking 字段（现状，GLM 默认思考）；
+        - off：全部调用关闭思考（最快，质量有损）；
+        - creative：仅创作型 purpose 保留思考，propose/critic/reflect 等
+          机械性调用关闭（推荐：省时约一半，质量基本无损）。
+        """
+        if self._is_kimi_code:
+            return False  # kimi 渠道走 _openai_call 既有分支
+        mode = os.environ.get("STORY_ENGINE_LLM_THINKING", "on").lower()
+        if mode == "off":
+            return True
+        if mode == "creative":
+            return not any(purpose.startswith(p)
+                           for p in self._THINKING_KEEP_PREFIXES)
+        return False
+
     async def _openai_call(self, prompt: str, temperature: float,
-                           max_tokens: int, force_thinking: bool = False) -> LLMResponse:
+                           max_tokens: int, force_thinking: bool = False,
+                           purpose: str = "generate") -> LLMResponse:
         t0 = time.perf_counter()
         headers = {"Authorization": f"Bearer {self.api_key}"}
         if self.user_agent:
@@ -182,6 +211,8 @@ class LLMPool:
                 body["thinking"] = {"type": "disabled"}
         else:
             body["temperature"] = temperature
+            if self._thinking_disabled(purpose):
+                body["thinking"] = {"type": "disabled"}
 
         async with httpx.AsyncClient(timeout=300) as client:
             r = await client.post(
