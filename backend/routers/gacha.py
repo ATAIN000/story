@@ -108,6 +108,7 @@ class GachaConfirmReq(BaseModel):
     cast: list | None = None
     macro_plan: dict | None = None
     total_episodes: int | None = None
+    material: str | None = None
 
 
 # 集数约定合法区间（短剧 1 集 ~ 长篇 500 集）
@@ -336,6 +337,12 @@ def gacha_session_confirm(sid: str, req: GachaConfirmReq):
             target_dir,
             macro={"template": "", "total_episodes": req.total_episodes,
                    "has_plan": False})
+    # P25: 参考素材落盘 material.md（请求体优先，其次宏观生成时暂存的）
+    material = req.material if isinstance(req.material, str) \
+        and req.material.strip() else session.get("material")
+    if material:
+        (target_dir / "material.md").write_text(
+            material, encoding="utf-8")
     deps.engine.reset()
     deps.engine.discard_plan()
     return {"ok": True, "project": {"name": req.project_name,
@@ -397,10 +404,12 @@ def gacha_session_cross_check(sid: str, req: CrossCheckReq):
 
 # ---------- macro 内部辅助 ----------
 def _build_macro_prompt(bundle, worldview_profile, cast_profile,
-                        template_name, total_episodes, conflict_warnings):
+                        template_name, total_episodes, conflict_warnings,
+                        material=None):
     from story_engine.macro.generator import _build_prompt
     return _build_prompt(bundle, worldview_profile, cast_profile,
-                         template_name, total_episodes, conflict_warnings)
+                         template_name, total_episodes, conflict_warnings,
+                         material_text=material)
 
 
 def _generate_skeleton_macro(bundle, worldview_profile, cast_profile,
@@ -461,6 +470,11 @@ async def macro_stream(ws: WebSocket, sid: str):
     conflict_warnings = req_data.get("conflict_warnings")
     if not isinstance(conflict_warnings, list):
         conflict_warnings = None
+    # P25: 参考素材（如百鬼图鉴），注入宏观 prompt；同时暂存 session 供 confirm 落盘
+    material = req_data.get("material")
+    if not isinstance(material, str) or not material.strip():
+        material = None
+    session["material"] = material
     total_episodes = _coerce_total_episodes(
         req_data.get("total_episodes"),
         getattr(bundle, "target_length", 12))
@@ -479,7 +493,7 @@ async def macro_stream(ws: WebSocket, sid: str):
             return
         prompt = _build_macro_prompt(
             bundle, wv_profile, cast_profile, template, total_episodes,
-            conflict_warnings)
+            conflict_warnings, material=material)
         from story_engine.macro.generator import macro_max_tokens
         full_text = ""
         try:

@@ -140,12 +140,15 @@ async def regenerate_component(
 
 def _build_prompt(bundle, worldview_profile, cast_profile,
                   template_name: str, total_episodes: int,
-                  conflict_warnings: list[dict] | None = None) -> str:
+                  conflict_warnings: list[dict] | None = None,
+                  material_text: str | None = None) -> str:
     """构建 LLM 提示词：题材 + 世界观 + 人物 + 模板 → 要求输出完整宏观计划 YAML
 
     P18.2: conflict_warnings（③.5 冲突标记）注入为约束段。
     P18 修复: 注入题材全量上下文（prompt 段/tracks/cast/禁忌）+ 世界观叙事引导 +
               人物完整信息（名/原型/性格/弧光/人设标签），让 LLM 产出不再模糊。
+    P25: material_text（参考素材，如百鬼图鉴）注入——改编/资料驱动型故事用，
+              素材中的角色/设定应按集编排进 episode_outlines。
     """
     genre_params = getattr(bundle, "genre_params", {}) or {}
     genre_name = getattr(bundle, "genre", "unknown")
@@ -209,6 +212,16 @@ def _build_prompt(bundle, worldview_profile, cast_profile,
                    "acts（每幕含 id/name/episode_range/function/beats，"
                    "beats 的 name 和 desc 必须具体化到本故事的人物和处境）")
 
+    # P25: 参考素材段（改编/资料驱动；截断防超长）
+    material_block = ""
+    if material_text and material_text.strip():
+        material_block = (
+            "【参考素材（必须按集编排进分集梗概，角色/怪物名不得改）】\n"
+            + material_text.strip()[:12000] + "\n\n")
+    material_req = (
+        "- 参考素材中的角色/怪物/设定须全部编排进 episode_outlines"
+        "（每集 1 个或合理合并），名称保持原文，不得自创替代\n" if material_block else "")
+
     # P18.2: 冲突标记约束段
     conflict_block = ""
     if conflict_warnings:
@@ -245,7 +258,7 @@ def _build_prompt(bundle, worldview_profile, cast_profile,
 【人物阵容（用户自定义的原型与弧光）】
 {cast_text or '（未提供自定义人物，请基于题材阵容推导主角和配角，赋予完整的弧光定义）'}
 
-{beat_section}
+{material_block}{beat_section}
 {conflict_block}
 【输出要求】
 输出完整 YAML，包含以下六个顶层键（均不可省略）：
@@ -273,7 +286,7 @@ def _build_prompt(bundle, worldview_profile, cast_profile,
 - 每条梗概、beat 描述、弧光里程碑都必须提到具体人物名和具体事件
 - logline 必须包含人物名+处境+核心抉择，不能是「一个X在Y世界中Z」的模板句
 - foreshadow 的 form 字段必须描述具体的伏笔呈现方式（如「一封未拆的信」而非「线索」
-{f"- 【人物名硬约束】所有人物名必须使用以下列表：[{cast_name_list}]，不得自创名字、不得使用泛称" if cast_name_list else ""}
+{material_req}{f"- 【人物名硬约束】所有人物名必须使用以下列表：[{cast_name_list}]，不得自创名字、不得使用泛称" if cast_name_list else ""}
 
 只输出 YAML，不要解释、前言后语或 markdown 代码围栏。
 """

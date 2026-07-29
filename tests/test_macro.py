@@ -589,3 +589,52 @@ def test_macro_max_tokens_scales_with_episodes():
     assert macro_max_tokens(12) == 16384          # 小集数保底 16k
     assert macro_max_tokens(90) == 4096 + 36000   # 90 集 ≈ 40K（实测 380+/集）
     assert macro_max_tokens(500) == 131072        # 封顶 128K（GLM-5.2 输出上限）
+
+
+# ============================================================
+# P25: 参考素材注入（material_text）
+# ============================================================
+
+def test_build_prompt_with_material():
+    """宏观 prompt 注入参考素材段 + 编排要求；无素材时整段缺席。"""
+    from story_engine.macro.generator import _build_prompt
+    from story_engine.types import GenreBundle
+    bundle = GenreBundle(genre="mystery", culture="test",
+                         genre_params={"title": "测试"}, culture_params={})
+    p0 = _build_prompt(bundle, None, None, "save_the_cat_15", 12, None)
+    assert "参考素材" not in p0
+    p1 = _build_prompt(bundle, None, None, "save_the_cat_15", 100, None,
+                       material_text="1缢鬼\n上吊而死的鬼，吐血红长舌头。")
+    assert "【参考素材（必须按集编排进分集梗概，角色/怪物名不得改）】" in p1
+    assert "缢鬼" in p1
+    assert "须全部编排进 episode_outlines" in p1
+
+
+def test_gacha_confirm_persists_material():
+    """confirm 携带 material → 落盘 material.md 纯文本。"""
+    import tempfile
+    from pathlib import Path
+    from fastapi.testclient import TestClient
+    backend = import_backend_main()
+    orig_dir = Path(backend.deps.engine.project_dir)
+    orig_genre = backend.deps.engine.genre.name
+    orig_culture = backend.deps.engine.culture.name
+    saved_root = backend.deps.PROJECTS_ROOT
+    c = TestClient(backend.app)
+    with tempfile.TemporaryDirectory() as root:
+        backend.deps.PROJECTS_ROOT = Path(root)
+        try:
+            r = c.post("/api/gacha/begin", json={"genre_name": "mystery"})
+            sid = r.json()["session_id"]
+            r1 = c.post(f"/api/gacha/{sid}/confirm", json={
+                "project_name": "mat-test", "total_episodes": 100,
+                "material": "1缢鬼\n上吊而死的鬼。"})
+            assert r1.status_code == 200, r1.text
+            md = Path(root) / "mat-test" / "material.md"
+            assert md.exists()
+            assert "缢鬼" in md.read_text(encoding="utf-8")
+        finally:
+            backend.deps.PROJECTS_ROOT = saved_root
+            backend.helpers._switch_to(orig_dir)
+            c.post("/api/project/init",
+                   json={"genre": orig_genre, "culture": orig_culture})

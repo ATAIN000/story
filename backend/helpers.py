@@ -154,7 +154,10 @@ def _build_project_zip(project_dir: Path, name: str, work_dir: Path) -> Path:
     zip_path = Path(work_dir) / f"{name}-story.zip"
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
         zf.write(backup_db, "story.db")
-        for extra in ("chapters.json", "project.json"):
+        # 设定资产随包走：规划图/世界观/人物/参考素材（此前只带 chapters+
+        # project.json，导入方看不到宏观规划图）
+        for extra in ("chapters.json", "project.json", "macro_plan.json",
+                      "worldview.json", "cast.json", "material.md"):
             p = Path(project_dir) / extra
             if p.is_file():
                 zf.write(p, extra)
@@ -166,7 +169,8 @@ def _build_project_zip(project_dir: Path, name: str, work_dir: Path) -> Path:
                              f"{f.relative_to(training).as_posix()}")
         zf.writestr("README.txt",
                     f"解压到 data/projects/{name}/ 即可；story.db 为 sqlite "
-                    "backup 一致快照（无需 wal/shm）。")
+                    "backup 一致快照（无需 wal/shm）；macro_plan/worldview/"
+                    "cast/material 为设定资产（存在才附带）。")
     return zip_path
 
 

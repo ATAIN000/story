@@ -246,3 +246,29 @@ def test_actor_ticks_target_zero_runs_full(monkeypatch, tmp_path):
     n_actors = len({p.split(":", 1)[1] for p in proposes})
     assert len(proposes) == 3 * n_actors, \
         f"应跑满 3 轮：propose={len(proposes)}（{n_actors} 角色）"
+
+
+# ---------- 用例 ⑤：markdown 标题行归一化（P25 修复） ----------
+def test_markdown_title_line_normalized(monkeypatch, tmp_path):
+    """LLM 产「# 标题：X」→ 归一化为约定格式：record.title 取到 X，
+    正文不残留 markdown 标题行（此前被当成无标题补兜底，md 行残留+真标题丢失）。"""
+    monkeypatch.setenv("STORY_ENGINE_SCRIPTED_DEMO", "0")
+    monkeypatch.setenv("STORY_ENGINE_IR_FIRST", "1")
+    monkeypatch.setenv("STORY_ENGINE_EVAL_ENABLED", "0")
+    monkeypatch.setenv("STORY_ENGINE_ACTOR_MAX_TICKS", "1")
+
+    class MdTitleFakeLLM(ScriptedFakeLLM):
+        @staticmethod
+        def _respond(purpose: str) -> str:
+            if purpose == "realize_chapter":
+                return "# 标题：矿底寒霜\n\n" + _ir_chapter_body()
+            return ScriptedFakeLLM._respond(purpose)
+
+    fake = MdTitleFakeLLM()
+    eng = StoryEngine(str(tmp_path), llm_client=fake)
+    rec = run(_gen_chapters(eng, 1))[0]
+    eng.kernel.close()
+
+    assert rec["title"] == "矿底寒霜", f"标题未取到：{rec['title']}"
+    assert not rec["final"]["text"].startswith("#")
+    assert "标题：腹中" not in rec["final"]["text"]

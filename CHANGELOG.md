@@ -8,6 +8,19 @@
 （pyproject 动态读取；后端 `/api/config` 与「关于」页透传；发布打 `vX.Y.Z` git tag，
 Windows 包文件名带版本号）。
 
+## [0.3.1] - 2026-07-27
+
+### 新增
+- **参考素材注入**（宏观规划步骤）：粘贴或导入 .txt/.md 素材文件，AI 将素材中的
+  角色/设定按集编排进分集梗概，confirm 落盘 `material.md`（改编/资料驱动型故事，
+  如百鬼图鉴 100 集实战：93/98 只鬼正确入编）。
+
+### 修复
+- 项目导出 zip 补齐设定资产：`macro_plan.json`/`worldview.json`/`cast.json`/
+  `material.md`（此前仅 chapters+project.json，导入方看不到规划图）。
+- markdown 标题行（`# 标题：X`）归一化：不再被误判为无标题导致正文残留
+  markdown 行且真标题丢失。
+
 ## [0.3.0] - 2026-07-27
 
 ### 新增

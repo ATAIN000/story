@@ -491,6 +491,17 @@ function normalizedTotalEpisodes() {
   return n
 }
 
+/* P25：素材文件导入（.txt/.md → textarea） */
+function onMaterialFile(ev) {
+  const f = ev.target.files?.[0]
+  if (!f) return
+  const reader = new FileReader()
+  reader.onload = () => { materialText.value = String(reader.result || '') }
+  reader.onerror = () => toastError('素材文件读取失败')
+  reader.readAsText(f, 'utf-8')
+  ev.target.value = ''   /* 允许重复导入同一文件 */
+}
+
 async function generateMacro() {
   if (macroGenerating.value) return
   if (!sessionId.value) {
@@ -515,6 +526,8 @@ async function generateMacro() {
     if (conflictAccepted.value && crossCheckWarnings.value.length > 0) {
       body.conflict_warnings = crossCheckWarnings.value
     }
+    /* P25: 参考素材注入（可选） */
+    if (materialText.value.trim()) body.material = materialText.value
     /* P20: WebSocket 流式生成（Vite 需 ws:true 代理；关闭/超时必须 settle Promise） */
     macroPlan.value = await new Promise((resolve, reject) => {
       let settled = false
@@ -616,6 +629,7 @@ const macroTemplateLoading = ref(false)
 const selectedTemplate = ref('save_the_cat_15')
 const totalEpisodes = ref(12)         // 集数约定（begin 回传的题材默认值起步）
 const macroPlan = ref(null)           // 生成的 MacroPlan dict
+const materialText = ref('')          // P25 参考素材（可选，注入宏观 prompt 并落盘 material.md）
 const macroGenerating = ref(false)
 const expandedMacroSection = ref('')  // 宏观预览展开的区段（blueprint/acts/episodes...）
 
@@ -910,6 +924,7 @@ async function doConfirm() {
     if (castPayload) extras.cast = castPayload
     if (macroPlan.value) extras.macro_plan = macroPlan.value
     extras.total_episodes = normalizedTotalEpisodes()   /* 集数约定（跳过宏观也落盘） */
+    if (materialText.value.trim()) extras.material = materialText.value   /* P25 素材落盘 */
     const res = await api.gachaSessionConfirm(sessionId.value, name, extras)
     sessionId.value = null   /* confirm 后 session 已被后端清理 */
     startOpen.value = false
@@ -1473,6 +1488,29 @@ async function doConfirm() {
                  aria-label="总集数约定（1-500）">
           <span class="wv-macro-eps-hint">幕拍点按总集数自动定位；修改后请重新生成宏观计划</span>
         </div>
+
+        <!-- P25 参考素材（可选）：改编/资料驱动型故事，注入宏观 prompt 并落盘 material.md -->
+        <details class="wv-macro-material">
+          <summary class="wv-macro-material-sum">
+            参考素材（可选）——粘贴或导入文本，AI 会把其中的角色/设定编排进分集梗概
+            <span v-if="materialText.trim()" class="wv-macro-material-n">{{ materialText.length }} 字</span>
+          </summary>
+          <div class="wv-macro-material-body">
+            <textarea v-model="materialText" class="wv-macro-material-ta"
+                      rows="6" :disabled="macroGenerating"
+                      data-testid="macro-material"
+                      placeholder="粘贴素材文本（如百鬼图鉴、原著节选、设定资料）；或点右侧导入 .txt/.md 文件"></textarea>
+            <div class="wv-macro-material-ops">
+              <label class="btn-line wv-macro-material-btn">
+                导入文件
+                <input type="file" accept=".txt,.md" class="wv-macro-file"
+                       data-testid="macro-material-file" @change="onMaterialFile">
+              </label>
+              <button v-if="materialText" class="btn-line" type="button"
+                      :disabled="macroGenerating" @click="materialText = ''">清空</button>
+            </div>
+          </div>
+        </details>
 
         <!-- 生成按钮 -->
         <div class="wv-macro-gen-row">

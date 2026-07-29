@@ -518,3 +518,34 @@ def test_projects_root_env_override():
             capture_output=True, text=True, cwd=root, env=env, timeout=300)
     assert r.returncode == 0, r.stderr[-500:]
     assert "story_custom_projects" in r.stdout
+
+
+def test_export_zip_includes_macro_assets(tmp_path):
+    """导出 zip 必须带规划图/世界观/人物/素材（此前只有 chapters+project.json，
+    导入方看不到规划图）。"""
+    import json
+    import zipfile
+    from backend.helpers import _build_project_zip
+
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    (proj / "chapters.json").write_text("[]", encoding="utf-8")
+    (proj / "project.json").write_text("{}", encoding="utf-8")
+    (proj / "macro_plan.json").write_text(
+        json.dumps({"blueprint": {"total_episodes": 100}}), encoding="utf-8")
+    (proj / "worldview.json").write_text("{}", encoding="utf-8")
+    (proj / "cast.json").write_text("[]", encoding="utf-8")
+    (proj / "material.md").write_text("百鬼图鉴", encoding="utf-8")
+    # story.db：最小 sqlite 库（backup 需要）
+    import sqlite3
+    conn = sqlite3.connect(str(proj / "story.db"))
+    conn.execute("CREATE TABLE t (id INTEGER)")
+    conn.close()
+
+    work = tmp_path / "work"
+    work.mkdir()
+    zip_path = _build_project_zip(proj, "proj", work)
+    names = set(zipfile.ZipFile(zip_path).namelist())
+    for f in ("story.db", "chapters.json", "project.json", "macro_plan.json",
+              "worldview.json", "cast.json", "material.md"):
+        assert f in names, f"导出 zip 缺 {f}"

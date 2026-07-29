@@ -720,6 +720,19 @@ button { font: inherit; cursor: pointer; border: none; background: none; color: 
 }
 .wv-macro-eps-input:focus { outline: 2px solid var(--primary); outline-offset: -1px; border-color: transparent; }
 .wv-macro-eps-hint { font-size: 11px; color: var(--faint); }
+/* P25 参考素材区 */
+.wv-macro-material { border: 1px solid var(--line); border-radius: 8px; background: var(--s1); }
+.wv-macro-material-sum { padding: 10px 14px; font-size: 12px; color: var(--ink2); cursor: pointer; user-select: none; }
+.wv-macro-material-n { margin-left: 8px; color: var(--primary); font-weight: 600; }
+.wv-macro-material-body { padding: 0 14px 12px; display: flex; flex-direction: column; gap: 8px; }
+.wv-macro-material-ta {
+  width: 100%; border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px;
+  font-size: 12px; line-height: 1.6; background: var(--s2); color: var(--ink);
+  resize: vertical; font-family: var(--sans);
+}
+.wv-macro-material-ops { display: flex; gap: 8px; align-items: center; }
+.wv-macro-material-btn { position: relative; overflow: hidden; cursor: pointer; }
+.wv-macro-file { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 .wv-macro-progress { margin-top: 12px; display: flex; align-items: flex-start; gap: 8px; justify-content: center; text-align: left; }
 .wv-macro-prog-text { font-size: 12px; color: var(--text-sec, #888); line-height: 1.6; }
 .wv-macro-prog-hint { font-size: 11px; color: var(--text-sec, #aaa); opacity: 0.7; }

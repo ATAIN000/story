@@ -1107,7 +1107,17 @@ class StoryEngine:
         import re as _re
         first_line = text.lstrip().splitlines()[0] if text.strip() else ""
         if not _re.match(r"^标题[:：]\S", first_line):
-            text = f"标题：第{chapter_no}章\n\n{text}"
+            if first_line.startswith("#"):
+                # markdown 标题归一化：「# 标题：X」/「## X」→「标题：X」
+                # 此前此类格式被当成"无标题"补兜底「标题：第N章」，
+                # 解析期再剥兜底行，导致 markdown 行残留正文 + 真标题丢失
+                stripped = _re.sub(r"^#+\s*", "", first_line)
+                stripped = _re.sub(r"^标题[:：]\s*", "", stripped).strip()
+                lines = text.lstrip().splitlines()
+                text = (f"标题：{stripped or f'第{chapter_no}章'}\n"
+                        + "\n".join(lines[1:]))
+            else:
+                text = f"标题：第{chapter_no}章\n\n{text}"
         elif first_line.startswith("标题:"):
             # P5.12 ④：半角冒号标题归一化为全角——keep 正则接受半角，但 L5
             # title_format（process_gates `^标题：\S+`，全角口径）只认全角，
