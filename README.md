@@ -106,6 +106,28 @@ STORY_ENGINE_LLM_MODEL=kimi-k2.6
 
 注意：**Kimi Code 套餐 key（sk-kimi- 前缀）与 Moonshot 开放平台是独立认证体系**，端点必须带 `/coding/v1`（客户端已自动适配 User-Agent 与 thinking 参数）。写故事推荐 Moonshot 开放平台通用模型（按量计费、无特殊要求）。
 
+### 没有 key？3 分钟申请一个（以 DeepSeek 为例）
+
+DeepSeek 便宜（写 12 章约几毛钱）、OpenAI 兼容、写故事够用，适合新手：
+
+1. 打开 **DeepSeek 开放平台**：https://platform.deepseek.com
+2. 注册并登录（手机号即可）
+3. 左侧菜单 **「API keys」→「创建 API key」** → 起个名字 → 复制生成的 key（`sk-` 开头，**只显示一次，保存好**）
+4. 充一点钱：**「充值」** 最低几元即可（按 token 计费，写故事很省）
+5. 回到 StoryOS：**左侧「设置」→ LLM 接入卡** → 选 **DeepSeek** → 粘贴 key → **测试连接** → 保存
+
+对应配置（DeepSeek 已内置在设置页快捷选项里，也可手动填 `.env`）：
+
+```bash
+STORY_ENGINE_LLM_BASE_URL=https://api.deepseek.com/v1
+STORY_ENGINE_LLM_API_KEY=sk-你刚复制的key
+STORY_ENGINE_LLM_MODEL=deepseek-v4-flash   # 写故事用这个（快、便宜）；要更强质量用 deepseek-v4-pro
+```
+
+> ⚠️ 注意：DeepSeek 旧模型 ID `deepseek-chat` / `deepseek-reasoner` 已于 2026-07 停用，现在必须用显式 V4 模型 ID（`deepseek-v4-flash` 或 `deepseek-v4-pro`）。
+
+> 其他 provider 同理：Moonshot（platform.moonshot.cn）、智谱 GLM（open.bigmodel.cn）、OpenAI（platform.openai.com）——都是「注册 → 创建 key → 填进设置页」。设置页每个 provider 都有快捷选项，选中自动填好端点，你只需粘 key。
+
 ## 本地开发
 
 ```bash

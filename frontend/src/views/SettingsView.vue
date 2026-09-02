@@ -111,7 +111,7 @@ const PROVIDERS = [
   { key: 'moonshot', name: 'Moonshot 开放平台', baseUrl: 'https://api.moonshot.cn/v1', model: 'kimi-k2.6' },
   { key: 'kimicode', name: 'Kimi Code 套餐', baseUrl: 'https://api.kimi.com/coding/v1', model: 'kimi-for-coding' },
   { key: 'glm', name: '智谱 GLM', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-4-flash' },
-  { key: 'deepseek', name: 'DeepSeek', baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-chat' },
+  { key: 'deepseek', name: 'DeepSeek', baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-v4-flash' },
   { key: 'openai', name: 'OpenAI', baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini' },
   { key: 'custom', name: '自定义', baseUrl: '', model: '' },
 ]
