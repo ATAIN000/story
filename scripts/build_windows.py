@@ -38,6 +38,35 @@ README = """StoryOS 故事工作台 · 使用说明
 
 注意：请把整个 StoryOS 文件夹解压到你有写权限的位置
 （桌面/文档/D 盘等），不要直接放在 Program Files 里运行。
+
+
+================================
+没有 LLM key？3 分钟申请一个（以 DeepSeek 为例）
+================================
+
+DeepSeek 便宜（写 12 章约几毛钱）、写故事够用，适合新手：
+
+1. 打开 DeepSeek 开放平台：https://platform.deepseek.com
+2. 注册并登录（手机号即可）
+3. 左侧「API keys」→「创建 API key」→ 起个名字 → 复制生成的 key
+   （sk- 开头，只显示一次，保存好）
+4. 充一点钱：「充值」最低几元即可（按 token 计费，写故事很省）
+5. 回到 StoryOS：左侧「设置」→ LLM 接入卡 → 选 DeepSeek →
+   粘贴 key → 测试连接 → 保存
+
+对应配置（设置页选 DeepSeek 会自动填好，也可手动填 .env）：
+  STORY_ENGINE_LLM_BASE_URL=https://api.deepseek.com/v1
+  STORY_ENGINE_LLM_API_KEY=sk-你刚复制的key
+  STORY_ENGINE_LLM_MODEL=deepseek-v4-flash   # 快、便宜，量产写故事；
+                                              # 要更强质量用 deepseek-v4-pro
+
+注意：DeepSeek 旧模型 deepseek-chat 已于 2026-07 停用，
+必须用显式 V4 模型 ID（deepseek-v4-flash 或 deepseek-v4-pro）。
+
+其他 provider 同理：Moonshot（platform.moonshot.cn）、
+智谱 GLM（open.bigmodel.cn）、OpenAI（platform.openai.com）——
+都是「注册 → 创建 key → 填进设置页」。设置页每个 provider 都有
+快捷选项，选中自动填好端点，你只需粘 key。
 """
 
 
