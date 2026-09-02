@@ -415,6 +415,7 @@ export function toSettingsVM(s) {
     evalEnabled: s.eval_enabled ?? false,
     irFirst: s.ir_first ?? false,
     evalMaxRounds: s.eval_max_rounds ?? 3,
+    fastMode: s.fast_mode ?? true,
     llmMode: s.llm_mode ?? '',
     llmModel: s.llm_model ?? '',
     /* P23：settings_view 新增 llm_configured（api_key 是否已配置，bool）——

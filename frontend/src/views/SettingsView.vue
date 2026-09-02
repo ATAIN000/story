@@ -38,6 +38,7 @@ const vm = computed(() => toSettingsVM(raw.value))
 const evalEnabled = ref(false)
 const irFirst = ref(false)
 const evalMaxRounds = ref(3)
+const fastMode = ref(true)
 const dirty = ref(false)         // 有未保存改动（理论上 POST 即时生效，无保存键）
 
 async function load() {
@@ -49,6 +50,7 @@ async function load() {
     evalEnabled.value = v.evalEnabled
     irFirst.value = v.irFirst
     evalMaxRounds.value = v.evalMaxRounds
+    fastMode.value = v.fastMode
     dirty.value = false
   } catch (e) {
     error.value = e.message
@@ -68,9 +70,10 @@ async function saveToggle(key, val) {
     evalEnabled.value = v.evalEnabled
     irFirst.value = v.irFirst
     evalMaxRounds.value = v.evalMaxRounds
+    fastMode.value = v.fastMode
     dirty.value = false
     const label = { eval_enabled: '自评迭代', ir_first: 'IR-first 优先',
-                    eval_max_rounds: '自评最大轮数' }[key] ?? key
+                    eval_max_rounds: '自评最大轮数', fast_mode: '快速模式' }[key] ?? key
     toast(`${label} 已更新（进程内覆盖，重启失效）`)
   } catch (e) {
     toastError(`设置写入失败：${e.message}`)
@@ -88,6 +91,11 @@ function onToggleIr(e) {
   const v = e.target.checked
   irFirst.value = v
   saveToggle('ir_first', v)
+}
+function onToggleFast(e) {
+  const v = e.target.checked
+  fastMode.value = v
+  saveToggle('fast_mode', v)
 }
 function onMaxRounds(e) {
   let n = parseInt(e.target.value, 10)
@@ -302,6 +310,19 @@ function onFont(e) {
           <div class="gen-hint">
             开关在<b>下一次生成</b>时生效，不会打断当前正在生成的章节。
           </div>
+          <div class="switch-row">
+            <div class="sw-text">
+              <div class="sw-name">快速模式（FAST_MODE）</div>
+              <div class="sw-sub">开启后跳过自评闭环（critic+修正全省，速度快一倍、省 token），只留硬规则校验兜底；关闭走完整自评</div>
+            </div>
+            <label class="switch">
+              <input type="checkbox" :checked="fastMode"
+                     :disabled="loading"
+                     @change="onToggleFast" aria-label="快速模式开关" data-testid="toggle-fast-mode" />
+              <span class="slider"></span>
+            </label>
+          </div>
+
           <div class="switch-row">
             <div class="sw-text">
               <div class="sw-name">自评迭代（EVAL_ENABLED）</div>

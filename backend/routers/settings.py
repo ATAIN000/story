@@ -17,6 +17,7 @@ class SettingsReq(BaseModel):
     eval_enabled: bool | None = None
     ir_first: bool | None = None
     eval_max_rounds: int | None = None
+    fast_mode: bool | None = None
 
 
 class TestLlmReq(BaseModel):
@@ -43,6 +44,7 @@ def settings_post(req: SettingsReq):
         "eval_enabled": req.eval_enabled,
         "ir_first": req.ir_first,
         "eval_max_rounds": req.eval_max_rounds,
+        "fast_mode": req.fast_mode,
     }.items() if v is not None}
     return deps.engine.apply_settings_overrides(patch)
 

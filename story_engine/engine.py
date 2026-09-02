@@ -1345,14 +1345,14 @@ class StoryEngine:
         return os.environ.get("STORY_ENGINE_EVAL_ENABLED", "1") != "0"
 
     def _fast_mode(self) -> bool:
-        """快速模式（前置约束最大化）：STORY_ENGINE_FAST_MODE=1 时跳过自评闭环
-        （critic 议会 + 修正迭代全省），只留硬规则校验兜底（事件层零 LLM +
-        实体漂移 + 字数门）。约束已前置（决策卡+实体表注入），一次到位。
-        默认 0（保持现状自评开）；进程内覆盖 _runtime_overrides 优先。"""
+        """快速模式（前置约束最大化）：跳过自评闭环（critic 议会 + 修正迭代
+        全省），只留硬规则校验兜底（事件层零 LLM + 实体漂移 + 字数门）。
+        约束已前置（决策卡+实体表注入），一次到位。
+        默认开（1）；STORY_ENGINE_FAST_MODE=0 或进程内覆盖可关（走完整自评）。"""
         ov = self._runtime_overrides.get("fast_mode")
         if ov is not None:
             return bool(ov)
-        return os.environ.get("STORY_ENGINE_FAST_MODE", "0") == "1"
+        return os.environ.get("STORY_ENGINE_FAST_MODE", "1") == "1"
 
     def _quality_gate_enabled(self) -> bool:
         """P23.4 质量门禁开关：默认开（生产路径生效）；STORY_ENGINE_QUALITY_GATE=0 关。
@@ -2193,6 +2193,7 @@ class StoryEngine:
             "eval_enabled": self._eval_enabled_gate(),
             "ir_first": self._ir_first_gate(),
             "eval_max_rounds": self._eval_max_rounds(),
+            "fast_mode": self._fast_mode(),
             "llm_mode": "mock" if self.llm.is_mock else "openai",
             "llm_model": self.llm.model,
             "llm_configured": bool(self.llm.api_key),
@@ -2250,6 +2251,8 @@ class StoryEngine:
                 n = None
             if n is not None:
                 self._runtime_overrides["eval_max_rounds"] = max(1, min(5, n))
+        if "fast_mode" in patch:
+            self._runtime_overrides["fast_mode"] = bool(patch["fast_mode"])
         return self.settings_view()
 
     def rollback(self, to_tick: int) -> dict:

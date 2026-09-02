@@ -47,14 +47,15 @@ const LINKS = [
         <div class="ab-card-t">
           <AppIcon name="heart" :size="14" /> 致谢
         </div>
-        <p class="ab-text">感谢 <b>「凡事皆可」短剧团队</b> 在本项目调研、素材与方向上的支持。</p>
+        <p class="ab-text">感谢 <b>「凡事皆可」短剧团队</b> 在本项目调研、素材与方向上的支持。
+          官网 <a href="https://www.atposs.com" target="_blank" rel="noopener">atposs.com</a></p>
         <div class="ab-qr-row">
-          <img v-if="!qrFailed" class="ab-qr" :src="'/group-qr.png'"
-               alt="「凡事皆可」短剧团队交流群二维码" loading="lazy" @error="qrFailed = true" />
-          <div v-else class="ab-qr ab-qr-ph">群二维码<br>放 frontend/public/group-qr.png</div>
+          <img v-if="!qrFailed" class="ab-qr" :src="'/atposs-homepage.svg'"
+               alt="「凡事皆可」官网首页" loading="lazy" @error="qrFailed = true" />
+          <div v-else class="ab-qr ab-qr-ph">官网截图<br>放 frontend/public/atposs-homepage.svg</div>
           <div class="ab-qr-side">
-            <b>后续沟通渠道</b>
-            <p>扫码加入「凡事皆可」短剧团队交流群：<br>问题反馈 · 题材许愿 · 素材共建 · 版本预告</p>
+            <b>凡事皆可 · ATPoss</b>
+            <p>官网 <a href="https://www.atposs.com" target="_blank" rel="noopener">www.atposs.com</a><br>短剧工具 · 素材 · 实操</p>
           </div>
         </div>
         <div class="ab-follow">
