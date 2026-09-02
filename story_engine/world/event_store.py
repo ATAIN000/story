@@ -51,7 +51,15 @@ class EventStore:
         CREATE TABLE IF NOT EXISTS meta (
             key TEXT PRIMARY KEY, value TEXT
         );
+        CREATE TABLE IF NOT EXISTS llm_calls (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            chapter INTEGER, purpose TEXT, model TEXT,
+            prompt TEXT, response TEXT,
+            tokens_in INTEGER, tokens_out INTEGER,
+            latency_ms REAL, timestamp TEXT
+        );
         CREATE INDEX IF NOT EXISTS idx_events_tick ON events(branch_id, world_tick);
+        CREATE INDEX IF NOT EXISTS idx_llm_calls_chapter ON llm_calls(chapter);
         """)
         self._conn.commit()
 
@@ -68,6 +76,35 @@ class EventStore:
     @property
     def timeline(self) -> int:
         return self._timeline
+
+    # ---------- LLM 调用记录（Model-visible-logged：独立于事件流，
+    # 不进 events 表——不污染世界状态 tick/rollback，仅供审计/回放查询） ----------
+    def record_llm_call(self, *, chapter: int | None, purpose: str,
+                        model: str, prompt: str, response: str,
+                        tokens_in: int, tokens_out: int,
+                        latency_ms: float) -> None:
+        """记录一次 LLM 调用的完整上下文（prompt/response 全文落盘）。"""
+        from datetime import datetime
+        with self._lock:
+            self._conn.execute(
+                "INSERT INTO llm_calls (chapter, purpose, model, prompt, response,"
+                " tokens_in, tokens_out, latency_ms, timestamp)"
+                " VALUES (?,?,?,?,?,?,?,?,?)",
+                (chapter, purpose, model, prompt, response, tokens_in,
+                 tokens_out, latency_ms,
+                 datetime.now().isoformat(timespec="seconds")))
+            self._conn.commit()
+
+    def llm_calls_for_chapter(self, chapter: int) -> list[dict]:
+        """读某章的完整 LLM 调用链（按时间序）。"""
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT chapter, purpose, model, prompt, response, tokens_in,"
+                " tokens_out, latency_ms, timestamp FROM llm_calls"
+                " WHERE chapter=? ORDER BY id", (chapter,)).fetchall()
+        return [dict(zip(("chapter", "purpose", "model", "prompt", "response",
+                          "tokens_in", "tokens_out", "latency_ms", "timestamp"),
+                         r)) for r in rows]
 
     # ---------- 写侧（CQRS 写 = append 命令） ----------
     def append(self, event: WorldEvent) -> str:

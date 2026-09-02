@@ -272,6 +272,73 @@ class TestGachaSynth(unittest.TestCase):
                 k.close()
 
 
+class TestSynthCardBegin(unittest.TestCase):
+    """synth 合成卡 begin：合成题材从未注册进 registry（P20 遗留 422 bug），
+    begin 带 synth_card → 现场注册（内存级）再走正常流程。"""
+
+    def _backend(self):
+        from conftest import import_backend_main
+        return import_backend_main()
+
+    @staticmethod
+    def _synth_card(yaml_pack):
+        return {"name": yaml_pack["name"], "source": "synth",
+                "desc": "测试合成", "yaml": yaml_pack}
+
+    def test_begin_with_synth_card_registers_and_creates_session(self):
+        """带完整 yaml 的 synth_card → 200 + session 创建 + registry 可查。"""
+        import tempfile
+        import yaml as _yaml
+        from fastapi.testclient import TestClient
+        backend = self._backend()
+        saved_root = backend.deps.PROJECTS_ROOT
+        c = TestClient(backend.app)
+        with tempfile.TemporaryDirectory() as root:
+            backend.deps.PROJECTS_ROOT = Path(root)
+            pack = _yaml.safe_load(VALID_YAML)
+            card = self._synth_card(pack)
+            try:
+                r = c.post("/api/gacha/begin",
+                           json={"genre_name": "test-synth",
+                                 "synth_card": card})
+                self.assertEqual(r.status_code, 200, r.text)
+                sid = r.json()["session_id"]
+                self.assertTrue(sid)
+                # registry 里已能查到合成题材
+                m = backend.deps.engine.kernel.registry.get_manifest(
+                    "story.genre", "test-synth")
+                self.assertEqual(m.name, "test-synth")
+                # 清理 session（释放临时目录句柄）
+                c.post(f"/api/gacha/{sid}/cancel")
+            finally:
+                backend.deps.PROJECTS_ROOT = saved_root
+
+    def test_begin_synth_card_incomplete_yaml_422(self):
+        """synth_card 缺 params → 422 未知题材。"""
+        from fastapi.testclient import TestClient
+        backend = self._backend()
+        c = TestClient(backend.app)
+        r = c.post("/api/gacha/begin",
+                   json={"genre_name": "nonexistent-synth",
+                         "synth_card": {"name": "nonexistent-synth",
+                                        "yaml": {"name": "nonexistent-synth",
+                                                 "extension_point": "story.genre"}}})
+        self.assertEqual(r.status_code, 422)
+        self.assertIn("未知题材", r.json()["detail"])
+
+    def test_begin_synth_card_name_mismatch_422(self):
+        """yaml.name 与 genre_name 不一致 → 422。"""
+        import yaml as _yaml
+        from fastapi.testclient import TestClient
+        backend = self._backend()
+        c = TestClient(backend.app)
+        card = self._synth_card(_yaml.safe_load(VALID_YAML))
+        r = c.post("/api/gacha/begin",
+                   json={"genre_name": "other-name", "synth_card": card})
+        self.assertEqual(r.status_code, 422)
+
+
+
 class TestGachaSessionFlow(unittest.TestCase):
     """P20：session 模式抽卡开局（begin → derive_cast → confirm）。
 

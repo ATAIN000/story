@@ -42,6 +42,7 @@ class ParagraphRewriteReq(BaseModel):
     direction: str = ""
 
 
+
 # ---------- config ----------
 @router.get("/api/config")
 def config():
@@ -305,6 +306,15 @@ def characters():
     return deps.engine.characters_view()
 
 
+# ---------- LLM 调用链查询（Model-visible-logged） ----------
+@router.get("/api/project/llm_trace")
+def llm_trace(chapter: int):
+    """读某章的完整 LLM 调用链（prompt/response 全文 + 耗时 + token），
+    供审计/回放：任何一章的生成上下文可精确重建。"""
+    return {"chapter": chapter,
+            "calls": deps.kernel.store.llm_calls_for_chapter(chapter)}
+
+
 # ---------- paragraph rewrite ----------
 @router.post("/api/paragraph/rewrite")
 async def paragraph_rewrite(req: ParagraphRewriteReq):
@@ -325,6 +335,8 @@ async def paragraph_rewrite(req: ParagraphRewriteReq):
                    f"（本章共 {result.get('para_count', 0)} 段）")
     return {k: result[k]
             for k in ("chapter", "para_index", "original", "rewritten", "note")}
+
+
 
 
 # ---------- meta config ----------

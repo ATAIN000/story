@@ -58,12 +58,17 @@ class IterationController:
     MAX_ROUNDS = 3
 
     def __init__(self, parliament, leader, gates, reader=None,
-                 max_rounds: int | None = None):
+                 max_rounds: int | None = None,
+                 force_full_on_empty: bool = False):
         self.parliament = parliament
         self.leader = leader
         self.gates = gates
         self.reader = reader
         self.max_rounds = int(max_rounds) if max_rounds else self.MAX_ROUNDS
+        # 第一波②：judge 粗筛放过（critiques 空）时，是否调 assess_full 全章
+        # 精审兜底。默认 False（向后兼容，测试零变化）；engine 生产路径按 env
+        # 开启（SCRIPTED_DEMO=0 真实 LLM 时生效，mock/剧本自评不跑）
+        self.force_full_on_empty = force_full_on_empty
         self._last_feedback: list[str] | None = None
         # 与 versions 对齐的 reader 反应平行表（Version 无 reader 字段，types 不改）
         self._reactions: list[ReaderReaction] = []
@@ -103,6 +108,17 @@ class IterationController:
             # critic 议会 + leader 仲裁
             critiques = await self.parliament.assess(
                 chapter, getattr(chapter_spec, "state", None))
+            # 第一波②兜底：judge 粗筛放过（critiques 空）→ 全章精审给二次机会。
+            # 每轮 judge 放过都兜底（不限制次数）：保证 best-of-K 选择基于一致
+            # 评估——若只首轮兜底，后续轮 judge 放过→critiques 空→blocking=False，
+            # _select_best 会误选「未评估」版本，丢弃兜底发现的问题。
+            # force_full_on_empty 关 / parliament 无 assess_full → 零行为变化。
+            # 成本：每轮最多 active 维度数 × 1 LLM；章节真的好（兜底全 PASS）→
+            # blocking=False 当轮即 break，不浪费后续轮。
+            if (not critiques and self.force_full_on_empty
+                    and hasattr(self.parliament, "assess_full")):
+                critiques = await self.parliament.assess_full(
+                    chapter, getattr(chapter_spec, "state", None))
             revision = self.leader.arbitrate(critiques)
 
             # 读者代理（可选）：只对记录版本的轮次 react 一次，

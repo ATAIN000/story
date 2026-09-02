@@ -40,6 +40,7 @@ from .humanize import _filter_ai_isms, _inject_imperfection
 from .ir import (
     INTERLINGUA_EN, INTERLINGUA_ZH, NarrativeIR, TextureParams,
 )
+from .skill_router import select_skills
 
 # 复制自 engine.py P3.8（`_GENERIC_PROMPT` + `_prompt_config()` 合并逻辑，
 # 三行相似胜过过早抽象）：engine 版是 StoryEngine 绑定方法（吃 self.bundle），
@@ -80,8 +81,12 @@ class LanguageRealizer:
     def __init__(self, llm_call=None, *, registry=None):
         # llm_call: async (prompt, *, purpose=, temperature=, max_tokens=) -> 带 .text
         self._llm_call = llm_call
+        # P-skill：保留 registry 引用供 story.skill 包按需注入（无 registry 时
+        # _skill_block 返回 ""，行为与基线逐字一致）
+        self._registry = registry
         # P7.2 L3：registry（kernel.registry）携带 story.language pack 时合并资源；
         # None / 零匹配 pack 时不动类常量，行为与基线逐字一致
+        self._extra_resources: dict = {}   # 语言包非标准键（感官词/隐喻/氛围等）
         if registry is not None:
             self._merge_pack_resources(registry)
 
@@ -118,9 +123,11 @@ class LanguageRealizer:
             for key, value in resources.items():
                 base = self.LANGUAGE_RESOURCES.get(key)
                 if base is None:
-                    warnings.warn(
-                        f"语言 pack {pack.name} 含未知资源键 {key!r}，忽略",
-                        stacklevel=2)
+                    # 语言包的非标准键（感官描写词/情感隐喻/氛围词/对话节奏模板等）
+                    # 此前 warning+忽略，导致题材特色质感素材全部浪费（zh-romance/
+                    # zh-gongan 的感官词/隐喻等从未进 prompt）。现收集进
+                    # _extra_resources，由 _resource_block 注入「题材质感素材」段
+                    self._collect_extra(pack.name, key, value)
                     continue
                 if isinstance(base, dict) and isinstance(value, dict):
                     for sub, words in value.items():
@@ -144,11 +151,29 @@ class LanguageRealizer:
                 merged[key] = words + [w for w in merged[key] if w not in words]
             self.LANGUAGE_RESOURCES = merged
 
+    def _collect_extra(self, pack_name: str, key: str, value) -> None:
+        """收集语言包非标准资源键进 _extra_resources（题材特色质感素材）。
+
+        list 值按包序去重追加；dict 值（如感官词按触觉/视觉/听觉分子键）按子键
+        合并去重。这些素材此前被 warning 丢弃，现经 _resource_block 注入 prompt，
+        让言情/公案等题材的感官细节/情感隐喻/氛围/对话节奏真正进入正文。
+        """
+        if isinstance(value, list):
+            bucket = self._extra_resources.setdefault(key, [])
+            bucket += [w for w in value if w not in bucket]
+        elif isinstance(value, dict):
+            submap = self._extra_resources.setdefault(key, {})
+            for sub, words in value.items():
+                if isinstance(words, list):
+                    sb = submap.setdefault(sub, [])
+                    sb += [w for w in words if w not in sb]
+
     # ---------- 主入口：1 次 LLM 调用 ----------
     async def realize(self, ir: NarrativeIR, sjuzhet=None, bundle=None,
                       *, recap: str | None = None,
                       worldview_text: str | None = None,
-                      macro_text: str | None = None) -> str:
+                      macro_text: str | None = None,
+                      entities_text: str | None = None) -> str:
         """IR → 目标语言文本（共创模式，恰好 1 次 LLM 调用；无设施/异常 → ""）
 
         recap：可选前情提要文本（P5.12 ②，章节连续性上下文）；None 时 prompt
@@ -156,10 +181,13 @@ class LanguageRealizer:
         worldview_text：可选世界观设定文本（P12.3，双通道融合）；None/空 时
         prompt 与现状逐字一致。
         macro_text：可选宏观指导文本（P17.4，beat/arc/foreshadow/tension）；
-        None/空 时 prompt 与现状逐字一致。"""
+        None/空 时 prompt 与现状逐字一致。
+        entities_text：可选已建立设定段（前置约束：实体清单+沿用勿改，
+        源头防漂移）；None/空 时 prompt 与现状逐字一致。"""
         prompt = self._render_prompt(ir, sjuzhet, bundle, recap=recap,
                                      worldview_text=worldview_text,
-                                     macro_text=macro_text)
+                                     macro_text=macro_text,
+                                     entities_text=entities_text)
         if self._llm_call is None:
             return ""
         try:
@@ -258,7 +286,8 @@ class LanguageRealizer:
     def _render_prompt(self, ir: NarrativeIR, sjuzhet=None, bundle=None,
                        *, recap: str | None = None,
                        worldview_text: str | None = None,
-                       macro_text: str | None = None) -> str:
+                       macro_text: str | None = None,
+                       entities_text: str | None = None) -> str:
         pcfg = _plugin_prompt_config(bundle)
         hard_reqs = [pcfg["style"], *(pcfg.get("hard_requirements") or []),
                      *self._craft_rules()]
@@ -278,6 +307,12 @@ class LanguageRealizer:
         macro_txt = (
             f"=== 本章宏观指导 ===\n{macro_text}\n\n"
             if macro_text else "")
+        # 前置约束：已建立设定段（实体清单+沿用勿改，源头防漂移）；
+        # None/空串时整段缺席，prompt 与现状逐字一致
+        entities_txt = f"{entities_text}\n\n" if entities_text else ""
+        # P-skill：按本章题材+原语匹配 story.skill 包，注入叙事技法（匠人写法）；
+        # 无 registry / 无命中 → ""（prompt 与现状逐字一致）
+        skill_txt = self._skill_block(bundle, ir)
         # P23.6 章节衔接约束：只在有前情提要时有意义（recap 缺席则整句缺席，
         # 否则 prompt 凭空引用「前情提要」）
         bridge_txt = (
@@ -288,12 +323,12 @@ class LanguageRealizer:
         return (
             f"你是{pcfg['role']}。背景：{pcfg['setting']}。\n"
             f"人物：{pcfg['characters']}。\n\n"
-            f"{worldview_txt}{macro_txt}{recap_txt}"
+            f"{worldview_txt}{macro_txt}{recap_txt}{entities_txt}"
             f"=== 本章故事骨架（IR 概念级摘要，供你再创作，不是待译原文） ===\n"
             f"{self._ir_summary(ir, sjuzhet)}\n\n"
             f"=== 质感目标（创作指令） ===\n{self._texture_block(ir.texture)}\n\n"
             f"=== 语言资源（按需取用，不必尽用） ===\n{self._resource_block(ir.texture)}\n\n"
-            f"=== 硬要求 ===\n{hard_txt}\n\n"
+            f"{skill_txt}=== 硬要求 ===\n{hard_txt}\n\n"
             "请以骨架为骨、质感为目标，再创作本章正文。\n"
             "首行写：标题：XXXX（XXXX 为 4-8 字的本章标题，概括本章核心事件或意象，"
             "不要用「第N章」这种无信息量标题），空一行后接正文。\n"
@@ -374,7 +409,57 @@ class LanguageRealizer:
         if n_para:
             lines.append(
                 f"对仗模板（可用约 {n_para} 式）：{'；'.join(res['对仗模板'][:n_para])}")
+        # 语言包非标准键（感官词/情感隐喻/氛围词/对话节奏模板等题材质感素材）
+        extra = getattr(self, "_extra_resources", None) or {}
+        if extra:
+            ex_parts = []
+            for k, v in extra.items():
+                if isinstance(v, list) and v:
+                    ex_parts.append(f"{k}：{'、'.join(v[:6])}")
+                elif isinstance(v, dict) and v:
+                    for sub, words in v.items():
+                        if words:
+                            ex_parts.append(
+                                f"{k}·{sub}：{'、'.join(words[:4])}")
+            if ex_parts:
+                lines.append("题材质感素材（按需取用，不必尽用）："
+                             + "；".join(ex_parts))
         return "\n".join(lines)
+
+    def _skill_block(self, bundle, ir) -> str:
+        """P-skill：按本章题材+原语匹配 story.skill 包，注入叙事技法段。
+
+        匹配由 skill_router.select_skills 完成（题材签名 + 8 原语双轴），
+        命中包的 params.prompt_template 按优先级顺序拼接。
+        无 registry / 非中文 / 无命中 / 命中包无可用模板 → 返回 ""（prompt
+        与现状逐字一致，零行为漂移）。skill 模板是中文匠人写法，英文章节
+        暂不注入（避免跨语言污染，en realizer 不进此分支）。
+        """
+        if self.language != "zh":
+            return ""
+        if self._registry is None:
+            return ""
+        names = select_skills(bundle, ir)
+        if not names:
+            return ""
+        # name → pack 映射，保持 select_skills 的优先级顺序取模板
+        packs_by_name = {
+            getattr(p, "name", ""): p for p in self._registry.packs("story.skill")
+        }
+        templates: list[str] = []
+        for n in names:
+            pack = packs_by_name.get(n)
+            if pack is None:
+                continue
+            params = getattr(pack, "params", None) or {}
+            tmpl = params.get("prompt_template")
+            if isinstance(tmpl, str) and tmpl.strip():
+                templates.append(tmpl.strip())
+        if not templates:
+            return ""
+        return ("=== 叙事技法（本章适用，运用这些匠人写法让正文更有网文质感，"
+                "酌情采用、勿生搬硬套、不必每条都用） ===\n\n"
+                + "\n\n".join(templates) + "\n\n")
 
     def _craft_rules(self) -> list[str]:
         """决策5：burstiness / show-not-tell 由渲染指令承担（追加进硬要求）"""
@@ -448,7 +533,8 @@ class EnglishRealizer(LanguageRealizer):
     def _render_prompt(self, ir: NarrativeIR, sjuzhet=None, bundle=None,
                        *, recap: str | None = None,
                        worldview_text: str | None = None,
-                       macro_text: str | None = None) -> str:
+                       macro_text: str | None = None,
+                       entities_text: str | None = None) -> str:
         pcfg = _plugin_prompt_config(bundle)
         hard_reqs = [pcfg["style"], *(pcfg.get("hard_requirements") or []),
                      *self._craft_rules()]
@@ -468,6 +554,9 @@ class EnglishRealizer(LanguageRealizer):
         macro_txt = (
             f"=== Macro Guidance ===\n{macro_text}\n\n"
             if macro_text else "")
+        # Preemptive constraint: established-setting block (entity list +
+        # keep-using); absent when None/empty, prompt byte-identical to before
+        entities_txt = f"{entities_text}\n\n" if entities_text else ""
         # P23.6 chapter-continuity constraint only makes sense with a recap;
         # absent when recap is None (avoids referencing a nonexistent recap)
         bridge_txt = (
@@ -479,7 +568,7 @@ class EnglishRealizer(LanguageRealizer):
         return (
             f"You are {pcfg['role']}. Setting: {pcfg['setting']}.\n"
             f"Characters: {pcfg['characters']}.\n\n"
-            f"{worldview_txt}{macro_txt}{recap_txt}"
+            f"{worldview_txt}{macro_txt}{recap_txt}{entities_txt}"
             f"=== Story skeleton (concept-level IR summary — raw material to "
             f"re-create from, not text to translate) ===\n"
             f"{self._ir_summary(ir, sjuzhet)}\n\n"
@@ -625,7 +714,8 @@ class Narrativizer:
     async def narrate(self, ir: NarrativeIR, sjuzhet=None,
                       *, recap: str | None = None,
                       worldview_text: str | None = None,
-                      macro_text: str | None = None) -> str:
+                      macro_text: str | None = None,
+                      entities_text: str | None = None) -> str:
         """realize（1 次 LLM）→ _filter_ai_isms → （env 门控的）_inject_imperfection
 
         recap：可选前情提要（P5.12 ②，engine IR-first 路径注入最近章节结尾 +
@@ -638,6 +728,7 @@ class Narrativizer:
         realizer = self.select_realizer(self.bundle.language)
         text = await realizer.realize(ir, sjuzhet, self.bundle, recap=recap,
                                       worldview_text=worldview_text,
-                                      macro_text=macro_text)
+                                      macro_text=macro_text,
+                                      entities_text=entities_text)
         text = _filter_ai_isms(text, realizer.language)
         return _inject_imperfection(text, realizer.language)

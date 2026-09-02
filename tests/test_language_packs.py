@@ -150,10 +150,11 @@ def test_no_registry_mismatch_and_unknown_key(tmp_path):
     reg = ExtensionRegistry()
     reg.load_packs(tmp_path / "packs")
 
-    # 未知资源键 → warning + 忽略；en pack 对 zh realizer 不合并（内容=常量）
-    with pytest.warns(UserWarning, match="未知资源键"):
-        zh = ChineseRealizer(registry=reg)
+    # 未知资源键 → 收集进 _extra_resources（题材质感素材段，不再 warning 丢弃）；
+    # en pack 对 zh realizer 不合并（内容=常量）
+    zh = ChineseRealizer(registry=reg)
     assert "生造键" not in zh.LANGUAGE_RESOURCES
+    assert "生造键" in zh._extra_resources   # 新行为：收集进题材质感素材而非丢弃
     assert (zh.LANGUAGE_RESOURCES["四字格"]
             == ChineseRealizer.LANGUAGE_RESOURCES["四字格"])
 

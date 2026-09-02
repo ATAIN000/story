@@ -79,8 +79,17 @@ export const api = {
     return req('/api/gacha/genres' + (qs ? `?${qs}` : ''))
   },
   gachaSynth: () => post('/api/gacha/synth'),
-  gachaBegin: (genreName, culture = null) =>
-    post('/api/gacha/begin', culture ? { genre_name: genreName, culture } : { genre_name: genreName }),
+  /* 剧本反推开局：台词脚本 + 作者补充 → 题材匹配（无需 session，先于 begin）。
+     excludeGenres 供重 ROLL 换方向。422 空脚本 / 502 解析失败（提示重试）。 */
+  analyzeScript: (scriptText, authorNote = '', excludeGenres = []) =>
+    post('/api/gacha/analyze_script',
+         { script_text: scriptText, author_note: authorNote, exclude_genres: excludeGenres }),
+  gachaBegin: (genreName, culture = null, synthCard = null) =>
+    post('/api/gacha/begin', {
+      genre_name: genreName,
+      ...(culture ? { culture } : {}),
+      ...(synthCard ? { synth_card: synthCard } : {}),
+    }),
   gachaSessionDeriveCast: (sid, worldview = {}, language = {}) =>
     post(`/api/gacha/${sid}/derive_cast`, { worldview, language }),
   gachaSessionCrossCheck: (sid, worldview = null, cast = null) =>

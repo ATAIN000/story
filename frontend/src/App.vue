@@ -1,5 +1,5 @@
 <script setup>
-// StoryOS App 骨架 —— nav（9 项）+ topbar + 状态机视图切换（不引 vue-router）。
+// StoryOS App 骨架 —— nav（分组状态机）+ topbar + 状态机视图切换（不引 vue-router）。
 // 布局/样式迁移自 story.html :41-73 / :432-464；视图占位 stub 由 P6.6-P6.10 填充。
 import { ref, computed, onMounted } from 'vue'
 import { api } from './api/api'

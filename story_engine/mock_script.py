@@ -263,6 +263,25 @@ FORESHADOW_SCRIPT = {
 CHAPTER_TITLES = {1: "报案与初审", 2: "暗访赌坊", 3: "夜审与收网"}
 
 
+# 剧本反推 mock 推荐（script_analyze purpose）：固定推荐公案 mystery
+# （与 yupei 演示项目同题材），保证 mock 演示模式全流程可跑
+SCRIPT_ANALYZE_MOCK = {
+    "genre_id": "mystery",
+    "reason": "脚本以质问与辩白对话为主，有案件悬而未决的悬念结构，贴公案悬疑",
+    "culture": "confucian_officialdom",
+    "preset": "hard_reality",
+    "characters": [
+        {"name": "沈砚清", "role": "主角", "traits": "冷静缜密，善察言观色"},
+        {"name": "顾明璋", "role": "配角", "traits": "圆滑世故，暗藏心事"},
+    ],
+    "worldview_hints": {"conflict_type": "真相与谎言的角力", "tone": "沉静克制"},
+}
+
+# 实体抽取 mock（entity_extract purpose）：返回空清单——mock 章节实体由规则
+# 兜底（extract_entities_rule）匹配已知角色名即可，无需 LLM
+ENTITY_EXTRACT_MOCK = {"entities": []}
+
+
 # ============ Mock LLM 响应路由 ============
 
 def respond(purpose: str, prompt: str) -> str:
@@ -276,4 +295,8 @@ def respond(purpose: str, prompt: str) -> str:
         return CORRECTIONS[chapter]["text"]
     if purpose == "extract_corrected_events":
         return json.dumps(CORRECTIONS[chapter]["events"], ensure_ascii=False)
+    if purpose == "script_analyze":
+        return json.dumps(SCRIPT_ANALYZE_MOCK, ensure_ascii=False)
+    if purpose == "entity_extract":
+        return json.dumps(ENTITY_EXTRACT_MOCK, ensure_ascii=False)
     return ""

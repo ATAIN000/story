@@ -44,7 +44,13 @@ class TestProcessGates(unittest.TestCase):
     def test_l5_three_rules(self):
         """L5 三规则各一断言：首行标题 / genre style 字数区间 / 无半截句"""
         gate = ProcessGate(style="800-1200字，文白相间，叙事节奏如评书")
-        body = "包拯端坐开封府，展昭侍立一旁。" * 60   # ~900 字，落在区间内
+        body = "\n\n".join([
+            "包拯端坐开封府，展昭侍立一旁。",
+            "王朝马汉分列两侧，惊堂木一拍。",
+            "堂下那人跪伏，颤声辩白不止。",
+            "证据罗列案前，包拯逐一审视。",
+            "案情逐渐明朗，真相呼之欲出。",
+        ] * 12)   # 多段、句首多变、~960 字（落在区间内，且通过文笔规则）
         ok = asyncio.run(gate.check_l5(chapter(body)))
         self.assertTrue(ok.passed, ok.failures)
 

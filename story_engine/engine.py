@@ -136,6 +136,18 @@ def _make_genesis_factory(bundle: GenreBundle, project_dir: Path | None = None):
     return _factory
 
 
+def _deep_merge(base: dict, override: dict) -> dict:
+    """深合并：override 覆盖 base；两边都是 dict 的键递归合并，否则覆盖。
+    返回新 dict（不改 base）。"""
+    out = dict(base)
+    for k, v in override.items():
+        if k in out and isinstance(out[k], dict) and isinstance(v, dict):
+            out[k] = _deep_merge(out[k], v)
+        else:
+            out[k] = v
+    return out
+
+
 def _load_cast_overrides(project_dir: Path | None) -> list[dict]:
     """P15.2：读项目目录的 cast.json（gacha confirm 落盘的自定义阵容）。
     文件缺失/损坏/非列表 → 空列表（容忍，不崩）。"""
@@ -315,6 +327,10 @@ class StoryEngine:
         # 此前生成 prompt 的 characters 始终用题材默认文案，LLM 看不到项目
         # 实际阵容，只能现编「嫌疑人甲/乙」占位名（人物条目灌水根因之一）
         genre_params = self._merge_cast_prompt(genre_params)
+        # Phase 4（借鉴 DSH 分层 patch）：项目层 patch 最后应用（最优先）——
+        # data/projects/<name>/patches.yaml 的 params 深合并覆盖题材默认，
+        # 供世界观向导产出/项目自定义覆盖题材包（不动全局 registry，不污染他项目）
+        genre_params = self._apply_project_patches(genre_params)
         # 权威 GenreBundle 构建一次：Showrunner 决策卡与 spawn_director 共用
         self.bundle = GenreBundle(
             genre=genre_name, culture=culture_name,
@@ -352,6 +368,20 @@ class StoryEngine:
         # P5.6：本章 IR-first 产出的 narrative_ir 摘要（每章生成前重置；
         # 仅 IR-first 成功时非 None，mock/剧本/回退 → None）
         self._chapter_narrative_ir = None
+        # 正文层设定一致性：实体登记表懒加载缓存（_entity_ledger() 首用时加载）
+        self._entity_ledger_cache = None
+        # 本章 LLM 抽取的实体清单（_check_text_consistency 校验时置值，
+        # 供 commit 后 _register_entities 复用，省一次抽取调用）
+        self._chapter_entities = []
+        # 章节生命周期事件总线（借鉴 DSH 事件驱动）：核心循环各步骤 emit
+        # 类型化事件，一致性校验/skill 注入等以监听器挂载而非硬编码进方法链。
+        from .kernel.chapter_events import ChapterEventBus, VALIDATION_TEXT
+        self._chapter_bus = ChapterEventBus()
+        # 默认监听器：正文层设定一致性校验（行为与原直接调用一致）
+        self._chapter_bus.on(VALIDATION_TEXT, self._on_text_validation)
+        # 默认监听器：字数门（正文层硬校验，独立于自评成败——大唐02 实测
+        # 自评网络退回时字数门没机会跑，失控章节漏拦）
+        self._chapter_bus.on(VALIDATION_TEXT, self._on_word_count)
         # P6.2：两阶段生成 — plan 端点缓存的待批准决策卡（DecisionCard | None）；
         # generate(mode="confirm") 优先消费并清除，rollback/reset 时作废
         self._pending_plan = None
@@ -516,6 +546,34 @@ class StoryEngine:
         params["prompt"] = prompt
         return params
 
+    # ============ Phase 4：项目层 patch（借鉴 DSH 分层 patch） ============
+    def _apply_project_patches(self, genre_params: dict) -> dict:
+        """项目级 patch：读 project_dir/patches.yaml 的 params 键，深合并覆盖
+        题材默认（项目层 > 题材层）。无文件/格式非 dict/读取失败 → 原样返回
+        （零影响）。这是单项目覆盖，不进全局 registry，不污染其他项目。
+
+        patches.yaml 格式：
+          params:
+            beats_per_chapter: 5          # 顶层键覆盖
+            prompt: {style: "..."}        # 嵌套 dict 深合并
+        """
+        patch_file = Path(self.project_dir) / "patches.yaml"
+        if not patch_file.exists():
+            return genre_params
+        try:
+            import yaml
+            patch = yaml.safe_load(patch_file.read_text(encoding="utf-8"))
+            if not isinstance(patch, dict):
+                return genre_params
+            params_override = patch.get("params")
+            if isinstance(params_override, dict):
+                merged = _deep_merge(genre_params, params_override)
+                _llog.info("项目 patch 生效 | 覆盖键={}", list(params_override))
+                return merged
+        except Exception:
+            _llog.warning("项目 patches.yaml 读取失败（已忽略）", exc_info=True)
+        return genre_params
+
     # ============ P22：内嵌 world_rules 消毒（生成期防崩） ============
     def _sanitize_world_rules(self, genre_params: dict) -> dict:
         """对最终 world_rules 列表做加载门禁（内嵌规则此前无校验，超词汇表
@@ -606,6 +664,16 @@ class StoryEngine:
         state = self.kernel.query_world("current_state")
         chapter_no = state.narrative.chapter + 1
         trace_id = f"ch{chapter_no}-{uuid4().hex[:8]}"
+        # Model-visible-logged：本章内所有 LLM 调用记录带 chapter 标记
+        self.kernel.llm.current_chapter = chapter_no
+        try:
+            return await self._generate_chapter_inner(mode, t0, state,
+                                                      chapter_no, trace_id)
+        finally:
+            self.kernel.llm.current_chapter = None
+
+    async def _generate_chapter_inner(self, mode, t0, state, chapter_no,
+                                      trace_id):
         with _llog.contextualize(trace_id=trace_id):
             scripted = self._scripted(chapter_no)
 
@@ -777,7 +845,7 @@ class StoryEngine:
         # 自评链路任何异常 → 退回未迭代结果（自评是增强不是门禁）
         evaluation = None
         self._chapter_narrative_ir = None  # P5.6：本章摘要重置（成功才置值）
-        if not scripted and self._eval_enabled():
+        if not scripted and self._eval_enabled() and not self._fast_mode():
             try:
                 (draft_text, draft_results, violations, correction,
                  final_text, final_events, evaluation) = \
@@ -885,6 +953,8 @@ class StoryEngine:
         chapters = self._read_chapters()
         chapters.append(record)
         self._write_chapters(chapters)
+        # 章节入库后登记实体（正文层设定一致性：供后续章节的漂移校验对照）
+        self._register_entities(chapter_no, final_text)
         _llog.info("章节提交 | 章={} | 事件={} | 时长={}ms | 修正={}",
                    chapter_no, len(committed), record["duration_ms"],
                    "是" if correction else "否")
@@ -912,6 +982,16 @@ class StoryEngine:
         _llog.info("验证结果 | 章={} | 事件={} | 违规={}", chapter_no,
                    len(draft_results), len(violations))
 
+        # Step 3.5: 正文层设定一致性校验（事件驱动：validation/text_layer 事件
+        # 监听器产出 violations 汇入修正回路）。默认监听器是实体漂移+回溯校验；
+        # 新增正文层校验 = 注册新监听器，不动本方法。
+        text_violations_nested = await self._chapter_bus.emit(
+            "validation/text_layer", chapter_no=chapter_no, text=draft_text)
+        for vlist in text_violations_nested:
+            if vlist:
+                violations += vlist
+                _llog.info("正文一致性 | 章={} | 违规={}", chapter_no, len(vlist))
+
         # Step 4: 修正回路（修正通道 — WorldState + 违规报告）
         correction = None
         final_text, final_events = draft_text, draft_events
@@ -926,6 +1006,114 @@ class StoryEngine:
                        correction["recheck_passed"])
         return (draft_text, draft_results, violations, correction,
                 final_text, final_events)
+
+    # ---------- 正文层设定一致性（硬校验，大唐01 实测补漏：事件层七步
+    # 抓不到正文名词漂移——金箍棒碎片→紧箍咒残片、阵名/封号漂移、
+    # 幻觉回溯、称呼混用） ----------
+    def _entity_check_enabled(self) -> bool:
+        """正文一致性校验开关（默认开；STORY_ENGINE_ENTITY_CHECK=0 关闭）。
+        仅 mock（无 key）关闭。剧本/真实混合模式（SCRIPTED_DEMO=1 前 3 章剧本、
+        后续真实 LLM）下，真实生成的章节仍校验——是否剧本章由调用点按
+        _scripted(chapter_no) 判断跳过，不在此恒关。"""
+        if self.llm.is_mock:
+            return False
+        return os.environ.get("STORY_ENGINE_ENTITY_CHECK", "1") != "0"
+
+    def _entity_ledger(self):
+        """实体登记表懒加载（项目级 entities.json）。"""
+        if self._entity_ledger_cache is None:
+            from .narrative.consistency import EntityLedger
+            self._entity_ledger_cache = EntityLedger.load(
+                self.project_dir / "entities.json")
+        return self._entity_ledger_cache
+
+    async def _on_text_validation(self, chapter_no: int, text: str) -> list[dict]:
+        """validation/text_layer 默认监听器：正文层设定一致性校验。
+        剧本章（mock 剧本演示，实体已知）跳过；真实 LLM 生成章校验。"""
+        if self._scripted(chapter_no):
+            return []
+        return await self._check_text_consistency(chapter_no, text)
+
+    def _on_word_count(self, chapter_no: int, text: str) -> list[dict]:
+        """validation/text_layer 字数门监听器：字数对照题材 style 区间
+        （正文层规则校验，零 LLM，不依赖自评成败）。剧本章跳过。
+        违规格式兼容修正回路（{event, check, reason}）。"""
+        if self._scripted(chapter_no):
+            return []
+        try:
+            from .narrative.consistency import check_word_count
+            style = self._prompt_config().get("style", "")
+            return [{"event": "字数门", "check": v["kind"], "reason": v["reason"]}
+                    for v in check_word_count(text, style)]
+        except Exception:
+            return []
+
+    def _entities_prompt_text(self) -> str:
+        """前置约束：实体登记表 → prompt 注入段（生成前告诉 LLM 已建立设定，
+        沿用勿改——漂移从源头不发生）。空表/校验关/mock → 空串（整段缺席，
+        prompt 与无注入时一致）。异常 → 空串（不阻塞生成）。"""
+        if not self._entity_check_enabled():
+            return ""
+        try:
+            from .narrative.consistency import format_entities_for_prompt
+            return format_entities_for_prompt(self._entity_ledger())
+        except Exception:
+            return ""
+
+    async def _check_text_consistency(self, chapter_no: int, text: str) -> list[dict]:
+        """正文层设定一致性校验 → violations（格式兼容修正回路：
+        {event, check, reason}）。LLM 抽取实体（thinking 关）+ 规则校验。
+        抽取/校验异常 → 记 warning 返回 []（不阻塞生成）。本章抽取结果
+        缓存进 _chapter_entities，供 commit 后登记复用（省一次 LLM 调用）。"""
+        if not self._entity_check_enabled() or not text:
+            return []
+        try:
+            from .narrative.consistency import (
+                check_entity_consistency, check_callback_validity,
+                extract_entities_llm, extract_entities_rule)
+            ledger = self._entity_ledger()
+            # LLM 抽取（主路径）；空结果 → 规则兜底（cast 角色名 + 标记名词）
+            extracted = await extract_entities_llm(text, self.llm.call)
+            if not extracted:
+                known = [c.get("name") for c in (self.characters_view() or [])
+                         if c.get("name")]
+                extracted = extract_entities_rule(text, known)
+            self._chapter_entities = extracted  # 供 commit 后登记复用
+            violations = check_entity_consistency(
+                text, ledger, chapter_no, extracted=extracted)
+            prior = [e.get("summary", "")
+                     for e in self.kernel.query_world("all_events")]
+            violations += check_callback_validity(text, prior)
+            return [
+                {"event": "设定一致性", "check": v["kind"], "reason": v["reason"]}
+                for v in violations
+            ]
+        except Exception:
+            _llog.warning("正文一致性校验异常（已跳过）", exc_info=True)
+            return []
+
+    def _register_entities(self, chapter_no: int, text: str) -> None:
+        """commit 后登记实体到项目登记表。优先用本章 _check_text_consistency
+        缓存的抽取结果（省一次 LLM 调用）；无缓存（mock/未校验）则规则兜底。
+        剧本章（mock 剧本演示）跳过；登记异常 → 记 warning 不影响章节。"""
+        if not self._entity_check_enabled() or not text:
+            return
+        if self._scripted(chapter_no):
+            return
+        try:
+            from .narrative.consistency import extract_entities_rule
+            ledger = self._entity_ledger()
+            extracted = self._chapter_entities
+            if not extracted:
+                known = [c.get("name") for c in (self.characters_view() or [])
+                         if c.get("name")]
+                extracted = extract_entities_rule(text, known)
+            for ent in extracted:
+                ledger.register(ent["name"], ent["type"], chapter_no,
+                                aliases=ent.get("aliases"))
+            ledger.save(self.project_dir / "entities.json")
+        except Exception:
+            _llog.warning("实体登记异常（已跳过）", exc_info=True)
 
     # ============ Phase 5：IR-first 文本产出（决策6，env 门控） ============
     def _ir_first_enabled(self) -> bool:
@@ -1084,7 +1272,8 @@ class StoryEngine:
             text = await Narrativizer(self.kernel, self.bundle).narrate(
                 ir, sjuzhet, recap=self._ir_recap(chapter_no),
                 worldview_text=self._worldview_prompt_text(),
-                macro_text=self._card_macro_text(card))
+                macro_text=self._card_macro_text(card),
+                entities_text=self._entities_prompt_text())
             _llog.info("IR-first 产出 | 章={} | beats={} | events={}", chapter_no,
                        len(ir.beats), len(ir.events))
         except Exception as exc:
@@ -1155,6 +1344,16 @@ class StoryEngine:
             return bool(ov)
         return os.environ.get("STORY_ENGINE_EVAL_ENABLED", "1") != "0"
 
+    def _fast_mode(self) -> bool:
+        """快速模式（前置约束最大化）：STORY_ENGINE_FAST_MODE=1 时跳过自评闭环
+        （critic 议会 + 修正迭代全省），只留硬规则校验兜底（事件层零 LLM +
+        实体漂移 + 字数门）。约束已前置（决策卡+实体表注入），一次到位。
+        默认 0（保持现状自评开）；进程内覆盖 _runtime_overrides 优先。"""
+        ov = self._runtime_overrides.get("fast_mode")
+        if ov is not None:
+            return bool(ov)
+        return os.environ.get("STORY_ENGINE_FAST_MODE", "0") == "1"
+
     def _quality_gate_enabled(self) -> bool:
         """P23.4 质量门禁开关：默认开（生产路径生效）；STORY_ENGINE_QUALITY_GATE=0 关。
 
@@ -1179,6 +1378,12 @@ class StoryEngine:
             n = 3
         return max(1, min(5, n))
 
+    def _critic_force_full(self) -> bool:
+        """第一波②：judge 粗筛放过时是否兜底全章精审。默认开（生产质量优先）；
+        STORY_ENGINE_CRITIC_FORCE_FULL=0 关。mock/剧本路径自评不跑（_eval_enabled
+        兜底），此开关仅在真实 LLM 自评迭代中生效。"""
+        return os.environ.get("STORY_ENGINE_CRITIC_FORCE_FULL", "1") != "0"
+
     def _build_eval_controller(self) -> tuple:
         """按需构建 evaluator 组件（仅门控通过时调用，mock/剧本零开销）。
         返回 (controller, reader, scorer)。
@@ -1199,7 +1404,8 @@ class StoryEngine:
             LeaderArbiter(insertions=parliament.leader_insertions,
                           blocking_extra=parliament.leader_blocking),
             gates, reader,
-            max_rounds=self._eval_max_rounds())
+            max_rounds=self._eval_max_rounds(),
+            force_full_on_empty=self._critic_force_full())
         scorer = PresentationScorer(self.bundle.genre_params)
         return controller, reader, scorer
 
@@ -1316,8 +1522,13 @@ class StoryEngine:
         curves = reader.get_reaction_curve() if reader else None
         score = asdict(scorer.score(best.critiques, curves))
         # P23.4 门禁D：critic 低分 → quality_flag 标记（不阻塞，供前端/用户识别）
+        # 修复：overall 是 0-1 加权浮点（PresentationScorer 各维 0-1），原阈值
+        # <60 永远成立（overall ≤ 1.0）导致所有章节都被误标 low_score、失去区分
+        # 意义；改为 <0.6（0-1 量表及格线）。critiques 空时 overall=0.5（未评估
+        # 中性值）仍 <0.6 → 标 low_score，提示「该章未被有效评估」（与第一波②
+        # assess_full 兜底配合：兜底后真有 FAIL 维度才会真正低分）
         overall = score.get("overall", 0) if isinstance(score, dict) else 0
-        quality_flag = "low_score" if isinstance(overall, (int, float)) and overall < 60 else None
+        quality_flag = "low_score" if isinstance(overall, (int, float)) and overall < 0.6 else None
         return {
             "rounds": max(v.round for v in versions) + 1,
             "best_round": best.round,
@@ -1329,6 +1540,40 @@ class StoryEngine:
             "reader_predictions": predictions,
             "quality_flag": quality_flag,
         }
+
+    async def _fallback_title(self, text: str) -> str | None:
+        """第一波③：标题退化为无信息量「第N章」时，用 LLM 从正文拟标题。
+
+        realizer 明确要求 LLM 首行写「标题：XXXX（4-8 字）」，但模型常不服从
+        （实测百鬼当道 CH4/9/10/12 退化为「第N章」占位）。本方法在正则提取到
+        无信息量标题时兜底：1 次 LLM 从正文核心内容拟一个有画面感的标题。
+        mock/异常/产出不合理 → None（调用方保留原默认「第N章」，不阻塞）。
+        """
+        if self.llm.is_mock:
+            return None
+        import re
+        prompt = (
+            "请为下面这章小说正文拟一个章节标题（4-12 个汉字），要求：\n"
+            "- 概括本章核心事件或核心意象，要有画面感和吸引力；\n"
+            "- 禁止用「第N章」「章节N」这类无信息量占位标题；\n"
+            "- 只输出标题本身，不要书名号、引号、序号、冒号前缀或任何解释。\n\n"
+            f"{text[:1600]}")
+        try:
+            resp = await self.llm.call(
+                prompt, purpose="title_fallback", temperature=0.6, max_tokens=80)
+        except Exception:
+            return None
+        raw = (getattr(resp, "text", "") or "").strip().splitlines()
+        cand = raw[0].strip() if raw else ""
+        # 清理常见包装：#/空格 前缀、「标题：」前缀、引号书名号
+        cand = re.sub(r'^[#\s]+', '', cand)
+        cand = re.sub(r'^(标题|章题|chapter|title)\s*[:：]?\s*', '', cand,
+                      flags=re.I)
+        cand = cand.strip(' \t"\'“”‘’「」『』《》（）')
+        # 合理性闸：长度 2-16，且不是「第N章」退化模式
+        if 2 <= len(cand) <= 16 and not re.match(r'^第.{0,3}章', cand):
+            return cand
+        return None
 
     async def _generate_chapter_actor_path(
         self, chapter_no: int, state: WorldState, t0: float, *,
@@ -1425,6 +1670,17 @@ class StoryEngine:
             for r in draft_results for c in r["checks"] if not c["passed"]
         ]
 
+        # 正文层设定一致性校验（与直接路径 Step 3.5 同款，事件驱动——
+        # actor 路径此前无此校验，大唐02 实测漏检漂移/幻觉回溯根因）
+        if draft_text:
+            text_violations_nested = await self._chapter_bus.emit(
+                "validation/text_layer", chapter_no=chapter_no, text=draft_text)
+            for vlist in text_violations_nested:
+                if vlist:
+                    violations += vlist
+                    _llog.info("正文一致性(Actor) | 章={} | 违规={}",
+                               chapter_no, len(vlist))
+
         correction = None
         final_text = draft_text
         if violations and not self.llm.is_mock:
@@ -1450,7 +1706,7 @@ class StoryEngine:
         # P4.5（决策5）：Actor 路径事件已提交，自评迭代只重生成展示文本
         # （沿用上方 text-only 修正先例），critic 评估对象是文本，不重写事件历史
         evaluation = None
-        if self._eval_enabled() and final_text.strip():
+        if self._eval_enabled() and not self._fast_mode() and final_text.strip():
             try:
                 final_text, evaluation = await self._iterate_display_text(
                     chapter_no, final_text, violations, pre_state, card)
@@ -1497,6 +1753,13 @@ class StoryEngine:
             # 去掉已匹配的标题行（保留正文）；兼容 标题:/# /第N章/纯markdown 多格式
             final_text = _re.sub(
                 r"^\s*(?:标题[:：]\s*.+|##?\s+.+|第.+章[^\n]*)\n+", "", final_text, count=1)
+        # 第一波③：标题退化为「第N章」无信息量 → LLM 从正文 fallback 拟标题
+        # （realizer 已要求首行写标题，模型不服从时这里兜底；失败保留默认）
+        if _re.fullmatch(r"第[0-9一二三四五六七八九十百零两]+章", title):
+            fb = await self._fallback_title(final_text)
+            if fb:
+                title = fb
+                _llog.info("标题 fallback 生成 | 章={} | 标题={}", chapter_no, title)
 
         record = {
             "chapter": chapter_no,
@@ -1530,6 +1793,8 @@ class StoryEngine:
         chapters = self._read_chapters()
         chapters.append(record)
         self._write_chapters(chapters)
+        # 章节入库后登记实体（正文层设定一致性；actor 路径同直接路径）
+        self._register_entities(chapter_no, record["final"]["text"])
         _llog.info("章节提交（Actor） | 章={} | 行动={} | 时长={}ms",
                    chapter_no, len(all_actions), record["duration_ms"])
         return record
@@ -1762,27 +2027,48 @@ class StoryEngine:
         两者均为可选参数，缺省调用行为与原样逐字一致。
         """
         v_text = "；".join(f"{v['event']}——{v['reason']}" for v in violations) or "无"
-        fb_txt = ""
-        task_line = "修正这些违规，保持叙事质量与篇幅。规则：\n"
-        if feedback:
-            fb_txt = ("自评反馈（必须逐条处理）：\n"
-                      + "\n".join(f"- {f}" for f in feedback) + "\n\n")
-            task_line = "修正上述违规与自评反馈，保持叙事质量与篇幅。规则：\n"
         # 世界规则违规修正指引：按文化 supernatural_tolerance 动态生成。
         # 旧实现硬编码「超自然只作氛围，破案改走证据链」——这是公案专属规则，
         # 对修仙/玄幻/神话会错误压制超自然元素（那些题材超自然是核心非氛围）。
         wrule = self._world_rule_correction_hint()
-        prompt = (
-            f"【CHAPTER={chapter_no}】\n"
-            f"以下是世界状态（检查基准）：\n{self._world_state_digest(state)}\n\n"
-            f"以下是生成的文本（含违规）：\n{draft_text[:2500]}\n\n"
-            f"检查发现的违规：{v_text}\n\n"
-            f"{fb_txt}"
-            f"{task_line}"
-            "- 认知违规：改为合法获知渠道（调查/证词/物证），或删去该信息\n"
-            "- 物理违规：补上必要的位置转移过程\n"
-            f"- 世界规则违规：{wrule}\n"
-            "只输出修正后的正文（保留首行标题）。")
+        if feedback and not violations:
+            # critic 驱动的叙事修订：无世界状态违规，只有 critic 的文学性 must_fix
+            # （如「角色动机断裂」「情节转折无铺垫」）。原 prompt 框架是「修正违规」，
+            # 规则全是认知/物理/世界规则，对文学反馈会误导模型——导致 round1 修正文
+            # 不对题、_has_improvement 判无提升、best_round 恒为 0（实测 verify12
+            # 第16章：critic 准确发现动机断裂，但迭代未改进）。这里改用叙事修订框架，
+            # 让模型针对反馈做有针对性的文学性修订。
+            prompt = (
+                f"【CHAPTER={chapter_no}】\n"
+                f"以下是已生成的章节正文，请按评审反馈做有针对性的修订：\n"
+                f"{draft_text[:3000]}\n\n"
+                f"评审反馈（逐条针对性修订，未涉及的情节/人物/场景保持原样）：\n"
+                + "\n".join(f"- {f}" for f in feedback) + "\n\n"
+                "修订纪律：\n"
+                "- 只针对反馈指出的问题修订，不得改写未涉及的段落\n"
+                "- 补足动机/连贯/铺垫等缺口时，用具体的行为、心理或对话落地，"
+                "不得空泛说明或新增与本章无关的情节\n"
+                "- 保持原文风格、篇幅、叙事视角与首行标题\n"
+                "- 修订后整体质量不得低于原文\n"
+                "只输出修订后的完整正文（保留首行标题）。")
+        else:
+            fb_txt = ""
+            task_line = "修正这些违规，保持叙事质量与篇幅。规则：\n"
+            if feedback:
+                fb_txt = ("自评反馈（必须逐条处理）：\n"
+                          + "\n".join(f"- {f}" for f in feedback) + "\n\n")
+                task_line = "修正上述违规与自评反馈，保持叙事质量与篇幅。规则：\n"
+            prompt = (
+                f"【CHAPTER={chapter_no}】\n"
+                f"以下是世界状态（检查基准）：\n{self._world_state_digest(state)}\n\n"
+                f"以下是生成的文本（含违规）：\n{draft_text[:2500]}\n\n"
+                f"检查发现的违规：{v_text}\n\n"
+                f"{fb_txt}"
+                f"{task_line}"
+                "- 认知违规：改为合法获知渠道（调查/证词/物证），或删去该信息\n"
+                "- 物理违规：补上必要的位置转移过程\n"
+                f"- 世界规则违规：{wrule}\n"
+                "只输出修正后的正文（保留首行标题）。")
         if self._scripted(chapter_no):
             note = mock_script.CORRECTIONS[chapter_no]["note"]
             return {"text": mock_script.respond("correct_chapter", f"【CHAPTER={chapter_no}】"),
@@ -2496,6 +2782,14 @@ class StoryEngine:
         # P19.3：key_events / foreshadow 覆盖反馈注入 prompt
         for fb in ctx.get("feedback") or []:
             parts.append(f"⚠{fb}")
+        if parts:
+            # 第二波④：防术语漂移——宏观层（episode_outlines/key_events）与章节
+            # 执行层（IR/Actor）独立生成，专有名词易不同步（实测「刀劳鬼」在
+            # macro_plan 出现 5 次但章节 IR 未铺垫，realizer 注入后直接套用）。
+            # 此约束同时作用于 Actor brief 与 Realizer，让两层都不引入未铺垫名词
+            parts.append("纪律：上述指导中的角色名/地名/专有名词，仅当本章骨架或"
+                         "前情已建立时方可使用；前情未铺垫者本章不得首次引入，"
+                         "改用描述性表达或留待后续章节铺垫")
         return "；".join(parts)
 
     def _read_chapters(self) -> list[dict]:

@@ -304,7 +304,9 @@ async function goSkeleton() {
     const genreName = synthCard.value?.genre?.name || selectedGenre.value
     if (!genreName) return
     try {
-      const res = await api.gachaBegin(genreName)
+      /* synth 合成卡带卡提交：后端现场注册（合成题材从未入库，P20 遗留 422 bug） */
+      const res = await api.gachaBegin(genreName, null,
+                                       synthCard.value?.genre ?? null)
       sessionId.value = res.session_id
       if (Number.isInteger(res.target_length) && res.target_length > 0) {
         totalEpisodes.value = res.target_length   /* 题材默认集数作为约定起点 */
@@ -400,6 +402,53 @@ function backToTheme() { stage.value = 'theme' }
 function backToSkeleton() { stage.value = 'skeleton' }
 function backToWizard() { stage.value = 'wizard' }
 
+/* ---- 剧本反推开局（script-driven 入口，theme 的替代起点） ---- */
+const scriptText = ref('')          // 台词脚本原文（后端截前 4000 字）
+const authorNote = ref('')          // 作者补充（可迭代修改再匹配）
+const scriptAnalyzing = ref(false)
+const scriptResult = ref(null)      // analyze_script 响应 {genre, reason, culture, preset, characters, worldview_hints}
+const scriptError = ref('')
+const scriptPrefill = ref(null)     // 确认后暂存 {characters, preset}，进 cast/skeleton 消费
+
+function goScript() { scriptError.value = ''; stage.value = 'script' }
+function backToThemeFromScript() { stage.value = 'theme' }
+
+async function runAnalyze(reroll = false) {
+  if (!scriptText.value.trim()) { scriptError.value = '请先粘贴台词脚本'; return }
+  scriptAnalyzing.value = true
+  scriptError.value = ''
+  try {
+    const exclude = reroll && scriptResult.value ? [scriptResult.value.genre.id] : []
+    scriptResult.value = await api.analyzeScript(scriptText.value, authorNote.value, exclude)
+  } catch (e) {
+    scriptError.value = e.message || 'AI 匹配失败'
+  } finally {
+    scriptAnalyzing.value = false
+  }
+}
+
+async function confirmScriptStart() {
+  const g = scriptResult.value?.genre
+  if (!g) return
+  /* 暂存 AI 人物（cast 页消费）；骨架推荐由 skeleton 页按 recommended_presets 置顶 */
+  scriptPrefill.value = {
+    characters: scriptResult.value.characters || [],
+    preset: scriptResult.value.preset || '',
+  }
+  /* 填入 AI 人物（castCards 非空 → goCast 不再触发 autoDeriveCast） */
+  if (scriptPrefill.value.characters.length > 0) {
+    castCards.value = scriptPrefill.value.characters.map(c => ({
+      name: c.name, role: c.role || '配角',
+      persona: { ...(c.traits ? { traits: c.traits } : {}) },
+    }))
+    if (castCards.value.length > 0) castCards.value[0].role = '主角'
+  }
+  /* 走现有 begin（建 session）→ 骨架页 */
+  selectedGenre.value = g.id
+  synthCard.value = null
+  await goSkeleton()
+}
+
 /* ---- 段 3 → 段 4（人物原型） ---- */
 function goCast() {
   stage.value = 'cast'
@@ -483,6 +532,7 @@ const sortedMacroTemplates = computed(() => {
 const macroElapsed = ref(0)
 let macroTimer = null
 const macroStreamText = ref('')   // P20: WebSocket 流式文本累积
+const macroThinking = ref(false)  // GLM thinking 检出（构思阶段无正文输出，显示提示）
 
 /* 集数约定规范化：非法输入回落 12，区间 1-500（与后端 TOTAL_EPISODES 区间一致） */
 function normalizedTotalEpisodes() {
@@ -511,6 +561,7 @@ async function generateMacro() {
   macroGenerating.value = true
   macroElapsed.value = 0
   macroStreamText.value = ''
+  macroThinking.value = false
   macroTimer = setInterval(() => { macroElapsed.value += 1 }, 1000)
   try {
     const wvPayload = Object.keys(wvProfile.value).length > 0
@@ -553,7 +604,11 @@ async function generateMacro() {
       ws.onmessage = (ev) => {
         try {
           const msg = JSON.parse(ev.data)
-          if (msg.type === 'delta') {
+          if (msg.type === 'thinking') {
+            /* GLM thinking 检出：构思阶段（无正文输出）→ 显示「深度构思中」提示 */
+            macroThinking.value = true
+          } else if (msg.type === 'delta') {
+            macroThinking.value = false      /* 正文开始输出，构思结束 */
             macroStreamText.value += msg.text
           } else if (msg.type === 'complete') {
             macroStreamText.value = ''
@@ -593,6 +648,7 @@ async function generateMacro() {
     clearInterval(macroTimer)
     macroTimer = null
     macroGenerating.value = false
+    macroThinking.value = false
   }
 }
 
@@ -983,12 +1039,29 @@ async function doConfirm() {
 
     <!-- ===== 段 1：题材选择（P22 搜索/筛选/分页浏览） ===== -->
     <template v-if="stage === 'theme'">
+      <!-- 剧本反推入口：有台词脚本时让 AI 反推题材（替代手动选题） -->
+      <div class="script-entry" data-testid="gacha-script-entry" role="button" tabindex="0"
+           @click="goScript" @keydown.enter="goScript">
+        <AppIcon name="feather" :size="15" />
+        <div class="script-entry-text">
+          <b>从剧本反推开局</b>
+          <span>已有台词脚本？粘贴进来，AI 帮你匹配题材、推导人物</span>
+        </div>
+        <span class="script-entry-arrow">→</span>
+      </div>
+
       <!-- synth 选中态展示 -->
       <div v-if="synthCard" class="gacha-synth-picked" role="status">
         <span class="gacha-src synth">AI 合成</span>
         <b>{{ dn(synthCard.genre.name) || synthCard.genre.name }}</b>
         <span class="gacha-desc">{{ synthCard.genre.desc || '—' }}</span>
-        <button class="btn-line btn-line-xs" aria-label="取消 AI 合成，回到题材列表" @click="synthCard = null">重新选择</button>
+        <div class="synth-picked-actions">
+          <button class="btn-main btn-sm" data-testid="synth-go-skeleton"
+                  aria-label="用此 AI 合成题材开工，进入骨架选择"
+                  @click="goSkeleton">用此题材开工 →</button>
+          <button class="btn-text" aria-label="取消 AI 合成，回到题材列表"
+                  @click="synthCard = null">重新选择</button>
+        </div>
       </div>
 
       <template v-else>
@@ -1114,6 +1187,69 @@ async function doConfirm() {
           下一步：选择骨架
         </button>
       </footer>
+    </template>
+
+    <!-- ===== 剧本反推（script-driven 入口，theme 的替代起点） ===== -->
+    <template v-else-if="stage === 'script'">
+      <div class="script-page">
+        <p class="script-tip">粘贴一段台词脚本（对话为主即可，仅前 4000 字参与分析），
+          可附一句作者补充（调性/偏好/雷点）。AI 从 315 题材库匹配并推导人物。</p>
+        <textarea v-model="scriptText" class="script-input" rows="10"
+                  data-testid="script-input"
+                  placeholder="例：&#10;甲：大人，小民冤枉！&#10;乙：堂下何人？所告何事？&#10;甲：……"
+                  aria-label="粘贴台词脚本"></textarea>
+        <input v-model="authorNote" class="script-note" type="text"
+               data-testid="script-note"
+               placeholder="作者补充（可选）：调性 / 偏好 / 雷点，如「要悬疑感，不要狗血」"
+               aria-label="作者补充说明">
+        <div class="script-actions">
+          <button class="btn-main" data-testid="script-analyze"
+                  :disabled="scriptAnalyzing" @click="runAnalyze(false)">
+            {{ scriptResult ? '重新匹配' : 'AI 匹配' }}
+          </button>
+          <button class="btn-line" @click="backToThemeFromScript">返回题材列表</button>
+        </div>
+        <div v-if="scriptAnalyzing" class="gacha-status" role="status">
+          <span class="gc-spin" aria-hidden="true"></span>AI 正在分析脚本…
+        </div>
+        <div v-if="scriptError" class="script-error" role="alert">{{ scriptError }}</div>
+
+        <!-- 匹配预览卡 -->
+        <div v-if="scriptResult" class="script-result" data-testid="script-result">
+          <div class="sr-genre">
+            <span class="gacha-src">匹配题材</span>
+            <b>{{ scriptResult.genre.title }}</b>
+            <span class="sr-family">{{ scriptResult.genre.family_title }}</span>
+            <span v-for="t in scriptResult.genre.tags" :key="t" class="tag">{{ t }}</span>
+          </div>
+          <p v-if="scriptResult.genre.vibe" class="sr-vibe">{{ scriptResult.genre.vibe }}</p>
+          <p v-if="scriptResult.reason" class="sr-reason">匹配理由：{{ scriptResult.reason }}</p>
+          <div class="sr-meta">
+            <span v-if="scriptResult.culture">文化：{{ scriptResult.culture }}</span>
+            <span v-if="scriptResult.preset">骨架：{{ scriptResult.preset }}</span>
+          </div>
+          <div v-if="scriptResult.characters.length" class="sr-chars">
+            <div v-for="(c, i) in scriptResult.characters" :key="i" class="sr-char">
+              <b>{{ c.name }}</b>
+              <span class="sr-role">{{ c.role }}</span>
+              <span v-if="c.traits" class="sr-traits">{{ c.traits }}</span>
+            </div>
+          </div>
+          <div v-if="scriptResult.worldview_hints.conflict_type || scriptResult.worldview_hints.tone"
+               class="sr-hints">
+            <span v-if="scriptResult.worldview_hints.conflict_type">冲突：{{ scriptResult.worldview_hints.conflict_type }}</span>
+            <span v-if="scriptResult.worldview_hints.tone">调性：{{ scriptResult.worldview_hints.tone }}</span>
+          </div>
+          <div class="script-actions">
+            <button class="btn-main" data-testid="script-confirm"
+                    @click="confirmScriptStart">确认开工（进入骨架选择）</button>
+            <button class="btn-line" data-testid="script-reroll"
+                    :disabled="scriptAnalyzing"
+                    @click="runAnalyze(true)">重 ROLL（换一个题材）</button>
+          </div>
+          <p class="sr-note">确认后仍可修改作者补充再匹配；人物可在人物原型页继续调整。</p>
+        </div>
+      </div>
     </template>
 
     <!-- ===== 段 2：骨架选择 ===== -->
@@ -1523,7 +1659,8 @@ async function doConfirm() {
             <span class="gc-spin" aria-hidden="true"></span>
             <span class="wv-macro-prog-text">
               已等待 {{ macroElapsed }} 秒
-              <br><span class="wv-macro-prog-hint">LLM 正在生成中，下方可实时看到输出</span>
+              <br><span v-if="macroThinking" class="wv-macro-prog-thinking">AI 正在深度构思（thinking 模式，通常 2-5 分钟后开始输出正文，属正常现象）</span>
+              <br><span v-if="!macroThinking" class="wv-macro-prog-hint">LLM 正在生成中，下方可实时看到输出</span>
             </span>
           </div>
         </div>
@@ -1708,4 +1845,54 @@ async function doConfirm() {
 .gg-skel-hint { margin: 10px 0 14px; padding: 9px 14px; border: 1px solid var(--line2);
   border-left: 3px solid var(--accent); border-radius: 8px; background: var(--s2);
   font-size: 12px; color: var(--ink2); display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+/* ===== 剧本反推开局 ===== */
+.script-entry { display: flex; align-items: center; gap: 12px; margin: 0 0 14px;
+  padding: 12px 16px; border: 1px dashed var(--accent); border-radius: 10px;
+  background: var(--s1); cursor: pointer; transition: background .15s; }
+.script-entry:hover { background: var(--s2); }
+.script-entry-text { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.script-entry-text b { font-size: 13.5px; color: var(--ink); }
+.script-entry-text span { font-size: 12px; color: var(--faint); }
+.script-entry-arrow { color: var(--accent); font-size: 16px; }
+.script-page { max-width: 760px; margin: 0 auto; padding: 8px 0 20px; }
+.script-tip { font-size: 12.5px; color: var(--ink2); line-height: 1.7; margin: 0 0 12px; }
+.script-input { width: 100%; box-sizing: border-box; padding: 12px 14px;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--s1);
+  color: var(--ink); font-size: 13px; line-height: 1.8; resize: vertical; font-family: inherit; }
+.script-input:focus { outline: none; border-color: var(--accent); }
+.script-note { width: 100%; box-sizing: border-box; margin-top: 10px; padding: 10px 14px;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--s1);
+  color: var(--ink); font-size: 13px; font-family: inherit; }
+.script-note:focus { outline: none; border-color: var(--accent); }
+.script-actions { display: flex; gap: 10px; margin-top: 14px; }
+.script-error { margin-top: 12px; padding: 10px 14px; border: 1px solid var(--danger);
+  border-radius: 8px; color: var(--danger); font-size: 12.5px; background: var(--s1); }
+.script-result { margin-top: 18px; padding: 16px 18px; border: 1px solid var(--line);
+  border-left: 3px solid var(--accent); border-radius: 10px; background: var(--s1); }
+.sr-genre { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.sr-genre b { font-size: 16px; color: var(--ink); }
+.sr-family { font-size: 11.5px; color: var(--faint); }
+.sr-vibe { font-size: 12.5px; color: var(--ink2); margin: 8px 0 0; }
+.sr-reason { font-size: 12.5px; color: var(--ink); margin: 8px 0 0; line-height: 1.7; }
+.sr-meta { display: flex; gap: 14px; margin-top: 10px; font-size: 12px; color: var(--faint); }
+.sr-chars { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+.sr-char { display: flex; align-items: baseline; gap: 10px; padding: 8px 12px;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--s2); }
+.sr-char b { font-size: 13.5px; color: var(--ink); }
+.sr-role { font-size: 11px; color: var(--accent); }
+.sr-traits { font-size: 12px; color: var(--ink2); }
+.sr-hints { display: flex; gap: 14px; margin-top: 12px; font-size: 12px; color: var(--faint); }
+.sr-note { margin-top: 12px; font-size: 11.5px; color: var(--faint); }
+
+/* 宏观生成 thinking 提示（构思阶段无正文输出，区别于普通等待文案） */
+.wv-macro-prog-thinking { color: var(--accent); font-size: 11.5px; }
+
+/* synth 卡选中态操作区：内嵌开工按钮 + 文字式重选（卡片为 column 布局，操作区底行右对齐） */
+.synth-picked-actions { display: flex; align-items: center; justify-content: flex-end;
+  gap: 12px; margin-top: 6px; }
+.btn-sm { padding: 6px 14px; font-size: 12.5px; }
+.btn-text { border: none; background: none; padding: 4px 6px; font-size: 12px;
+  color: var(--faint); text-decoration: underline; cursor: pointer; }
+.btn-text:hover { color: var(--ink); }
 </style>

@@ -73,6 +73,7 @@ _422_FIELD_ZH = {
     "worldview": "世界观", "cast": "人物阵容", "tick": "tick",
     "content": "内容", "text": "文本", "macro_plan": "宏观计划",
     "base_url": "LLM 地址", "api_key": "API key", "model": "模型",
+    "media": "媒介",
 }
 
 
@@ -110,6 +111,18 @@ app.include_router(gacha.router)
 app.include_router(macro.router)
 app.include_router(hitl.router)
 app.include_router(settings.router)
+
+
+# ---- API 兜底（在 SPA catch-all 之前注册）：未匹配的 /api/* 请求返回中文 404。
+# 否则 POST/PUT 到不存在的 API 路径会被只吃 GET 的 SPA 路由拦成 405
+# 「Method Not Allowed」（典型场景：前端 dist 比后端新，旧进程没有新端点）。
+@app.api_route("/api/{full_path:path}",
+               methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
+def api_not_found(full_path: str):
+    from fastapi import HTTPException
+    raise HTTPException(
+        status_code=404,
+        detail=f"接口不存在：/api/{full_path}（后端版本可能过旧，请重启后端服务）")
 
 
 # ---- 静态托管 Vue SPA（必须最后注册：catch-all 路由） ----

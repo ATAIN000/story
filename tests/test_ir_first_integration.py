@@ -43,13 +43,20 @@ PROPOSE_JSON = json.dumps(
 
 def _ir_chapter_body() -> str:
     """Realizer 产出的正文（故意不产标题行——引擎补行是传导1的验证点）；
-    非空白字数落在 genre style「800-1200字」区间内，句末标点收尾"""
-    filler = "夜色深沉，更鼓声自远处传来，府衙内外一片肃然。"
-    lines = ["展昭潜入聚宝赌坊，暗中记下刘伯出入的时辰。"]
-    while len(re.sub(r"\s", "", "\n".join(lines))) < 880:
-        lines.append(filler)
-    lines.append("包拯听罢沉吟片刻，提笔在卷宗上落下一行小字。")
-    return "\n".join(lines)
+    非空白字数落在 genre style「800-1200字」区间内；多段分隔、段首轮换
+    （过 L5 文笔门：wall_of_text 单段≤8句、repetitive_opening 段首不连续重复）"""
+    fillers = [
+        "夜色深沉，更鼓声自远处传来，府衙内外一片肃然。",
+        "展昭按剑前行，目光扫过赌坊内每一张面孔。",
+        "烛光摇曳，卷宗上的字迹在暗影里若隐若现。",
+        "包拯听罢沉吟片刻，提笔在卷宗上落下一行小字。",
+    ]
+    paras = ["展昭潜入聚宝赌坊，暗中记下刘伯出入的时辰。"]
+    i = 0
+    while len(re.sub(r"\s", "", "\n\n".join(paras))) < 880:
+        paras.append(fillers[i % len(fillers)])
+        i += 1
+    return "\n\n".join(paras)
 
 
 class ScriptedFakeLLM:

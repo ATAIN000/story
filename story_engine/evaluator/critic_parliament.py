@@ -52,6 +52,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import re
 from dataclasses import dataclass
 
@@ -151,6 +152,11 @@ class CriticParliament:
             self._llm_call = kernel.llm_call
         else:
             self._llm_call = None
+        # 第三波⑥：critic 可用更强模型评估（蓝图「critic 模型 ≥ generator」）。
+        # 设 STORY_ENGINE_CRITIC_MODEL 时 _call_llm 带 model 覆盖；未设 → None，
+        # 调用签名与现状逐字一致（test fake 不受影响）
+        self._critic_model = os.environ.get(
+            "STORY_ENGINE_CRITIC_MODEL", "").strip() or None
         # P7.3 L4：registry 显式传入优先；否则从 kernel 取（P7.2 同款 getattr
         # 兜底）。零 pack 时 dimension_guide 即模块常量 identity、Leader 规则
         # 为空，行为与基线逐字一致
@@ -258,6 +264,54 @@ class CriticParliament:
         critiques = [c for c in critiques if self._has_valid_evidence(c, chapter)]
         # 共振加权：多 critic 命中同一存疑段 = 高置信（赌注5 发现）
         return self._resonance_weighting(critiques, suspects)
+
+    # ---------- 兜底全章精审（第一波②：judge 放过时的二次机会）----------
+    async def assess_full(self, chapter: str, world_state=None) -> list[Critique]:
+        """跳过 judge 粗筛，对整章直接跑所有 active 维度 critic。
+
+        串联模式下 judge 单次 LLM 调用太易「没问题就放过」（实测 CH4：judge 放过
+        → 7 维 critic 全跳过 → critiques 空 → 迭代立即终止，正文用初版）。
+        本方法给 setting_consistency/plot_coherence/dialogue_authenticity 等维度
+        二次机会：让每维 critic 独立扫全章，不依赖 judge 是否标记。
+
+        成本 = active 维度数 × 1 LLM（与正常 Stage 2 同量级，仅在 assess 返回空
+        时触发）。空章节/无 LLM 设施/全维 PASS → 返回 []（与 assess 同款兜底）。
+        IterationController.force_full_on_empty 开启时由 run() 调用。
+        """
+        chapter = chapter or ""
+        if not chapter.strip():
+            return []
+        results = await asyncio.gather(*(
+            self._critic_full(dim, chapter, world_state)
+            for dim in self.dimensions))
+        critiques = [c for c in results if c is not None]
+        # 同 assess 的防幻觉 quote 过滤（evidence 须能逐字命中章节原文）
+        return [c for c in critiques if self._has_valid_evidence(c, chapter)]
+
+    async def _critic_full(self, dimension: str, chapter: str,
+                           world_state=None) -> Critique | None:
+        """单维 critic 直接审全章（不依赖 judge 粗筛的存疑段）。
+
+        与 _critic 的差异：prompt 把整章作为审查对象（而非存疑段引文），
+        要求 critic 自己定位问题句。解析复用 _parse_critique；失败 → None。
+        """
+        desc, good, bad = self.dimension_guide[dimension]
+        state_block = _state_prompt_block(world_state)
+        prompt = (
+            f"你是小说评审专家，只负责「{dimension}」这一个维度。\n"
+            f"维度说明：{desc}\n{good}\n{bad}\n\n"
+            "请通读下面整章原文，从该维度审查是否存在确实问题：\n"
+            f"{chapter}{state_block}\n\n"
+            "审查完毕，按 YAML 输出恰好这四个字段：\n"
+            "verdict: PASS 或 FAIL（该维度是否有确实问题；没问题就 PASS）\n"
+            "evidence: 逐字引自上述原文的问题句列表（FAIL 必须给出；"
+            "无引用视为无效）\n"
+            "fix_directive: 具体修改指令（FAIL 时给出怎么改）\n"
+            "executable: yes/no/partial（该修改是否在文本生成能力之内）\n"
+            "只输出 YAML，不要任何解释，不要输出数字分数。")
+        text = await self._call_llm(prompt, purpose=f"critic_full_{dimension}",
+                                    max_tokens=_CRITIC_MAX_TOKENS)
+        return self._parse_critique(text, dimension)
 
     # ---------- Stage 1：单 judge 粗筛 ----------
     async def _single_judge_screen(self, chapter: str,
@@ -383,13 +437,18 @@ class CriticParliament:
     # ---------- LLM 设施（callable 注入，P3.7 blending 同款模式） ----------
     async def _call_llm(self, prompt: str, *, purpose: str,
                         max_tokens: int) -> str:
-        """统一 LLM 出口；无设施/异常/空响应 → ""（上层按不可解析处理，不阻塞）"""
+        """统一 LLM 出口；无设施/异常/空响应 → ""（上层按不可解析处理，不阻塞）
+
+        第三波⑥：self._critic_model 设定时带 model 覆盖（critic 用更强模型）；
+        未设定则不传 model，签名与原状一致（test fake 安全）"""
         if self._llm_call is None:
             return ""
         try:
-            resp = await self._llm_call(
-                prompt, purpose=purpose, temperature=_TEMPERATURE,
-                max_tokens=max_tokens)
+            kwargs = dict(purpose=purpose, temperature=_TEMPERATURE,
+                          max_tokens=max_tokens)
+            if self._critic_model:
+                kwargs["model"] = self._critic_model
+            resp = await self._llm_call(prompt, **kwargs)
             return (getattr(resp, "text", "") or "").strip()
         except Exception:
             return ""

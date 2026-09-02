@@ -79,6 +79,10 @@ class Kernel:
             str(self.project_dir / "story.db"),
             initial_state_factory=initial_state_factory,
         )
+        # Model-visible-logged：LLM 调用完成 → 记录进 llm_calls 表
+        # （独立于事件流，不污染世界状态 tick/rollback，仅供审计/回放查询）。
+        # 钩子异常不影响 LLM 调用本身（record 内部容错）。
+        self.llm.on_call = self.store.record_llm_call
         # 16-bank 记忆（与 EventStore 同库，独立表）；懒初始化
         self.memory_banks = None
         self._retrieval_by_agent: dict[str, Any] = {}
@@ -328,10 +332,16 @@ class Kernel:
     async def llm_call(self, prompt: str, *,
                        purpose: str = "generate",
                        temperature: float = 0.7,
-                       max_tokens: int = 16384) -> LLMResponse:
-        """统一 LLM 调用入口，多 provider 路由"""
-        return await self.llm.call(
-            prompt, purpose=purpose, temperature=temperature, max_tokens=max_tokens)
+                       max_tokens: int = 16384,
+                       model: str | None = None) -> LLMResponse:
+        """统一 LLM 调用入口，多 provider 路由；model 非 None 时透传
+        （critic 用更强模型）。不传 model 时签名与原状逐字一致——
+        不接受 model 的 LLM 实现（测试 fake/旧 Provider）不受影响。"""
+        kwargs = dict(purpose=purpose, temperature=temperature,
+                      max_tokens=max_tokens)
+        if model is not None:
+            kwargs["model"] = model
+        return await self.llm.call(prompt, **kwargs)
 
     # =========================================================
     # 内部辅助（非 syscall，但被 StoryEngine 用到）

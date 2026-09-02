@@ -3,6 +3,9 @@
 .env.local
 *.env
 
+# 隔离工作区
+.worktrees/
+
 # Python
 __pycache__/
 *.pyc
@@ -29,6 +32,7 @@ data/projects/yupei/story.db-wal
 data/projects/yupei/story.db-shm
 data/projects/yupei/chapters.json
 data/projects/yupei/project.json
+data/projects/yupei/hitl_requests.json
 data/projects/yupei/training_data/
 # P20: gacha 临时工作区
 data/projects/.tmp_gacha_*/

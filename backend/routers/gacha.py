@@ -36,6 +36,32 @@ def _derive_culture_for_genre(kernel, genre_name: str) -> str:
         return "confucian_officialdom"
 
 
+def _register_synth_card(synth_card: dict | None, genre_name: str) -> bool:
+    """synth 合成卡现场注册到主 registry（内存级，重启消失）。
+
+    卡结构：draw_card_async 返回的 card.genre = {name, source, desc, yaml}，
+    yaml 是完整 genre pack（含 manifest_version/name/extension_point/params）。
+    数据不完整或 name 不匹配 → False（调用方据此 422）。"""
+    if not isinstance(synth_card, dict):
+        return False
+    yaml_pack = synth_card.get("yaml")
+    if not isinstance(yaml_pack, dict):
+        return False
+    if not all(k in yaml_pack for k in ("name", "extension_point", "params")):
+        return False
+    if yaml_pack["name"] != genre_name:
+        return False
+    from story_engine.kernel.registry import PluginManifest
+    try:
+        manifest = PluginManifest.from_dict(yaml_pack)
+        deps.engine.kernel.registry.register(manifest)
+    except Exception:
+        logger.warning("synth 卡注册失败 | genre=%s", genre_name, exc_info=True)
+        return False
+    logger.info("synth 合成题材现场注册 | genre=%s", genre_name)
+    return True
+
+
 def _create_session_engine(genre_name: str, culture: str | None = None):
     """为抽卡向导创建临时工作区 Kernel + StoryEngine。
 
@@ -100,6 +126,10 @@ from pydantic import BaseModel
 class GachaBeginReq(BaseModel):
     genre_name: str
     culture: str | None = None
+    # synth 合成卡（draw_card_async 返回的 card.genre，含完整 yaml）。
+    # 合成题材从未注册进 registry（P20 遗留 bug：synth 卡 + 下一步 → 422），
+    # begin 时带上它 → 现场注册（内存级，重启消失）再走正常流程。
+    synth_card: dict | None = None
 
 
 class GachaConfirmReq(BaseModel):
@@ -122,6 +152,53 @@ def _coerce_total_episodes(value, default: int = 12) -> int:
     except (TypeError, ValueError):
         return default
     return n if TOTAL_EPISODES_MIN <= n <= TOTAL_EPISODES_MAX else default
+
+
+# ---------- 剧本反推开局（先于 begin，无需 session） ----------
+class ScriptAnalyzeReq(BaseModel):
+    """台词脚本 + 作者补充 → 题材匹配。exclude_genres 供重 ROLL 换方向。"""
+    script_text: str
+    author_note: str = ""
+    exclude_genres: list[str] = []
+
+
+@router.post("/api/gacha/analyze_script")
+async def analyze_script_endpoint(req: ScriptAnalyzeReq):
+    """剧本反推：LLM 从 315 题材库匹配题材 + 推导人物原型/骨架/文化。
+
+    无需 gacha session（先于 begin）；用主 engine 的 LLM。单次调用，
+    thinking 关（script_analyze 在 _THINKING_NEVER_PREFIXES）。
+    返回：genre（taxon 展开的完整题材卡）+ reason/culture/preset/
+    characters/worldview_hints。解析失败/题材不在库 → 502（前端提示重试）。
+    """
+    from story_engine.meta.genre_taxonomy import taxon_by_id
+    from story_engine.meta.script_analyze import analyze_script
+
+    if not req.script_text or not req.script_text.strip():
+        raise HTTPException(status_code=422, detail="请粘贴台词脚本")
+    parsed = await analyze_script(
+        req.script_text, req.author_note, deps.kernel.llm.call,
+        exclude_genres=req.exclude_genres or None)
+    if parsed is None:
+        raise HTTPException(
+            status_code=502, detail="AI 匹配失败（响应解析异常），请换个说法重试")
+    taxon = taxon_by_id(parsed["genre_id"])
+    if taxon is None:  # analyze 内部已做模糊回退，此处兜底
+        raise HTTPException(status_code=502, detail="AI 推荐的题材不在库，请重试")
+    return {
+        "genre": {
+            "id": taxon.id, "title": taxon.title, "family": taxon.family,
+            "family_title": taxon.family_title, "tier": taxon.tier,
+            "tags": list(taxon.tags), "vibe": taxon.vibe,
+            "recommended_presets": [taxon.primary_preset, *taxon.secondary_presets],
+            "recommended_macro_templates": list(taxon.macro_templates),
+        },
+        "reason": parsed["reason"],
+        "culture": parsed["culture"],
+        "preset": parsed["preset"],
+        "characters": parsed["characters"],
+        "worldview_hints": parsed["worldview_hints"],
+    }
 
 
 # ---------- genre 浏览 ----------
@@ -176,8 +253,10 @@ def gacha_begin(req: GachaBeginReq):
     try:
         deps.engine.kernel.registry.get_manifest("story.genre", genre_name)
     except Exception:
-        raise HTTPException(status_code=422,
-                            detail=f"未知题材：{genre_name}")
+        # 库中无此题材：若是 synth 合成卡（带完整 yaml），现场注册再放行
+        if not _register_synth_card(req.synth_card, genre_name):
+            raise HTTPException(status_code=422,
+                                detail=f"未知题材：{genre_name}")
     sess_engine, sess_kernel, tmp_dir = _create_session_engine(
         genre_name, req.culture)
     sid = uuid4().hex[:12]
@@ -343,6 +422,20 @@ def gacha_session_confirm(sid: str, req: GachaConfirmReq):
     if material:
         (target_dir / "material.md").write_text(
             material, encoding="utf-8")
+    # Phase 4：项目层 patch 模板（用户可在此覆盖题材默认 params；
+    # engine 构建 bundle 时项目层最优先，不动全局题材库）
+    patches_file = target_dir / "patches.yaml"
+    if not patches_file.exists():
+        patches_file.write_text(
+            "# 项目层 patch（覆盖题材默认，engine 构建时最优先应用）\n"
+            "# 用法：在 params 下写要覆盖的键（深合并），例：\n"
+            "# params:\n"
+            "#   beats_per_chapter: 5          # 每章节拍数\n"
+            "#   prompt:\n"
+            "#     style: \"1000-1500字，文白相间\"   # 覆盖题材文风\n"
+            f"# 当前题材: {genre_name} | 文化: {culture}\n"
+            "params: {}\n",
+            encoding="utf-8")
     deps.engine.reset()
     deps.engine.discard_plan()
     return {"ok": True, "project": {"name": req.project_name,
@@ -497,9 +590,16 @@ async def macro_stream(ws: WebSocket, sid: str):
         from story_engine.macro.generator import macro_max_tokens
         full_text = ""
         try:
+            async def _notify_thinking():
+                """GLM thinking 首次检出 → 前端显示「深度构思中」（不再 3-5 分钟黑屏）。"""
+                try:
+                    await ws.send_json({"type": "thinking"})
+                except Exception:
+                    pass
             async for chunk in sess_kernel.llm.call_stream(
                     prompt, purpose="macro_plan", temperature=0.7,
-                    max_tokens=macro_max_tokens(total_episodes)):
+                    max_tokens=macro_max_tokens(total_episodes),
+                    on_thinking=_notify_thinking):
                 full_text += chunk
                 await ws.send_json({"type": "delta", "text": chunk})
         except Exception as e:

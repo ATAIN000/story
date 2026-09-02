@@ -21,6 +21,7 @@ from typing import Any
 from ..showrunner import TODOROV_PHASES
 from ..types import WorldEvent, WorldState
 from ..validator import ConsistencyValidator
+from ..narrative.humanize import AI_ISMS_ZH
 from .types_eval import Gate
 
 # L5：字数区间解析失败时的宽默认（不阻塞正常篇幅）
@@ -141,20 +142,71 @@ class ProcessGate:
                 or re.match(r"^#\s*.+", first_line)
                 or re.match(r"^第.+章", first_line)):
             failures["title_format"] = "首行标题格式不符（要求「标题：XXXX」或 markdown 标题或「第X章」）"
-        # 字数检查：放宽容差（LLM 不精确控制篇幅，且网文章节篇幅差异大）。
-        # 旧实现下限 lo×0.5 / 上限 hi×1.5（1500字题材→[500,2250]），上限偏紧，
-        # 2500+ 章节会被误判违规多烧一轮修正。放宽到 lo×0.4 / hi×2.0
-        # （1500字题材→[600,3000]，覆盖网文常见篇幅）。
+        # 字数检查：收紧容差（大唐01 实测 644/2687 字在旧容差 [600,3000] 下
+        # 全部漏过）。收紧到 lo×0.7 / hi×1.3（1500字题材→[1050,1950]），
+        # 失控章节（过短纯对话交代 / 超标塞多场戏）进修正回路。
         lo, hi = parse_word_range(self.style)
-        margin_lo = max(50, int(lo * 0.4))
-        margin_hi = int(hi * 2.0)
+        margin_lo = max(50, int(lo * 0.3))
+        margin_hi = int(hi * 1.3)
         n_chars = len(re.sub(r"\s", "", stripped))
         if not (lo - margin_lo <= n_chars <= margin_hi):
             failures["word_count"] = (
-                f"字数 {n_chars} 超出容差区间 [{lo - margin_lo}, {margin_hi}]（genre style {lo}-{hi}，容差 lo×0.4/hi×2.0）")
+                f"字数 {n_chars} 超出容差区间 [{lo - margin_lo}, {margin_hi}]（genre style {lo}-{hi}，容差 lo×0.7/hi×1.3）")
         if stripped and stripped[-1] not in SENTENCE_ENDINGS:
             failures["truncated"] = f"结尾无句末标点（疑半截句）：…{stripped[-10:]}"
+        # ⑦ 文笔维度（规则化，无 LLM，在 critic 之前拦确定性硬伤）：
+        # 段落超长 / 句首重复 / AI腔残留。任一命中 → gate FAIL → 驱动下一轮修正
+        for finder in (self._check_wall_of_text,
+                       self._check_repetitive_opening,
+                       self._check_ai_ism_residue):
+            found = finder(stripped)
+            if found is not None:
+                failures[found[0]] = found[1]
         return Gate(layer="L5", passed=not failures, failures=failures)
+
+    # ---------- ⑦ 文笔规则检查（确定性，无 LLM）----------
+    @staticmethod
+    def _paragraphs(text: str) -> list[str]:
+        """按空行切段落（过滤空段）"""
+        return [p.strip() for p in (text or "").split("\n\n") if p.strip()]
+
+    def _check_wall_of_text(self, text: str):
+        """段落超长：任一段落 >8 句或 >600 字。realizer 要求 2-4 句/段、场景
+        转换空行分隔；超长密集块伤可读性，是网文质感杀手。阈值偏宽（>8 句）
+        避免误伤合理的密集场景。返回 (key, reason) 或 None。"""
+        for i, p in enumerate(self._paragraphs(text)):
+            sents = len(re.findall(r"[。！？…」』!?]", p))
+            if sents > 8 or len(p) > 600:
+                return ("wall_of_text",
+                        f"第{i + 1}段过密（{sents}句/{len(p)}字），"
+                        "建议 2-4 句/段、场景转换用空行分隔")
+        return None
+
+    def _check_repetitive_opening(self, text: str):
+        """句首重复：3+ 连续段落以相同 2 字开头（LLM 常见单调 tic，如连续
+        「他…」「她…」）。返回 (key, reason) 或 None。"""
+        paras = [p for p in self._paragraphs(text) if len(p) >= 2]
+        run = 1
+        for i in range(1, len(paras)):
+            if paras[i][:2] == paras[i - 1][:2]:
+                run += 1
+                if run >= 3:
+                    return ("repetitive_opening",
+                            f"连续{run}+段以「{paras[i][:2]}」开头，句首单调重复")
+            else:
+                run = 1
+        return None
+
+    def _check_ai_ism_residue(self, text: str):
+        """AI腔残留安全网：realizer 已 _filter_ai_isms，但若过滤被绕过
+        （IR-first 回退/未走 Narrativizer 路径）会残留。残留 >3 处已知 AI-ism
+        → 标记。阈值偏宽，正常过滤后文本不会触发。"""
+        count = sum(text.count(ism) for ism in AI_ISMS_ZH)
+        if count > 3:
+            return ("ai_ism_residue",
+                    f"残留 {count} 处 AI 腔用词（如「值得注意的是」「映入眼帘」"
+                    "等），建议改为朴素表达")
+        return None
 
 
 def parse_word_range(style: str) -> tuple[int, int]:
