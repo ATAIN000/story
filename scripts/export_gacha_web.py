@@ -205,6 +205,11 @@ def main() -> None:
         "namePools": NAME_POOLS,
         "culturePool": CULTURE_POOL,
     }
+    # 开局码容量护栏：码格式 gi(2位)-wi(1位)-si(1位)-cast(4)-outline(4)，
+    # 下标段上限 36^2=1296 / 36 / 36，超限则页面 decode 会拒绝自己产出的码
+    assert len(data["genres"]) <= 36**2, "题材数超开局码容量（1296）"
+    assert len(data["worldviews"]) <= 36, "世界观数超开局码容量（36）"
+    assert len(data["skeletons"]) <= 36, "骨架数超开局码容量（36）"
     OUT_FILE.parent.mkdir(parents=True, exist_ok=True)
     OUT_FILE.write_text(
         "window.GACHA_DATA = "

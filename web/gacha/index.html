@@ -237,6 +237,8 @@ function buildModel(c) {
 
 // ============ 开局码 ============
 // 格式：题材下标(2位)-世界观下标(1位)-骨架下标(1位)-人物种子(4位)-大纲种子(4位)，如 3k-9-b-k7x2-m9p4
+// 开局码段长：题材2位(≤1295)/世界观1位(≤35)/骨架1位(≤35)/人物种子4位/句式种子4位
+// 容量护栏在 scripts/export_gacha_web.py main() 里有对应断言，两边同步
 const SEG_LENS = [2, 1, 1, 4, 4];
 function encode(c) {
   return [c.gi.toString(36).padStart(2, "0"), c.wi.toString(36), c.si.toString(36), c.cast, c.outline].join("-");
