@@ -334,6 +334,7 @@ function roll() {
   render();
 }
 function copyText(text, btn) {
+  if (!navigator.clipboard) { alert("当前环境不支持自动复制，请手动复制"); return; }
   navigator.clipboard.writeText(text).then(() => {
     const old = btn.textContent; btn.textContent = "已复制 ✓";
     setTimeout(() => btn.textContent = old, 1200);
@@ -401,7 +402,7 @@ function selftest() {
 }
 
 initPage();
-if (location.search.includes("selftest")) selftest();
+if (location.search.includes("selftest") && window.GACHA_DATA) selftest();
 </script>
 </body>
 </html>
