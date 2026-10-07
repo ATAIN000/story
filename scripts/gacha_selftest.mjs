@@ -131,6 +131,25 @@ if (elements.get("actions")?.style?.display !== "flex") fails.push("#actions 未
 if (elements.get("err")?.style?.display === "block") fails.push("#err 被显示（GACHA_DATA 缺失分支）");
 if (elements.get("footer")?.textContent !== "开局结构来自 StoryOS 题材库 · 315 题材 × 10 世界观 × 31 骨架")
   fails.push(`页脚计数未按数据动态生成：${JSON.stringify(elements.get("footer")?.textContent)}`);
+if (!html.includes("凡事皆可 · ALL THINGS POSSIBLE")) fails.push("缺页脚品牌行「凡事皆可 · ALL THINGS POSSIBLE」");
+
+// 暗黑主题断言：设计 token 就位，旧皮肤（橙/米色/衬线字体栈）与 emoji 零残留
+const EMOJI_RE = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u;
+if (EMOJI_RE.test(html)) fails.push("index.html 源码含 emoji 残留");
+for (const legacy of ["#b5501f", "#f7f3ea", "#fffdf8", "serif", "🎲", "🔒", "🔓", "✓"])
+  if (html.includes(legacy)) fails.push(`index.html 含旧皮肤残留「${legacy}」`);
+for (const token of ["--bg: #0b0e13", "--card: #12161d", "--line: #232a35",
+                     "--ink: #e6e9ee", "--ink2: #8b949e",
+                     "#a8e063", "#56ccf2", "#b06ab3", "#ff6a88"])
+  if (!html.includes(token)) fails.push(`index.html 缺设计 token「${token}」`);
+// 图标渲染断言：按钮与 TAB 锁钮真实渲染 <svg>，渲染结果无 emoji
+const renderedHtml = ["rollBtn", "copyCodeBtn", "restoreBtn", "copyMdBtn", "dlMdBtn", "tabs", "panel"]
+  .map(id => elements.get(id)?.innerHTML || "").join("\n");
+if (EMOJI_RE.test(renderedHtml)) fails.push("渲染结果 innerHTML 含 emoji 残留");
+if (!renderedHtml.includes("<svg")) fails.push("渲染结果未渲染任何 <svg 图标");
+for (const btnId of ["rollBtn", "copyCodeBtn", "restoreBtn", "copyMdBtn", "dlMdBtn"])
+  if (!(elements.get(btnId)?.innerHTML || "").includes("<svg")) fails.push(`#${btnId} 缺 SVG 图标`);
+if (!tabsHtml0.includes("<svg")) fails.push("TAB 锁钮未渲染 SVG 图标");
 
 // 数据卫生断言：50 组随机码 × 5 个 tab 的渲染结果中不得有 slug 残留
 // （tags/setting/characters 展示区不出现 [a-z]+[_-][a-z]+ 模式与已知内部代号）
@@ -233,4 +252,5 @@ if (fails.length) {
   process.exit(1);
 }
 console.log("NODE SELFTEST OK：SELFTEST PASS 已输出、document.title 已置、hero/TAB/详情面板已渲染、开局码格式正确、副标题与页脚计数动态生成");
+console.log("THEME OK：暗黑设计 token 就位，旧皮肤（橙/米色/衬线）与 emoji 零残留，按钮与 TAB 锁钮 SVG 图标渲染到位");
 console.log("EXTRAS OK：toMarkdown 结构完整、五面板注释逐字一致、锁定 roll 语义正确、全锁 alert、坏码拒绝（含旧格式与越界下标）、大写码可还原、slug 残留零检出");

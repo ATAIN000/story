@@ -6,52 +6,83 @@
 <title>StoryOS 开局抽卡</title>
 <style>
   :root {
-    --bg: #f7f3ea; --card: #fffdf8; --ink: #2c2620; --ink2: #6b6155;
-    --accent: #b5501f; --line: #e3dccb;
+    --bg: #0b0e13; --card: #12161d; --line: #232a35;
+    --ink: #e6e9ee; --ink2: #8b949e;
+    --grad: linear-gradient(90deg, #a8e063, #56ccf2, #b06ab3, #ff6a88);
+    --grad-v: linear-gradient(180deg, #a8e063, #56ccf2, #b06ab3, #ff6a88);
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scrollbar-color: #2b333f var(--bg); scrollbar-width: thin; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: #2b333f; border-radius: 6px; }
+  ::selection { background: rgba(86, 204, 242, 0.28); color: #fff; }
   body {
     background: var(--bg); color: var(--ink);
-    font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
-    line-height: 1.7; padding: 24px 16px 64px;
+    font-family: system-ui, "PingFang SC", "Microsoft YaHei", "Segoe UI", "Helvetica Neue", Arial;
+    line-height: 1.7; padding: 48px 16px 64px;
   }
   .wrap { max-width: 760px; margin: 0 auto; }
   h1 {
-    font-family: "Noto Serif SC", "Songti SC", "SimSun", serif;
-    font-size: 28px; text-align: center; margin-bottom: 4px;
+    font-size: 24px; font-weight: 600; letter-spacing: 0.2em;
+    text-align: center; color: #fff; margin-bottom: 12px;
   }
-  .sub { text-align: center; color: var(--ink2); font-size: 14px; margin-bottom: 24px; }
+  .brand-line {
+    width: 120px; height: 3px; border-radius: 3px;
+    background: var(--grad); margin: 0 auto 14px;
+  }
+  .sub {
+    text-align: center; color: var(--ink2); font-size: 13px;
+    letter-spacing: 0.05em; margin-bottom: 28px;
+  }
   .roll-btn {
-    display: block; width: 100%; padding: 16px; font-size: 20px; font-weight: bold;
-    color: #fff; background: var(--accent); border: none; border-radius: 12px;
-    cursor: pointer; margin-bottom: 16px;
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    width: 100%; padding: 16px; font-size: 18px; font-weight: 600; letter-spacing: 0.1em;
+    font-family: inherit; color: var(--ink); cursor: pointer; margin-bottom: 16px;
+    border: 1px solid transparent; border-radius: 12px;
+    background: linear-gradient(var(--card), var(--card)) padding-box, var(--grad) border-box;
+    transition: box-shadow 200ms ease;
   }
+  .roll-btn:hover { box-shadow: 0 0 12px rgba(86, 204, 242, 0.25); }
   .roll-btn:active { transform: scale(0.98); }
-  .roll-btn:disabled { background: var(--ink2); cursor: not-allowed; }
+  .roll-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+  .roll-btn svg, .btn svg, .tab-lock svg { display: block; flex-shrink: 0; }
   .code-bar {
-    display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
-    background: var(--card); border: 1px dashed var(--line); border-radius: 10px;
-    padding: 10px 14px; margin-bottom: 20px; font-size: 14px;
+    position: relative; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+    background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+    padding: 10px 14px 10px 18px; margin-bottom: 20px; font-size: 14px; overflow: hidden;
   }
-  .code-bar .code { font-family: monospace; font-weight: bold; color: var(--accent); }
+  .code-bar::before {
+    content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+    background: var(--grad-v);
+  }
+  .code-bar .code {
+    font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-weight: 700;
+    background: var(--grad); background-clip: text; -webkit-background-clip: text; color: transparent;
+  }
   .code-bar input {
     flex: 1; min-width: 140px; padding: 6px 10px; border: 1px solid var(--line);
-    border-radius: 6px; background: var(--bg); font-family: monospace; font-size: 13px;
+    border-radius: 6px; background: var(--bg); color: var(--ink);
+    font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 13px;
   }
+  .code-bar input::placeholder { color: var(--ink2); }
   .btn {
+    display: inline-flex; align-items: center; gap: 6px;
     padding: 6px 14px; border: 1px solid var(--line); border-radius: 6px;
-    background: #fff; cursor: pointer; font-size: 13px; color: var(--ink);
+    background: var(--card); cursor: pointer; font-size: 13px; color: var(--ink);
+    font-family: inherit; transition: border-color 150ms ease;
   }
-  .btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .btn:hover { border-color: #38424f; }
+  .btn.primary {
+    border: 1px solid transparent;
+    background: linear-gradient(var(--card), var(--card)) padding-box, var(--grad) border-box;
+  }
   /* 摘要 hero 卡 */
   .hero {
     background: var(--card); border: 1px solid var(--line); border-radius: 12px;
     padding: 22px 20px; margin-bottom: 14px; text-align: center;
   }
-  .hero-title {
-    font-family: "Noto Serif SC", "Songti SC", "SimSun", serif;
-    font-size: 26px; font-weight: 700;
-  }
+  .hero-title { font-size: 24px; font-weight: 600; color: var(--ink); }
   .hero-pitch { font-size: 15px; margin: 8px 0 6px; }
   .hero-meta { color: var(--ink2); font-size: 13px; }
   /* TAB 栏 */
@@ -60,11 +91,13 @@
     flex: 1; position: relative; background: var(--card); border: 1px solid var(--line);
     border-radius: 10px; padding: 12px 8px 8px; text-align: center; cursor: pointer;
     font-family: inherit; color: var(--ink); line-height: 1.4;
+    transition: border-color 150ms ease;
   }
-  .tab.locked { background: #f7e8dc; }
+  .tab:hover { border-color: #38424f; }
+  .tab.locked { background: #161b24; border-color: #38424f; }
   .tab.active::after {
     content: ""; position: absolute; left: 18%; right: 18%; bottom: -1px;
-    height: 2px; background: var(--accent); border-radius: 2px;
+    height: 2px; background: var(--grad); border-radius: 2px;
   }
   .tab-label { display: block; font-size: 14px; font-weight: 600; }
   .tab-val {
@@ -72,20 +105,17 @@
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   .tab-lock {
-    position: absolute; top: 0; right: 2px; border: none; background: none;
-    font-size: 12px; cursor: pointer; opacity: 0.45; padding: 2px 4px;
+    position: absolute; top: 3px; right: 4px; border: none; background: none;
+    cursor: pointer; opacity: 0.45; padding: 2px; color: var(--ink2); line-height: 0;
   }
-  .tab.locked .tab-lock { opacity: 1; color: var(--accent); }
+  .tab.locked .tab-lock { opacity: 1; color: var(--ink); }
   /* 详情面板 */
   .panel {
     background: var(--card); border: 1px solid var(--line); border-radius: 12px;
     padding: 18px 20px; margin-bottom: 14px;
   }
-  .panel h2 {
-    font-family: "Noto Serif SC", "Songti SC", "SimSun", serif;
-    font-size: 17px; margin-bottom: 2px;
-  }
-  .note { color: var(--ink2); font-size: 12px; margin-bottom: 10px; }
+  .panel h2 { font-size: 17px; font-weight: 600; margin-bottom: 2px; }
+  .note { color: var(--ink2); font-size: 12px; letter-spacing: 0.05em; margin-bottom: 10px; }
   .panel-in { animation: panelIn 200ms ease-out; }
   @keyframes panelIn {
     from { opacity: 0; transform: translateY(-6px); }
@@ -105,39 +135,62 @@
   .act-line { font-size: 14px; margin: 6px 0; }
   .minis { display: flex; gap: 10px; margin: 10px 0; }
   .mini {
-    flex: 1; background: #fbf6ec; border: 1px solid var(--line);
+    flex: 1; background: var(--bg); border: 1px solid var(--line);
     border-radius: 10px; padding: 12px 8px; text-align: center;
   }
-  .mini-name {
-    font-family: "Noto Serif SC", "Songti SC", "SimSun", serif;
-    font-size: 17px; font-weight: 700;
+  .mini-name { font-size: 17px; font-weight: 600; }
+  .mini-role {
+    font-size: 12px; margin-top: 2px;
+    background: var(--grad); background-clip: text; -webkit-background-clip: text; color: transparent;
   }
-  .mini-role { font-size: 12px; color: var(--accent); margin-top: 2px; }
   .act { margin: 10px 0 4px; }
-  .act-head { font-weight: 600; font-size: 15px; border-left: 3px solid var(--accent); padding-left: 8px; }
+  .act-head { position: relative; font-weight: 600; font-size: 15px; padding-left: 11px; }
+  .act-head::before {
+    content: ""; position: absolute; left: 0; top: 4px; bottom: 4px; width: 3px;
+    background: var(--grad-v); border-radius: 3px;
+  }
   .beat { font-size: 14px; margin: 6px 0 6px 12px; }
-  .beat .ep { color: var(--accent); font-family: monospace; font-size: 12px; }
+  .beat .ep {
+    font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 12px;
+    background: var(--grad); background-clip: text; -webkit-background-clip: text; color: transparent;
+  }
   .beat .bdesc { color: var(--ink2); font-size: 13px; }
   .hook-box {
-    background: #fbf6ec; border-left: 3px solid var(--accent);
-    padding: 10px 14px; border-radius: 0 8px 8px 0; font-size: 14px;
+    position: relative; background: var(--card);
+    padding: 10px 14px 10px 17px; border-radius: 0 8px 8px 0; font-size: 14px;
+  }
+  .hook-box::before {
+    content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+    background: var(--grad-v); border-radius: 3px 0 0 3px;
   }
   .actions { display: flex; gap: 10px; justify-content: center; margin-top: 20px; flex-wrap: wrap; }
-  .footer { text-align: center; color: var(--ink2); font-size: 12px; margin-top: 36px; }
-  #err { display: none; text-align: center; color: var(--accent); padding: 40px 0; }
+  .footer {
+    text-align: center; color: var(--ink2); font-size: 12px;
+    letter-spacing: 0.05em; margin-top: 36px;
+  }
+  .footer-brand {
+    text-align: center; color: var(--ink2); font-size: 11px;
+    letter-spacing: 0.2em; margin-top: 8px;
+  }
+  #err { display: none; text-align: center; color: #ff6a88; padding: 40px 0; }
+  /* 老虎机滚动中候选文字降一档，定格瞬间 200ms 亮度脉冲 */
+  .rolling { color: var(--ink2) !important; }
+  .settled { animation: settlePulse 200ms ease-out; }
+  @keyframes settlePulse { from { filter: brightness(1.8); } to { filter: brightness(1); } }
   @media (max-width: 640px) {
     .tab { padding: 8px 4px 6px; }
     .tab-label { font-size: 12px; }
     .tab-val { display: none; }
-    .hero-title { font-size: 22px; }
+    .hero-title { font-size: 20px; }
   }
 </style>
 </head>
 <body>
 <div class="wrap">
   <h1>StoryOS 开局抽卡</h1>
+  <div class="brand-line"></div>
   <p class="sub" id="sub">315 题材 × 10 世界观 × 31 骨架 · 一次抽齐开局，锁定满意的部分再 Roll</p>
-  <button class="roll-btn" id="rollBtn">🎲 抽一个开局</button>
+  <button class="roll-btn" id="rollBtn">抽一个开局</button>
   <div class="code-bar" id="codeBar" style="display:none">
     <span>开局码</span><span class="code" id="codeText"></span>
     <button class="btn" id="copyCodeBtn">复制码</button>
@@ -159,6 +212,7 @@
     <button class="btn" id="dlMdBtn">下载 .md</button>
   </div>
   <p class="footer" id="footer">开局结构来自 StoryOS 题材库</p>
+  <p class="footer-brand">凡事皆可 · ALL THINGS POSSIBLE</p>
 </div>
 <script src="data.js"></script>
 <script>
@@ -320,6 +374,20 @@ function esc(s) {
   return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
+// ============ 内联 SVG 图标（lucide 风格几何路径，stroke=currentColor 继承配色，零外链零依赖） ============
+const ICONS = {
+  dice: '<rect x="3" y="3" width="18" height="18" rx="3.5"/><circle cx="8" cy="8" r="1.3" fill="currentColor" stroke="none"/><circle cx="16" cy="8" r="1.3" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="8" cy="16" r="1.3" fill="currentColor" stroke="none"/><circle cx="16" cy="16" r="1.3" fill="currentColor" stroke="none"/>',
+  lock: '<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+  "lock-open": '<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.8-1.6"/>',
+  copy: '<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
+  download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/>',
+  "rotate-ccw": '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>',
+  check: '<path d="M20 6 9 17l-5-5"/>',
+};
+const icon = (name, size = 14) =>
+  `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor"` +
+  ` stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name]}</svg>`;
+
 const TAB_ORDER = ["genre", "worldview", "skeleton", "cast", "outline"];
 const TAB_NAMES = {genre: "题材", worldview: "世界观", skeleton: "骨架", cast: "人物", outline: "大纲"};
 const PANEL_NOTES = {
@@ -342,7 +410,7 @@ function tabValue(b, m) {
 function renderTabs(m) {
   $("tabs").innerHTML = TAB_ORDER.map(b =>
     `<button class="tab${b === activeTab ? " active" : ""}${state.locks[b] ? " locked" : ""}" data-tab="${b}">` +
-    `<span class="tab-lock" data-block="${b}" title="锁定${BLOCK_LABELS[b]}">${state.locks[b] ? "🔒" : "🔓"}</span>` +
+    `<span class="tab-lock" data-block="${b}" title="锁定${BLOCK_LABELS[b]}">${icon(state.locks[b] ? "lock" : "lock-open")}</span>` +
     `<span class="tab-label">${TAB_NAMES[b]}</span>` +
     `<span class="tab-val" id="tabVal-${b}">${esc(tabValue(b, m))}</span></button>`
   ).join("");
@@ -415,7 +483,15 @@ function cancelAnim() {
   anim.intervals = []; anim.timeouts = [];
 }
 
+// 老虎机滚动涉及的元素：滚动中降一档色（.rolling），定格瞬间 200ms 亮度脉冲（.settled）
+const slotEls = b => b === "genre" ? [$("heroTitle"), $("tabVal-genre")]
+  : b === "worldview" ? [$("heroMetaW"), $("tabVal-worldview")]
+  : b === "skeleton" ? [$("heroMetaS"), $("tabVal-skeleton")]
+  : b === "cast" ? [$("heroMetaCast"), $("tabVal-cast")]
+  : [$("tabVal-outline")];
+
 function overlayRandom(b, m) {
+  slotEls(b).forEach(el => el.classList.add("rolling"));
   const D = window.GACHA_DATA;
   const rnd = arr => arr[Math.floor(Math.random() * arr.length)];
   if (b === "genre") {
@@ -449,6 +525,12 @@ function settleBlock(b, m) {
     setHeroBlock(b, m);
     $(`tabVal-${b}`).textContent = tabValue(b, m);
   }
+  slotEls(b).forEach(el => {
+    el.classList.remove("rolling");
+    el.classList.remove("settled");
+    void el.offsetWidth; // 强制重排，让连续定格也重播脉冲
+    el.classList.add("settled");
+  });
   if (activeTab === b) renderPanel(m);
 }
 
@@ -459,6 +541,7 @@ function render(animate = false) {
   history.replaceState(null, "", "#" + encode(state));
   renderHero(m);
   renderTabs(m);
+  for (const b of BLOCKS) slotEls(b).forEach(el => el.classList.remove("rolling", "settled"));
   $("pack").style.display = "block";
   $("codeBar").style.display = "flex";
   $("actions").style.display = "flex";
@@ -474,6 +557,7 @@ function render(animate = false) {
   }
   if (!state.locks.outline) {
     $("tabVal-outline").textContent = "……";
+    $("tabVal-outline").classList.add("rolling");
     anim.timeouts.push(setTimeout(() => settleBlock("outline", m), SETTLE_MS.cast + 150));
   }
 }
@@ -531,11 +615,18 @@ function roll(animate = true) {
 function copyText(text, btn) {
   if (!navigator.clipboard) { alert("当前环境不支持自动复制，请手动复制"); return; }
   navigator.clipboard.writeText(text).then(() => {
-    const old = btn.textContent; btn.textContent = "已复制 ✓";
-    setTimeout(() => btn.textContent = old, 1200);
+    const old = btn.innerHTML;
+    btn.innerHTML = icon("check") + "<span>已复制</span>";
+    setTimeout(() => { btn.innerHTML = old; }, 1200);
   }).catch(() => alert("复制失败，请手动选中复制"));
 }
 function initPage() {
+  // 静态按钮注入内联 SVG 图标（文案保留在 span 里，复制反馈时整体替换再还原）
+  $("rollBtn").innerHTML = icon("dice", 18) + "<span>抽一个开局</span>";
+  $("copyCodeBtn").innerHTML = icon("copy") + "<span>复制码</span>";
+  $("restoreBtn").innerHTML = icon("rotate-ccw") + "<span>还原</span>";
+  $("copyMdBtn").innerHTML = icon("copy") + "<span>复制大纲</span>";
+  $("dlMdBtn").innerHTML = icon("download") + "<span>下载 .md</span>";
   if (!window.GACHA_DATA) {
     $("err").style.display = "block";
     $("rollBtn").disabled = true;
@@ -545,8 +636,9 @@ function initPage() {
   $("sub").textContent = `${D.genres.length} 题材 × ${D.worldviews.length} 世界观 × ${D.skeletons.length} 骨架 · 一次抽齐开局，锁定满意的部分再 Roll`;
   $("footer").textContent = `开局结构来自 StoryOS 题材库 · ${D.genres.length} 题材 × ${D.worldviews.length} 世界观 × ${D.skeletons.length} 骨架`;
   $("rollBtn").onclick = () => roll();
-  $("copyCodeBtn").onclick = e => copyText(encode(state), e.target);
-  $("copyMdBtn").onclick = e => copyText(toMarkdown(), e.target);
+  // 按钮内含 SVG，e.target 可能落在图标节点上——用 currentTarget 锁定按钮本体
+  $("copyCodeBtn").onclick = e => copyText(encode(state), e.currentTarget);
+  $("copyMdBtn").onclick = e => copyText(toMarkdown(), e.currentTarget);
   $("dlMdBtn").onclick = () => {
     const blob = new Blob([toMarkdown()], {type: "text/markdown;charset=utf-8"});
     const a = document.createElement("a");
@@ -567,7 +659,7 @@ function initPage() {
       state.locks[b] = !state.locks[b];
       tabEl.classList.toggle("locked", !!state.locks[b]);
       const lockEl = e.target.closest(".tab-lock");
-      lockEl.textContent = state.locks[b] ? "🔒" : "🔓";
+      lockEl.innerHTML = icon(state.locks[b] ? "lock" : "lock-open");
       lockEl.classList.remove("pop");
       void lockEl.offsetWidth;
       lockEl.classList.add("pop");
