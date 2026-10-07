@@ -836,6 +836,15 @@ function pushHistory() {
   LS.set(LS_HISTORY, list);
 }
 
+// 服务器统计探针：有效抽卡时静默请求 pixel.gif?c=码&v=数据版本&z=星座
+// 纯静态托管即可——请求会进 Web 服务器访问日志，事后 grep 日志统计；失败静默
+function track(code) {
+  try {
+    const img = new Image();
+    img.src = "pixel.gif?c=" + code + "&v=" + window.GACHA_DATA.version + "&z=" + (zodiac || "-");
+  } catch {}
+}
+
 // 收藏：星钮切换，上限 100，状态随渲染刷新
 function isFav(code) { return LS.get(LS_FAVS, []).some(f => f.code === code); }
 function renderFavBtn() {
@@ -954,7 +963,7 @@ function initPage() {
     const before = encode(state);
     roll();
     // 全锁定时 roll() 原样返回（码不变）不记日志；有效抽卡才追加历史并刷新批注/记录面板
-    if (encode(state) !== before) { pushHistory(); refreshRecIfOpen(); }
+    if (encode(state) !== before) { pushHistory(); refreshRecIfOpen(); track(encode(state)); }
   };
   // 按钮内含 SVG，e.target 可能落在图标节点上——用 currentTarget 锁定按钮本体
   $("copyCodeBtn").onclick = e => copyText(encode(state), e.currentTarget);

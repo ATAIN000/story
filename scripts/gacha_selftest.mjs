@@ -57,6 +57,9 @@ Object.defineProperty(globalThis, "navigator", {
 });
 const alerts = [];
 globalThis.alert = msg => alerts.push(String(msg));
+// Image 探针 mock：记录每次 src 赋值（服务器统计探针 track() 的载体）
+const tracked = [];
+globalThis.Image = class { set src(v) { tracked.push(String(v)); } };
 // Blob / URL / URL.createObjectURL：Node 22 自带 Blob；createObjectURL 需补
 if (!URL.createObjectURL) {
   URL.createObjectURL = () => "blob:shim";
@@ -306,6 +309,24 @@ else if (!hist.every(h => /^[0-9a-z]{2}-[0-9a-z]-[0-9a-z]-[0-9a-z]{4}-[0-9a-z]{4
 for (let i = 0; i < 60; i++) elements.get("rollBtn").onclick();
 hist = JSON.parse(localStorage.getItem("storyos_gacha_history") || "[]");
 if (hist.length !== 50) fails.push(`history 未封顶 50：${hist.length}`);
+
+// 服务器统计探针：63 次有效抽卡 → 63 次 pixel.gif 请求，query 含码/版本/星座；还原不触发
+if (tracked.length !== 63) fails.push(`63 次抽卡后探针请求=${tracked.length} 次（预期 63）`);
+else {
+  const last = tracked[tracked.length - 1];
+  const m = last.match(/^pixel\.gif\?c=([0-9a-z-]+)&v=([^&]+)&z=(.+)$/);
+  if (!m) fails.push(`探针 URL 格式不对：${last}`);
+  else if (m[1] !== t.encode(t.state)) fails.push(`探针码 ${m[1]} ≠ 当前码 ${t.encode(t.state)}`);
+  else if (m[3] !== "-") fails.push(`未选星座时 z 应为 -，实为 ${m[3]}`);
+}
+t.setZodiac("天蝎");
+elements.get("rollBtn").onclick();
+if (!tracked[tracked.length - 1].endsWith("&z=天蝎"))
+  fails.push(`选天蝎后探针 z 参数不对：${tracked[tracked.length - 1]}`);
+t.setZodiac(null);
+const trackedBefore = tracked.length;
+t.restoreCode(t.encode(t.state));
+if (tracked.length !== trackedBefore) fails.push("码还原不应触发统计探针");
 // 历史列表行：题材+时间+码+还原钮+转收藏星钮
 t.renderRecList();
 const recHistHtml = elements.get("recList")?.innerHTML || "";
