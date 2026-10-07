@@ -48,6 +48,7 @@ CONFLICT_WORDS = {
     "cognitive": "认知错位", "relational": "关系撕裂",
     "physical": "生死对抗", "political": "权力倾轧",
     "existential": "存在危机", "moral": "道德两难",
+    "internal": "内心挣扎", "cosmic": "宇宙恐怖", "resource": "资源争夺",
 }
 
 #: 骨架模板中文名（与 backend/routers/macro.py 的 TEMPLATES_META 保持一致）
