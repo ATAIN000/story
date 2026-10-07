@@ -136,12 +136,20 @@ if (!html.includes("凡事皆可 · ALL THINGS POSSIBLE")) fails.push("缺页脚
 // 暗黑主题断言：设计 token 就位，旧皮肤（橙/米色/衬线字体栈）与 emoji 零残留
 const EMOJI_RE = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u;
 if (EMOJI_RE.test(html)) fails.push("index.html 源码含 emoji 残留");
-for (const legacy of ["#b5501f", "#f7f3ea", "#fffdf8", "serif", "🎲", "🔒", "🔓", "✓"])
+for (const legacy of ["#b5501f", "#f7f3ea", "#fffdf8", "🎲", "🔒", "🔓", "✓"])
   if (html.includes(legacy)) fails.push(`index.html 含旧皮肤残留「${legacy}」`);
-for (const token of ["--bg: #0b0e13", "--card: #12161d", "--line: #232a35",
-                     "--ink: #e6e9ee", "--ink2: #8b949e",
-                     "#a8e063", "#56ccf2", "#b06ab3", "#ff6a88"])
+// 主站字体栈以 sans-serif 收尾，故 serif 残留检测需排除 sans- 前缀
+if (/(?<!sans-)serif/.test(html)) fails.push("index.html 含旧皮肤残留「serif 字体栈」");
+for (const token of ["--bg: #0d1117", "--card: #12161d", "--line: #232a35",
+                     "--ink: #e6e9ee", "--ink2: #94a0ac",
+                     "#ff5f6d", "#ffb35c", "#f7e96b", "#5fd08a", "#5aa7ff", "#b07cff"])
   if (!html.includes(token)) fails.push(`index.html 缺设计 token「${token}」`);
+// 主站融合断言：彩虹波 SVG + hueflow 流动动画就位，静态渐变短线已删，开局码条在按钮组下方
+if (!html.includes('class="rainbow"')) fails.push('缺主站彩虹波 SVG（class="rainbow"）');
+if (!html.includes("hueflow")) fails.push("缺 hueflow 渐变流动动画");
+if (html.includes("brand-line")) fails.push("静态渐变短线 brand-line 未删除");
+if (!(html.indexOf('id="actions"') < html.indexOf('id="codeBar"')))
+  fails.push("开局码条 #codeBar 未移到按钮组 #actions 下方");
 // 图标渲染断言：按钮与 TAB 锁钮真实渲染 <svg>，渲染结果无 emoji
 const renderedHtml = ["rollBtn", "copyCodeBtn", "restoreBtn", "copyMdBtn", "dlMdBtn", "tabs", "panel"]
   .map(id => elements.get(id)?.innerHTML || "").join("\n");
