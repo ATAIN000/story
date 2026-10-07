@@ -27,6 +27,7 @@
     cursor: pointer; margin-bottom: 16px;
   }
   .roll-btn:active { transform: scale(0.98); }
+  .roll-btn:disabled { background: var(--ink2); cursor: not-allowed; }
   .code-bar {
     display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
     background: var(--card); border: 1px dashed var(--line); border-radius: 10px;
@@ -95,7 +96,7 @@
     <button class="btn primary" id="copyMdBtn">复制大纲</button>
     <button class="btn" id="dlMdBtn">下载 .md</button>
   </div>
-  <p class="footer">开局结构来自 StoryOS 题材库 · 315 题材 × 10 世界观 × 31 骨架</p>
+  <p class="footer" id="footer">开局结构来自 StoryOS 题材库</p>
 </div>
 <script src="data.js"></script>
 <script>
@@ -108,7 +109,8 @@ const newSeg = () => Math.floor(Math.random() * Math.pow(36, 4)).toString(36).pa
 
 const BLOCKS = ["genre", "worldview", "skeleton", "cast", "outline"];
 const BLOCK_LABELS = {genre:"题材", worldview:"世界观", skeleton:"骨架", cast:"人物", outline:"大纲句式"};
-const state = {seeds: {}, locks: {}};
+// 开局码存结果而非种子：gi/wi/si 为数组下标，cast/outline 为抽取种子——锁定即锁定结果，天然绝对有效
+const state = {gi: 0, wi: 0, si: 0, cast: "", outline: "", locks: {}};
 
 // ============ 句式库（拍点分类 × 变体） ============
 const BEAT_RULES = [
@@ -197,7 +199,7 @@ function drawNames(pool, rng) {
 }
 
 function fill(tpl, g, w, names, rng) {
-  const conflict = g.conflictWords.length ? pick(g.conflictWords, rng) : "矛盾";
+  const conflict = pick(g.conflictWords.length ? g.conflictWords : ["矛盾"], rng);
   return tpl
     .replaceAll("{mc}", names.mc).replaceAll("{rival}", names.rival)
     .replaceAll("{ally}", names.ally)
@@ -212,40 +214,40 @@ function beatLine(beat, g, w, names, rng) {
   const text = beat.name + " " + beat.desc;
   let cls = "generic";
   for (const [re, c] of BEAT_RULES) if (re.test(text)) { cls = c; break; }
-  return fill(pick(SENTENCES[cls], rng), g, w, names, rng);
+  const tpl = pick(SENTENCES[cls], rng);
+  return {tpl, line: fill(tpl, g, w, names, rng)};
 }
 
-function buildModel(seeds) {
+function buildModel(c) {
   const D = window.GACHA_DATA;
-  const g = pick(D.genres, rngOf(seeds.genre));
-  const wr = rngOf(seeds.worldview);
-  let w = (g.recommendedPreset && wr() < 0.7)
-    ? (D.worldviews.find(x => x.key === g.recommendedPreset) || pick(D.worldviews, wr))
-    : pick(D.worldviews, wr);
-  const sr = rngOf(seeds.skeleton);
-  let s = (g.recommendedTemplates.length && sr() < 0.7)
-    ? (D.skeletons.find(x => x.id === g.recommendedTemplates[0]) || pick(D.skeletons, sr))
-    : pick(D.skeletons, sr);
-  const cr = rngOf(seeds.cast);
+  const g = D.genres[c.gi];
+  const w = D.worldviews[c.wi];
+  const s = D.skeletons[c.si];
+  const cr = rngOf(c.cast);
   const culture = g.recommendedCulture || "modern-chinese-urban";
   const pool = D.namePools[D.culturePool[culture] || "cn"];
   const names = drawNames(pool, cr);
-  const orng = rngOf(seeds.outline);
+  const orng = rngOf(c.outline);
   const acts = s.acts.map(a => ({
     name: a.name, func: a.function, range: a.range,
-    beats: a.beats.map(b => ({ep: b.ep, desc: b.desc, line: beatLine(b, g, w, names, orng)})),
+    beats: a.beats.map(b => ({ep: b.ep, desc: b.desc, ...beatLine(b, g, w, names, orng)})),
   }));
   return {g, w, s, culture, names, acts, hook: fill(pick(HOOKS, orng), g, w, names, orng)};
 }
 
 // ============ 开局码 ============
-function encode(seeds) { return BLOCKS.map(b => seeds[b]).join("-"); }
+// 格式：题材下标(2位)-世界观下标(1位)-骨架下标(1位)-人物种子(4位)-大纲种子(4位)，如 3k-9-b-k7x2-m9p4
+const SEG_LENS = [2, 1, 1, 4, 4];
+function encode(c) {
+  return [c.gi.toString(36).padStart(2, "0"), c.wi.toString(36), c.si.toString(36), c.cast, c.outline].join("-");
+}
 function decode(code) {
   const segs = code.trim().toLowerCase().split("-");
-  if (segs.length !== 5 || segs.some(s => !/^[0-9a-z]{4}$/.test(s))) return null;
-  const seeds = {};
-  BLOCKS.forEach((b, i) => seeds[b] = segs[i]);
-  return seeds;
+  if (segs.length !== 5 || !segs.every((s, i) => s.length === SEG_LENS[i] && /^[0-9a-z]+$/.test(s))) return null;
+  const D = window.GACHA_DATA;
+  const gi = parseInt(segs[0], 36), wi = parseInt(segs[1], 36), si = parseInt(segs[2], 36);
+  if (gi >= D.genres.length || wi >= D.worldviews.length || si >= D.skeletons.length) return null;
+  return {gi, wi, si, cast: segs[3], outline: segs[4]};
 }
 
 // ============ 渲染 ============
@@ -258,9 +260,9 @@ function lockBtn(block) {
   return `<button class="lock${on}" data-block="${block}" title="锁定${BLOCK_LABELS[block]}">${state.locks[block] ? "🔒" : "🔓"}</button>`;
 }
 function render() {
-  const m = buildModel(state.seeds);
-  $("codeText").textContent = encode(state.seeds);
-  history.replaceState(null, "", "#" + encode(state.seeds));
+  const m = buildModel(state);
+  $("codeText").textContent = encode(state);
+  history.replaceState(null, "", "#" + encode(state));
   let html = "";
   html += `<div class="sec">${lockBtn("genre")}<h2>题材 · ${esc(m.g.title)}</h2>
     <div class="tags">${m.g.tags.map(t => `<span class="tag">${esc(t)}</span>`).join("")}</div>
@@ -289,10 +291,10 @@ function render() {
 
 // ============ Markdown 导出 ============
 function toMarkdown() {
-  const m = buildModel(state.seeds);
+  const m = buildModel(state);
   const D = window.GACHA_DATA;
   let md = `# ${m.g.title} · 开局包\n\n`;
-  md += `> 开局码 \`${encode(state.seeds)}\` · StoryOS 开局抽卡 · 数据版本 ${D.version}\n\n`;
+  md += `> 开局码 \`${encode(state)}\` · StoryOS 开局抽卡 · 数据版本 ${D.version}\n\n`;
   md += `## 题材\n\n- **核心冲突**：${m.g.coreConflict}\n- **标签**：${m.g.tags.join(" / ")}\n\n${m.g.setting}\n\n`;
   md += `## 世界观 · ${m.w.name}\n\n${m.w.vibe}\n\n${m.w.rules.map(r => "- " + r).join("\n")}\n\n`;
   md += `## 骨架 · ${m.s.name}\n\n${m.s.brief}\n\n`;
@@ -311,31 +313,52 @@ function toMarkdown() {
 function roll() {
   const locked = BLOCKS.filter(b => state.locks[b]);
   if (locked.length === BLOCKS.length) { alert("已全部锁定，先解锁再 Roll"); return; }
-  for (const b of BLOCKS) if (!state.locks[b]) state.seeds[b] = newSeg();
+  const D = window.GACHA_DATA;
+  const rand = n => Math.floor(Math.random() * n);
+  if (!state.locks.genre) state.gi = rand(D.genres.length);
+  const g = D.genres[state.gi]; // 世界观/骨架跟随当前题材推荐（含题材被锁定的情况）
+  if (!state.locks.worldview) {
+    const i = g.recommendedPreset && Math.random() < 0.7
+      ? D.worldviews.findIndex(x => x.key === g.recommendedPreset) : -1;
+    state.wi = i >= 0 ? i : rand(D.worldviews.length);
+  }
+  if (!state.locks.skeleton) {
+    const i = g.recommendedTemplates.length && Math.random() < 0.7
+      ? D.skeletons.findIndex(x => x.id === g.recommendedTemplates[0]) : -1;
+    state.si = i >= 0 ? i : rand(D.skeletons.length);
+  }
+  if (!state.locks.cast) state.cast = newSeg();
+  if (!state.locks.outline) state.outline = newSeg();
   render();
 }
 function copyText(text, btn) {
   navigator.clipboard.writeText(text).then(() => {
     const old = btn.textContent; btn.textContent = "已复制 ✓";
     setTimeout(() => btn.textContent = old, 1200);
-  });
+  }).catch(() => alert("复制失败，请手动选中复制"));
 }
 function initPage() {
-  if (!window.GACHA_DATA) { $("err").style.display = "block"; return; }
+  if (!window.GACHA_DATA) {
+    $("err").style.display = "block";
+    $("rollBtn").disabled = true;
+    return;
+  }
+  const D = window.GACHA_DATA;
+  $("footer").textContent = `开局结构来自 StoryOS 题材库 · ${D.genres.length} 题材 × ${D.worldviews.length} 世界观 × ${D.skeletons.length} 骨架`;
   $("rollBtn").onclick = roll;
-  $("copyCodeBtn").onclick = e => copyText(encode(state.seeds), e.target);
+  $("copyCodeBtn").onclick = e => copyText(encode(state), e.target);
   $("copyMdBtn").onclick = e => copyText(toMarkdown(), e.target);
   $("dlMdBtn").onclick = () => {
     const blob = new Blob([toMarkdown()], {type: "text/markdown;charset=utf-8"});
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `开局包-${encode(state.seeds)}.md`;
+    a.download = `开局包-${encode(state)}.md`;
     a.click(); URL.revokeObjectURL(a.href);
   };
   $("restoreBtn").onclick = () => {
-    const seeds = decode($("codeInput").value);
-    if (!seeds) { alert("开局码格式不对（应为 5 段，如 k7x2-m9p4-q3z8-n1b6-r5t7）"); return; }
-    state.seeds = seeds; state.locks = {}; render();
+    const c = decode($("codeInput").value);
+    if (!c) { alert("开局码格式不对（应为 5 段：题材-世界观-骨架-人物-大纲，如 3k-9-b-k7x2-m9p4）"); return; }
+    Object.assign(state, c); state.locks = {}; render();
   };
   $("pack").onclick = e => {
     const btn = e.target.closest(".lock");
@@ -344,25 +367,34 @@ function initPage() {
     state.locks[b] = !state.locks[b];
     render();
   };
+  window.addEventListener("hashchange", () => {
+    const c = decode(location.hash.slice(1));
+    if (c) { Object.assign(state, c); state.locks = {}; render(); }
+  });
   const fromHash = decode(location.hash.slice(1));
-  if (fromHash) { state.seeds = fromHash; render(); }
-  else { for (const b of BLOCKS) state.seeds[b] = newSeg(); render(); }
+  if (fromHash) { Object.assign(state, fromHash); render(); }
+  else roll(); // 初始无任何锁定，等同全部重摇
 }
 
 // ============ 自检（?selftest=1 时在 console 输出结果） ============
 function selftest() {
+  const D = window.GACHA_DATA;
   for (let i = 0; i < 200; i++) {
-    const seeds = {}; for (const b of BLOCKS) seeds[b] = newSeg();
-    const m1 = buildModel(seeds);
-    const seeds2 = decode(encode(seeds));
-    const m2 = buildModel(seeds2);
+    const c = {
+      gi: Math.floor(Math.random() * D.genres.length),
+      wi: Math.floor(Math.random() * D.worldviews.length),
+      si: Math.floor(Math.random() * D.skeletons.length),
+      cast: newSeg(), outline: newSeg(),
+    };
+    const m1 = buildModel(c);
+    const m2 = buildModel(decode(encode(c)));
     if (JSON.stringify(m1) !== JSON.stringify(m2))
-      throw new Error("开局码还原不一致 @" + encode(seeds));
+      throw new Error("开局码还原不一致 @" + encode(c));
     const ns = [m1.names.mc, m1.names.rival, m1.names.ally];
-    if (new Set(ns).size !== 3) throw new Error("人物重名 @" + encode(seeds));
+    if (new Set(ns).size !== 3) throw new Error("人物重名 @" + encode(c));
     if (!m1.acts.length || !m1.acts[0].beats.length) throw new Error("大纲为空");
   }
-  console.log("SELFTEST PASS：200 组种子还原一致、人物不重名、大纲非空");
+  console.log("SELFTEST PASS：200 组开局码还原一致、人物不重名、大纲非空");
   document.title = "SELFTEST PASS";
 }
 
