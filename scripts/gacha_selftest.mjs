@@ -133,9 +133,11 @@ if (elements.get("footer")?.textContent !== "开局结构来自 StoryOS 题材�
   fails.push(`页脚计数未按数据动态生成：${JSON.stringify(elements.get("footer")?.textContent)}`);
 
 // 数据卫生断言：50 组随机码 × 5 个 tab 的渲染结果中不得有 slug 残留
-// （tags/setting/characters 展示区不出现 [a-z]+_[a-z]+ 模式与已知内部代号）
+// （tags/setting/characters 展示区不出现 [a-z]+[_-][a-z]+ 模式与已知内部代号）
+// 注意：innerHTML 含 HTML 属性（如 data-tab），先剥标签再匹配文本内容
 const SLUG_RE = /[a-z]+[_-][a-z]+/;
 const KNOWN_SLUGS = /modern-chinese-urban|infinite_flow|dungeon_loop|hard_reality|western_fantasy|xianxia_cultivation|post_apocalyptic/;
+const stripTags = html => html.replace(/<[^>]*>/g, " ");
 t.state.locks = {};
 let slugHits = 0;
 for (let i = 0; i < 50; i++) {
@@ -153,7 +155,8 @@ for (let i = 0; i < 50; i++) {
     regions.push(elements.get("panel")?.innerHTML || "");
   }
   for (const r of regions) {
-    const m1 = r.match(SLUG_RE), m2 = r.match(KNOWN_SLUGS);
+    const text = stripTags(r);
+    const m1 = text.match(SLUG_RE), m2 = text.match(KNOWN_SLUGS);
     if (m1 || m2) {
       fails.push(`渲染结果含 slug 残留 @码=${t.encode(t.state)}：${JSON.stringify((m1 || m2)[0])}`);
       slugHits++;
