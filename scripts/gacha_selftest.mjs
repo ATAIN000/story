@@ -26,8 +26,13 @@ const elements = new Map();
 globalThis.window = globalThis; // window 即全局代理，承载 GACHA_DATA
 globalThis.document = {
   getElementById(id) {
-    // 返回吸收赋值的对象（textContent/innerHTML/style/onclick 均可写）
-    if (!elements.has(id)) elements.set(id, { style: {}, dataset: {} });
+    // 返回吸收赋值的对象（textContent/innerHTML/style/onclick/classList 均可写）
+    if (!elements.has(id)) {
+      elements.set(id, {
+        style: {}, dataset: {}, offsetWidth: 0,
+        classList: { add() {}, remove() {}, toggle() {} },
+      });
+    }
     return elements.get(id);
   },
   createElement() {
@@ -58,7 +63,7 @@ try {
   (0, eval)(dataJs); // data.js 是 window.GACHA_DATA = {...} 赋值
   if (!globalThis.GACHA_DATA) throw new Error("data.js 执行后 window.GACHA_DATA 仍为空");
   // 页面脚本为严格模式 eval，函数不外泄；末尾导出引用供功能点抽查
-  (0, eval)(pageJs + "\n;globalThis.__t = {toMarkdown, roll, decode, encode, state, BLOCKS, buildModel};");
+  (0, eval)(pageJs + "\n;globalThis.__t = {toMarkdown, roll, decode, encode, state, BLOCKS, buildModel, render, switchTab};");
 } catch (e) {
   console.log = origLog;
   console.error("FAIL：页面脚本执行抛异常：", e);
@@ -71,14 +76,53 @@ if (!logs.some(l => l.includes("SELFTEST PASS"))) fails.push("console 输出无 
 if (document.title !== "SELFTEST PASS") fails.push(`document.title=${JSON.stringify(document.title)}`);
 if (alerts.length) fails.push(`alert 被调用：${alerts.join("；")}`);
 
-// initPage 渲染断言：开局包已写入 #pack，开局码格式正确，codeBar/actions 已显示
+// initPage 渲染断言：结果区 #pack 已显示，hero/tabs/详情面板各元素已渲染，开局码格式正确，codeBar/actions 已显示
+const D = globalThis.GACHA_DATA;
 const pack = elements.get("pack");
-if (!pack || typeof pack.innerHTML !== "string" || pack.innerHTML.length < 500)
-  fails.push("#pack.innerHTML 为空或过短，页面未渲染开局包");
+if (pack?.style?.display !== "block") fails.push("#pack 未显示");
+const tabsHtml0 = elements.get("tabs")?.innerHTML || "";
+if (tabsHtml0.length < 200) fails.push("#tabs 未渲染");
 else {
-  for (const kw of ["题材 ·", "世界观 ·", "骨架 ·", "人物", "分幕大纲（12 集）", "hook-box"])
-    if (!pack.innerHTML.includes(kw)) fails.push(`#pack.innerHTML 缺少「${kw}」`);
+  if ((tabsHtml0.match(/class="tab[ "]/g) || []).length !== 5) fails.push("TAB 数量不是 5 个");
+  for (const label of [">题材<", ">世界观<", ">骨架<", ">人物<", ">大纲<"])
+    if (!tabsHtml0.includes(label)) fails.push(`TAB 栏缺少标签「${label}」`);
 }
+if ((elements.get("panel")?.innerHTML || "").length < 200) fails.push("#panel 未渲染或过短");
+const t = globalThis.__t;
+// hero 摘要区：题材大标题 / 一句话 pitch / 人物一行均非空
+for (const id of ["heroTitle", "heroPitch", "heroMetaCast", "heroMetaW", "heroMetaS"])
+  if (!elements.get(id)?.textContent) fails.push(`#${id} 为空`);
+if (!/主角 .+ · 对手 .+ · 盟友 .+/.test(elements.get("heroMetaCast")?.textContent || ""))
+  fails.push(`hero 人物一行格式不对：${JSON.stringify(elements.get("heroMetaCast")?.textContent)}`);
+// 默认激活「题材」面板：标题 + 注释 + 标签 chips + 核心冲突
+const panel0 = elements.get("panel")?.innerHTML || "";
+for (const kw of ["题材 · ", "题材决定故事的轨道、节奏与冲突类型", "核心冲突", "class=\"tag\""])
+  if (!panel0.includes(kw)) fails.push(`题材面板缺少「${kw}」`);
+// 五个面板注释逐字核对 + 结构抽查
+const NOTES = {
+  genre: "题材决定故事的轨道、节奏与冲突类型",
+  worldview: "世界观决定这个世界的底层设定与运行规则",
+  skeleton: "骨架决定 12 集的幕拍结构——每个节点该发生什么",
+  cast: "人物阵容由题材与文化推导，名字随重 Roll 更换",
+  outline: "按骨架拍点生成的分幕大纲，每拍一句；末尾钩子留给读者",
+};
+for (const [tab, note] of Object.entries(NOTES)) {
+  t.switchTab(tab);
+  const ph = elements.get("panel")?.innerHTML || "";
+  if (!ph.includes(`<p class="note">${note}</p>`)) fails.push(`${tab} 面板注释不符：预期「${note}」`);
+}
+t.switchTab("outline");
+const panelOutline = elements.get("panel")?.innerHTML || "";
+for (const kw of ["分幕大纲（12 集）", "hook-box", "class=\"act\""])
+  if (!panelOutline.includes(kw)) fails.push(`大纲面板缺少「${kw}」`);
+t.switchTab("cast");
+if (!/class="mini-name"/.test(elements.get("panel")?.innerHTML || "")) fails.push("人物面板缺迷你卡");
+t.switchTab("skeleton");
+if (!/（第\d+-\d+集）—— /.test(elements.get("panel")?.innerHTML || "")) fails.push("骨架面板缺幕结构概览行");
+t.switchTab("genre");
+// 副标题动态计数
+if (elements.get("sub")?.textContent !== "315 题材 × 10 世界观 × 31 骨架 · 一次抽齐开局，锁定满意的部分再 Roll")
+  fails.push(`副标题不对：${JSON.stringify(elements.get("sub")?.textContent)}`);
 const codeText = elements.get("codeText")?.textContent;
 if (!/^[0-9a-z]{2}-[0-9a-z]-[0-9a-z]-[0-9a-z]{4}-[0-9a-z]{4}$/.test(codeText || ""))
   fails.push(`开局码格式不对：${JSON.stringify(codeText)}`);
@@ -88,8 +132,38 @@ if (elements.get("err")?.style?.display === "block") fails.push("#err 被显示�
 if (elements.get("footer")?.textContent !== "开局结构来自 StoryOS 题材库 · 315 题材 × 10 世界观 × 31 骨架")
   fails.push(`页脚计数未按数据动态生成：${JSON.stringify(elements.get("footer")?.textContent)}`);
 
+// 数据卫生断言：50 组随机码 × 5 个 tab 的渲染结果中不得有 slug 残留
+// （tags/setting/characters 展示区不出现 [a-z]+_[a-z]+ 模式与已知内部代号）
+const SLUG_RE = /[a-z]+_[a-z]+/;
+const KNOWN_SLUGS = /modern-chinese-urban|infinite_flow|dungeon_loop|hard_reality|western_fantasy|xianxia_cultivation|post_apocalyptic/;
+t.state.locks = {};
+let slugHits = 0;
+for (let i = 0; i < 50; i++) {
+  t.state.gi = Math.floor(Math.random() * D.genres.length);
+  t.state.wi = Math.floor(Math.random() * D.worldviews.length);
+  t.state.si = Math.floor(Math.random() * D.skeletons.length);
+  t.state.cast = Math.floor(Math.random() * 36 ** 4).toString(36).padStart(4, "0");
+  t.state.outline = Math.floor(Math.random() * 36 ** 4).toString(36).padStart(4, "0");
+  t.render();
+  const heroText = ["heroTitle", "heroPitch", "heroMetaCast", "heroMetaW", "heroMetaS"]
+    .map(id => elements.get(id)?.textContent || "").join(" ");
+  const regions = [heroText, elements.get("tabs")?.innerHTML || ""];
+  for (const tab of ["genre", "worldview", "skeleton", "cast", "outline"]) {
+    t.switchTab(tab);
+    regions.push(elements.get("panel")?.innerHTML || "");
+  }
+  for (const r of regions) {
+    const m1 = r.match(SLUG_RE), m2 = r.match(KNOWN_SLUGS);
+    if (m1 || m2) {
+      fails.push(`渲染结果含 slug 残留 @码=${t.encode(t.state)}：${JSON.stringify((m1 || m2)[0])}`);
+      slugHits++;
+      break;
+    }
+  }
+}
+if (!slugHits) console.log("SLUG-SCAN OK：50 组随机码 × 5 tab 渲染结果无 slug 残留");
+
 // 功能点抽查：MD 导出 / 锁定重 Roll / 坏开局码拒绝
-const t = globalThis.__t;
 const md = t.toMarkdown();
 for (const kw of ["# ", "开局码 `", "## 题材", "## 世界观 ·", "## 骨架 ·", "## 人物", "## 分幕大纲（12 集）", "**E"])
   if (!md.includes(kw)) fails.push(`toMarkdown 缺少「${kw}」`);
@@ -121,7 +195,6 @@ if (!up || up.gi !== 128 || up.wi !== 9 || up.si !== 11 || up.cast !== "k7x2" ||
 // 锁定泄漏核心断言：固定 wi/si/cast/outline 遍历全部 315 个 gi——
 // 世界观/骨架/句式模板选择必须零漂移；姓名按名字池分组一致（池随题材文化切换属预期）；
 // 填空词随题材变化（line 变体数 > 1，证明题材仍有影响力）
-const D = globalThis.GACHA_DATA;
 const fixed = { wi: 3, si: 5, cast: "k7x2", outline: "m9p4" };
 const ref = t.buildModel({ gi: 0, ...fixed });
 const refTpls = ref.acts.flatMap(a => a.beats.map(b => b.tpl)).join("␟");
@@ -156,5 +229,5 @@ if (fails.length) {
   console.error("FAIL：\n- " + fails.join("\n- "));
   process.exit(1);
 }
-console.log("NODE SELFTEST OK：SELFTEST PASS 已输出、document.title 已置、开局包已渲染、开局码格式正确、页脚计数动态生成");
-console.log("EXTRAS OK：toMarkdown 结构完整、锁定 roll 语义正确、全锁 alert、坏码拒绝（含旧格式与越界下标）、大写码可还原");
+console.log("NODE SELFTEST OK：SELFTEST PASS 已输出、document.title 已置、hero/TAB/详情面板已渲染、开局码格式正确、副标题与页脚计数动态生成");
+console.log("EXTRAS OK：toMarkdown 结构完整、五面板注释逐字一致、锁定 roll 语义正确、全锁 alert、坏码拒绝（含旧格式与越界下标）、大写码可还原、slug 残留零检出");

@@ -43,19 +43,56 @@
     background: #fff; cursor: pointer; font-size: 13px; color: var(--ink);
   }
   .btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
-  .sec {
+  /* 摘要 hero 卡 */
+  .hero {
     background: var(--card); border: 1px solid var(--line); border-radius: 12px;
-    padding: 18px 20px; margin-bottom: 14px; position: relative;
+    padding: 22px 20px; margin-bottom: 14px; text-align: center;
   }
-  .sec h2 {
+  .hero-title {
     font-family: "Noto Serif SC", "Songti SC", "SimSun", serif;
-    font-size: 17px; margin-bottom: 8px; padding-right: 40px;
+    font-size: 26px; font-weight: 700;
   }
-  .lock {
-    position: absolute; top: 14px; right: 14px; font-size: 18px;
-    background: none; border: none; cursor: pointer; opacity: 0.5;
+  .hero-pitch { font-size: 15px; margin: 8px 0 6px; }
+  .hero-meta { color: var(--ink2); font-size: 13px; }
+  /* TAB 栏 */
+  .tabs { display: flex; gap: 6px; margin-bottom: 14px; }
+  .tab {
+    flex: 1; position: relative; background: var(--card); border: 1px solid var(--line);
+    border-radius: 10px; padding: 12px 8px 8px; text-align: center; cursor: pointer;
+    font-family: inherit; color: var(--ink); line-height: 1.4;
   }
-  .lock.on { opacity: 1; }
+  .tab.locked { background: #f7e8dc; }
+  .tab.active::after {
+    content: ""; position: absolute; left: 18%; right: 18%; bottom: -1px;
+    height: 2px; background: var(--accent); border-radius: 2px;
+  }
+  .tab-label { display: block; font-size: 14px; font-weight: 600; }
+  .tab-val {
+    display: block; font-size: 11px; color: var(--ink2); margin-top: 2px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .tab-lock {
+    position: absolute; top: 0; right: 2px; border: none; background: none;
+    font-size: 12px; cursor: pointer; opacity: 0.45; padding: 2px 4px;
+  }
+  .tab.locked .tab-lock { opacity: 1; color: var(--accent); }
+  /* 详情面板 */
+  .panel {
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    padding: 18px 20px; margin-bottom: 14px;
+  }
+  .panel h2 {
+    font-family: "Noto Serif SC", "Songti SC", "SimSun", serif;
+    font-size: 17px; margin-bottom: 2px;
+  }
+  .note { color: var(--ink2); font-size: 12px; margin-bottom: 10px; }
+  .panel-in { animation: panelIn 200ms ease-out; }
+  @keyframes panelIn {
+    from { opacity: 0; transform: translateY(-6px); }
+    to { opacity: 1; transform: none; }
+  }
+  .tab-lock.pop { animation: pop 150ms ease-out; }
+  @keyframes pop { 50% { transform: scale(1.35); } }
   .tags { margin: 6px 0; }
   .tag {
     display: inline-block; font-size: 12px; color: var(--ink2);
@@ -65,6 +102,17 @@
   .kv { font-size: 14px; color: var(--ink2); margin: 4px 0; }
   .kv b { color: var(--ink); font-weight: 600; }
   .rules li { font-size: 14px; margin-left: 20px; }
+  .act-line { font-size: 14px; margin: 6px 0; }
+  .minis { display: flex; gap: 10px; margin: 10px 0; }
+  .mini {
+    flex: 1; background: #fbf6ec; border: 1px solid var(--line);
+    border-radius: 10px; padding: 12px 8px; text-align: center;
+  }
+  .mini-name {
+    font-family: "Noto Serif SC", "Songti SC", "SimSun", serif;
+    font-size: 17px; font-weight: 700;
+  }
+  .mini-role { font-size: 12px; color: var(--accent); margin-top: 2px; }
   .act { margin: 10px 0 4px; }
   .act-head { font-weight: 600; font-size: 15px; border-left: 3px solid var(--accent); padding-left: 8px; }
   .beat { font-size: 14px; margin: 6px 0 6px 12px; }
@@ -77,12 +125,18 @@
   .actions { display: flex; gap: 10px; justify-content: center; margin-top: 20px; flex-wrap: wrap; }
   .footer { text-align: center; color: var(--ink2); font-size: 12px; margin-top: 36px; }
   #err { display: none; text-align: center; color: var(--accent); padding: 40px 0; }
+  @media (max-width: 640px) {
+    .tab { padding: 8px 4px 6px; }
+    .tab-label { font-size: 12px; }
+    .tab-val { display: none; }
+    .hero-title { font-size: 22px; }
+  }
 </style>
 </head>
 <body>
 <div class="wrap">
   <h1>StoryOS 开局抽卡</h1>
-  <p class="sub">一次抽齐：题材 × 世界观 × 骨架 × 人物 × 分幕大纲 · 锁定满意的部分再重 Roll</p>
+  <p class="sub" id="sub">315 题材 × 10 世界观 × 31 骨架 · 一次抽齐开局，锁定满意的部分再 Roll</p>
   <button class="roll-btn" id="rollBtn">🎲 抽一个开局</button>
   <div class="code-bar" id="codeBar" style="display:none">
     <span>开局码</span><span class="code" id="codeText"></span>
@@ -91,7 +145,15 @@
     <button class="btn" id="restoreBtn">还原</button>
   </div>
   <div id="err">数据加载失败，请检查 data.js 是否与 index.html 同目录</div>
-  <div id="pack"></div>
+  <div id="pack" style="display:none">
+    <div class="hero">
+      <div class="hero-title" id="heroTitle"></div>
+      <p class="hero-pitch" id="heroPitch"></p>
+      <p class="hero-meta"><span id="heroMetaCast"></span> ｜ 世界观·<span id="heroMetaW"></span> ｜ 骨架·<span id="heroMetaS"></span></p>
+    </div>
+    <div class="tabs" id="tabs"></div>
+    <div class="panel" id="panel"></div>
+  </div>
   <div class="actions" id="actions" style="display:none">
     <button class="btn primary" id="copyMdBtn">复制大纲</button>
     <button class="btn" id="dlMdBtn">下载 .md</button>
@@ -257,38 +319,171 @@ const $ = id => document.getElementById(id);
 function esc(s) {
   return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
-function lockBtn(block) {
-  const on = state.locks[block] ? " on" : "";
-  return `<button class="lock${on}" data-block="${block}" title="锁定${BLOCK_LABELS[block]}">${state.locks[block] ? "🔒" : "🔓"}</button>`;
+
+const TAB_ORDER = ["genre", "worldview", "skeleton", "cast", "outline"];
+const TAB_NAMES = {genre: "题材", worldview: "世界观", skeleton: "骨架", cast: "人物", outline: "大纲"};
+const PANEL_NOTES = {
+  genre: "题材决定故事的轨道、节奏与冲突类型",
+  worldview: "世界观决定这个世界的底层设定与运行规则",
+  skeleton: "骨架决定 12 集的幕拍结构——每个节点该发生什么",
+  cast: "人物阵容由题材与文化推导，名字随重 Roll 更换",
+  outline: "按骨架拍点生成的分幕大纲，每拍一句；末尾钩子留给读者",
+};
+let activeTab = "genre";
+
+function tabValue(b, m) {
+  if (b === "genre") return m.g.title;
+  if (b === "worldview") return m.w.name;
+  if (b === "skeleton") return m.s.name;
+  if (b === "cast") return `${m.names.mc}·${m.names.rival}·${m.names.ally}`;
+  return `12 集 ${m.acts.reduce((n, a) => n + a.beats.length, 0)} 拍`;
 }
-function render() {
+
+function renderTabs(m) {
+  $("tabs").innerHTML = TAB_ORDER.map(b =>
+    `<button class="tab${b === activeTab ? " active" : ""}${state.locks[b] ? " locked" : ""}" data-tab="${b}">` +
+    `<span class="tab-lock" data-block="${b}" title="锁定${BLOCK_LABELS[b]}">${state.locks[b] ? "🔒" : "🔓"}</span>` +
+    `<span class="tab-label">${TAB_NAMES[b]}</span>` +
+    `<span class="tab-val" id="tabVal-${b}">${esc(tabValue(b, m))}</span></button>`
+  ).join("");
+}
+
+// hero 区按块更新（题材=大标题+pitch，世界观/骨架/人物=meta 行对应段）
+function setHeroBlock(b, m) {
+  if (b === "genre") {
+    $("heroTitle").textContent = m.g.title;
+    $("heroPitch").textContent = m.g.coreConflict;
+  } else if (b === "worldview") {
+    $("heroMetaW").textContent = m.w.name;
+  } else if (b === "skeleton") {
+    $("heroMetaS").textContent = m.s.name;
+  } else if (b === "cast") {
+    $("heroMetaCast").textContent = `主角 ${m.names.mc} · 对手 ${m.names.rival} · 盟友 ${m.names.ally}`;
+  }
+}
+
+function renderHero(m) {
+  for (const b of ["genre", "worldview", "skeleton", "cast"]) setHeroBlock(b, m);
+}
+
+function renderPanel(m) {
+  let html = "";
+  if (activeTab === "genre") {
+    html = `<h2>题材 · ${esc(m.g.title)}</h2><p class="note">${PANEL_NOTES.genre}</p>
+      <div class="tags">${m.g.tags.map(t => `<span class="tag">${esc(t)}</span>`).join("")}</div>
+      <p class="kv"><b>核心冲突</b>：${esc(m.g.coreConflict)}</p>
+      <p class="kv">${esc(m.g.setting)}</p>`;
+  } else if (activeTab === "worldview") {
+    html = `<h2>世界观 · ${esc(m.w.name)}</h2><p class="note">${PANEL_NOTES.worldview}</p>
+      <p class="kv">${esc(m.w.vibe)}</p>
+      <ul class="rules">${m.w.rules.map(r => `<li>${esc(r)}</li>`).join("")}</ul>`;
+  } else if (activeTab === "skeleton") {
+    html = `<h2>骨架 · ${esc(m.s.name)}</h2><p class="note">${PANEL_NOTES.skeleton}</p>
+      <p class="kv">${esc(m.s.brief)} · 共 ${m.s.acts.length} 幕 / 12 集</p>
+      ${m.acts.map(a => `<p class="act-line">${esc(a.name)}（第${a.range[0]}-${a.range[1]}集）—— ${esc(a.func)}</p>`).join("")}`;
+  } else if (activeTab === "cast") {
+    html = `<h2>人物</h2><p class="note">${PANEL_NOTES.cast}</p>
+      <div class="minis">
+        <div class="mini"><div class="mini-name">${esc(m.names.mc)}</div><div class="mini-role">主角</div></div>
+        <div class="mini"><div class="mini-name">${esc(m.names.rival)}</div><div class="mini-role">对手</div></div>
+        <div class="mini"><div class="mini-name">${esc(m.names.ally)}</div><div class="mini-role">盟友</div></div>
+      </div>
+      <p class="kv">${esc(m.g.characters)}</p>`;
+  } else {
+    html = `<h2>分幕大纲（12 集）</h2><p class="note">${PANEL_NOTES.outline}</p>`;
+    for (const a of m.acts) {
+      html += `<div class="act"><div class="act-head">${esc(a.name)} <span class="bdesc">第${a.range[0]}-${a.range[1]}集 · ${esc(a.func)}</span></div>`;
+      for (const b of a.beats)
+        html += `<div class="beat"><span class="ep">E${b.ep}</span> <span class="bdesc">${esc(b.desc)}</span><br>${esc(b.line)}</div>`;
+      html += `</div>`;
+    }
+    html += `<div class="hook-box">${esc(m.hook)}</div>`;
+  }
+  const panel = $("panel");
+  panel.innerHTML = html;
+  panel.classList.remove("panel-in");
+  void panel.offsetWidth; // 强制重排，让连续切换也重播淡入
+  panel.classList.add("panel-in");
+}
+
+// ============ 抽卡动效（老虎机式定格，纯展示随机值不进 state） ============
+const SETTLE_MS = {genre: 400, worldview: 550, skeleton: 700, cast: 850};
+const anim = {intervals: [], timeouts: []};
+function cancelAnim() {
+  anim.intervals.forEach(clearInterval);
+  anim.timeouts.forEach(clearTimeout);
+  anim.intervals = []; anim.timeouts = [];
+}
+
+function overlayRandom(b, m) {
+  const D = window.GACHA_DATA;
+  const rnd = arr => arr[Math.floor(Math.random() * arr.length)];
+  if (b === "genre") {
+    const t = rnd(D.genres).title;
+    $("heroTitle").textContent = t;
+    $("heroPitch").textContent = "……";
+    $("tabVal-genre").textContent = t;
+  } else if (b === "worldview") {
+    const n = rnd(D.worldviews).name;
+    $("heroMetaW").textContent = n;
+    $("tabVal-worldview").textContent = n;
+  } else if (b === "skeleton") {
+    const n = rnd(D.skeletons).name;
+    $("heroMetaS").textContent = n;
+    $("tabVal-skeleton").textContent = n;
+  } else if (b === "cast") {
+    const pool = D.namePools[D.culturePool[m.culture] || "cn"];
+    const mk = () => pool.names ? rnd(pool.names)
+      : pool.family ? rnd(pool.given) + "·" + rnd(pool.family)
+      : rnd(pool.surnames) + rnd(pool.given);
+    const a = mk(), b2 = mk(), c = mk();
+    $("heroMetaCast").textContent = `主角 ${a} · 对手 ${b2} · 盟友 ${c}`;
+    $("tabVal-cast").textContent = `${a}·${b2}·${c}`;
+  }
+}
+
+function settleBlock(b, m) {
+  if (b === "outline") {
+    $("tabVal-outline").textContent = tabValue("outline", m);
+  } else {
+    setHeroBlock(b, m);
+    $(`tabVal-${b}`).textContent = tabValue(b, m);
+  }
+  if (activeTab === b) renderPanel(m);
+}
+
+function render(animate = false) {
+  cancelAnim();
   const m = buildModel(state);
   $("codeText").textContent = encode(state);
   history.replaceState(null, "", "#" + encode(state));
-  let html = "";
-  html += `<div class="sec">${lockBtn("genre")}<h2>题材 · ${esc(m.g.title)}</h2>
-    <div class="tags">${m.g.tags.map(t => `<span class="tag">${esc(t)}</span>`).join("")}</div>
-    <p class="kv"><b>核心冲突</b>：${esc(m.g.coreConflict)}</p>
-    <p class="kv">${esc(m.g.setting)}</p></div>`;
-  html += `<div class="sec">${lockBtn("worldview")}<h2>世界观 · ${esc(m.w.name)}</h2>
-    <p class="kv">${esc(m.w.vibe)}</p><ul class="rules">${m.w.rules.map(r => `<li>${esc(r)}</li>`).join("")}</ul></div>`;
-  html += `<div class="sec">${lockBtn("skeleton")}<h2>骨架 · ${esc(m.s.name)}</h2>
-    <p class="kv">${esc(m.s.brief)} · 共 ${m.s.acts.length} 幕 / 12 集</p></div>`;
-  html += `<div class="sec">${lockBtn("cast")}<h2>人物</h2>
-    <p class="kv"><b>主角</b> ${esc(m.names.mc)} · <b>对手</b> ${esc(m.names.rival)} · <b>盟友</b> ${esc(m.names.ally)}</p>
-    <p class="kv">${esc(m.g.characters)}</p></div>`;
-  let outline = `<div class="sec">${lockBtn("outline")}<h2>分幕大纲（12 集）</h2>`;
-  for (const a of m.acts) {
-    outline += `<div class="act"><div class="act-head">${esc(a.name)} <span class="bdesc">第${a.range[0]}-${a.range[1]}集 · ${esc(a.func)}</span></div>`;
-    for (const b of a.beats)
-      outline += `<div class="beat"><span class="ep">E${b.ep}</span> <span class="bdesc">${esc(b.desc)}</span><br>${esc(b.line)}</div>`;
-    outline += `</div>`;
-  }
-  outline += `<div class="hook-box">${esc(m.hook)}</div></div>`;
-  html += outline;
-  $("pack").innerHTML = html;
+  renderHero(m);
+  renderTabs(m);
+  $("pack").style.display = "block";
   $("codeBar").style.display = "flex";
   $("actions").style.display = "flex";
+  if (!animate) { renderPanel(m); return; }
+  // 老虎机：未锁定块的 hero/tab 小字每 50ms 换随机候选，按 题材→世界观→骨架→人物 定格；
+  // 锁定 tab 不参与滚动直接保持；详情面板在各块定格时才刷新（定格前保留旧内容）
+  for (const b of ["genre", "worldview", "skeleton", "cast"]) {
+    if (state.locks[b]) continue;
+    overlayRandom(b, m);
+    const iv = setInterval(() => overlayRandom(b, m), 50);
+    anim.intervals.push(iv);
+    anim.timeouts.push(setTimeout(() => { clearInterval(iv); settleBlock(b, m); }, SETTLE_MS[b]));
+  }
+  if (!state.locks.outline) {
+    $("tabVal-outline").textContent = "……";
+    anim.timeouts.push(setTimeout(() => settleBlock("outline", m), SETTLE_MS.cast + 150));
+  }
+}
+
+function switchTab(b) {
+  if (b === activeTab) return;
+  activeTab = b;
+  const m = buildModel(state);
+  renderTabs(m);
+  renderPanel(m);
 }
 
 // ============ Markdown 导出 ============
@@ -312,7 +507,7 @@ function toMarkdown() {
 }
 
 // ============ 交互 ============
-function roll() {
+function roll(animate = true) {
   const locked = BLOCKS.filter(b => state.locks[b]);
   if (locked.length === BLOCKS.length) { alert("已全部锁定，先解锁再 Roll"); return; }
   const D = window.GACHA_DATA;
@@ -331,7 +526,7 @@ function roll() {
   }
   if (!state.locks.cast) state.cast = newSeg();
   if (!state.locks.outline) state.outline = newSeg();
-  render();
+  render(animate);
 }
 function copyText(text, btn) {
   if (!navigator.clipboard) { alert("当前环境不支持自动复制，请手动复制"); return; }
@@ -347,8 +542,9 @@ function initPage() {
     return;
   }
   const D = window.GACHA_DATA;
+  $("sub").textContent = `${D.genres.length} 题材 × ${D.worldviews.length} 世界观 × ${D.skeletons.length} 骨架 · 一次抽齐开局，锁定满意的部分再 Roll`;
   $("footer").textContent = `开局结构来自 StoryOS 题材库 · ${D.genres.length} 题材 × ${D.worldviews.length} 世界观 × ${D.skeletons.length} 骨架`;
-  $("rollBtn").onclick = roll;
+  $("rollBtn").onclick = () => roll();
   $("copyCodeBtn").onclick = e => copyText(encode(state), e.target);
   $("copyMdBtn").onclick = e => copyText(toMarkdown(), e.target);
   $("dlMdBtn").onclick = () => {
@@ -361,14 +557,23 @@ function initPage() {
   $("restoreBtn").onclick = () => {
     const c = decode($("codeInput").value);
     if (!c) { alert("开局码格式不对（应为 5 段：题材-世界观-骨架-人物-大纲，如 3k-9-b-k7x2-m9p4）"); return; }
-    Object.assign(state, c); state.locks = {}; render();
+    Object.assign(state, c); state.locks = {}; render(); // 还原不播动效
   };
-  $("pack").onclick = e => {
-    const btn = e.target.closest(".lock");
-    if (!btn) return;
-    const b = btn.dataset.block;
-    state.locks[b] = !state.locks[b];
-    render();
+  $("tabs").onclick = e => {
+    const tabEl = e.target.closest(".tab");
+    if (!tabEl) return;
+    const b = tabEl.dataset.tab;
+    if (e.target.closest(".tab-lock")) {
+      state.locks[b] = !state.locks[b];
+      tabEl.classList.toggle("locked", !!state.locks[b]);
+      const lockEl = e.target.closest(".tab-lock");
+      lockEl.textContent = state.locks[b] ? "🔒" : "🔓";
+      lockEl.classList.remove("pop");
+      void lockEl.offsetWidth;
+      lockEl.classList.add("pop");
+      return;
+    }
+    switchTab(b);
   };
   window.addEventListener("hashchange", () => {
     const c = decode(location.hash.slice(1));
@@ -376,7 +581,7 @@ function initPage() {
   });
   const fromHash = decode(location.hash.slice(1));
   if (fromHash) { Object.assign(state, fromHash); render(); }
-  else roll(); // 初始无任何锁定，等同全部重摇
+  else roll(false); // 首次加载不播动效；初始无任何锁定，等同全部重摇
 }
 
 // ============ 自检（?selftest=1 时在 console 输出结果） ============
