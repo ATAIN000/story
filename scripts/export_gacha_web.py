@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import datetime
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -17,11 +18,12 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from story_engine.macro.templates import TEMPLATES, compute_acts  # noqa: E402
-from story_engine.meta.genre_taxonomy import macro_templates_for_genre  # noqa: E402
+from story_engine.meta.genre_taxonomy import macro_templates_for_genre, tag_zh  # noqa: E402
 from story_engine.worldview.layers import ALL_PARAMS  # noqa: E402
 from story_engine.worldview.presets import PRESETS  # noqa: E402
 
 GENRES_DIR = ROOT / "story_engine" / "plugins" / "genres"
+CULTURES_DIR = ROOT / "story_engine" / "plugins" / "cultures"
 OUT_FILE = ROOT / "web" / "gacha" / "data.js"
 TOTAL_EPISODES = 12
 
@@ -49,6 +51,23 @@ CONFLICT_WORDS = {
     "physical": "生死对抗", "political": "权力倾轧",
     "existential": "存在危机", "moral": "道德两难",
     "internal": "内心挣扎", "cosmic": "宇宙恐怖", "resource": "资源争夺",
+}
+
+#: tag_zh 未覆盖标签的中文映射（导出时 EXTRA 优先，其次 tag_zh，再回退原文并告警）
+TAG_ZH_EXTRA = {
+    "book_transmigration": "穿书", "business_management": "经营",
+    "business_strategy": "商战", "chinese_folk_belief": "民俗",
+    "cozy_mystery": "治愈推理", "cyberpunk": "赛博",
+    "episodic": "单元剧", "folk_horror": "民俗恐怖",
+    "forensic": "法医", "high_fantasy": "史诗奇幻",
+    "historical_fiction": "历史", "litrpg": "游戏异界",
+    "low_fantasy": "低魔奇幻", "multiverse": "多元宇宙",
+    "palace_drama": "宫廷", "period_drama": "年代",
+    "political_thriller": "政治惊悚", "post_apocalyptic": "废土",
+    "progression_fantasy": "升级流", "psychological_thriller": "心理惊悚",
+    "reality_distortion": "现实扭曲", "science_fiction": "科幻",
+    "sports_competition": "竞技", "survival_game": "生存游戏",
+    "workplace_comedy": "职场喜剧", "wuxia": "武侠", "xianxia": "修仙",
 }
 
 #: 骨架模板中文名（与 backend/routers/macro.py 的 TEMPLATES_META 保持一致）
@@ -158,8 +177,42 @@ def export_skeletons() -> list[dict]:
     return out
 
 
-def export_genres() -> list[dict]:
+def _slug_patterns() -> list[tuple[re.Pattern, str]]:
+    """内部代号 → 中文显示名（文化 name→title、世界观 key→name、骨架 id→中文名）。
+
+    slug 全是 ASCII [a-z_-]+，用 (?<![a-zA-Z0-9_-])...(?![a-zA-Z0-9_-]) 边界
+    （\\b 对下划线不切断，会误匹配），按长度降序避免短 slug 抢先。
+    """
+    mapping: dict[str, str] = {}
+    for f in sorted(CULTURES_DIR.glob("*.yaml")):
+        raw = yaml.safe_load(f.read_text(encoding="utf-8"))
+        title = (raw.get("params") or {}).get("title")
+        if raw.get("name") and title:
+            mapping[raw["name"]] = title
+    for p in PRESETS:
+        mapping[p["key"]] = p["name"]
+    for sid, (cn, _brief) in SKELETON_NAMES.items():
+        mapping[sid] = cn
+    return [
+        (re.compile(r"(?<![a-zA-Z0-9_-])" + re.escape(slug) + r"(?![a-zA-Z0-9_-])"), zh)
+        for slug, zh in sorted(mapping.items(), key=lambda kv: -len(kv[0]))
+    ]
+
+
+def _clean_slugs(text: str, patterns: list[tuple[re.Pattern, str]]) -> tuple[str, int]:
+    """setting/characters/role 里的内部代号全词替换为中文，返回 (新文本, 替换处数)。"""
+    total = 0
+    for pat, zh in patterns:
+        text, n = pat.subn(zh, text)
+        total += n
+    return text, total
+
+
+def export_genres() -> tuple[list[dict], dict[str, int], list[str]]:
     out = []
+    slug_patterns = _slug_patterns()
+    clean_stats = {"setting": 0, "characters": 0, "role": 0}
+    uncovered_tags: set[str] = set()
     for f in sorted(GENRES_DIR.glob("*.yaml")):
         raw = yaml.safe_load(f.read_text(encoding="utf-8"))
         params = raw.get("params") or {}
@@ -174,17 +227,27 @@ def export_genres() -> list[dict]:
                   for t in params.get("tracks") or []]
         if not title or not core or not tracks:
             raise SystemExit(f"题材 {gid} 缺 title/core_conflict/tracks，导出中止")
-        tags = params.get("taxonomy_tags") or fusion.get("parent_genres") or []
+        tags = []
+        for t in params.get("taxonomy_tags") or fusion.get("parent_genres") or []:
+            zh = TAG_ZH_EXTRA.get(t) or tag_zh(t)
+            if zh == t:
+                uncovered_tags.add(t)
+            tags.append(zh)
         conflict_words = [CONFLICT_WORDS.get(c["type"], c["type"])
                           for c in params.get("conflict_types") or []]
+        cleaned = {}
+        for field in ("setting", "characters", "role"):
+            text, n = _clean_slugs(prompt.get(field, ""), slug_patterns)
+            cleaned[field] = text
+            clean_stats[field] += n
         out.append({
             "id": gid,
             "title": title,
             "tags": tags,
             "coreConflict": core,
-            "setting": prompt.get("setting", ""),
-            "characters": prompt.get("characters", ""),
-            "role": prompt.get("role", ""),
+            "setting": cleaned["setting"],
+            "characters": cleaned["characters"],
+            "role": cleaned["role"],
             "tracks": tracks,
             "conflictWords": conflict_words,
             "resolution": params.get("resolution_pattern", ""),
@@ -192,14 +255,15 @@ def export_genres() -> list[dict]:
             "recommendedCulture": params.get("recommended_culture"),
             "recommendedTemplates": list(macro_templates_for_genre(gid)),
         })
-    return out
+    return out, clean_stats, sorted(uncovered_tags)
 
 
 def main() -> None:
+    genres, clean_stats, uncovered_tags = export_genres()
     data = {
         "version": datetime.date.today().isoformat(),
         "totalEpisodes": TOTAL_EPISODES,
-        "genres": export_genres(),
+        "genres": genres,
         "worldviews": export_worldviews(),
         "skeletons": export_skeletons(),
         "namePools": NAME_POOLS,
@@ -220,6 +284,11 @@ def main() -> None:
     print(f"导出完成：{OUT_FILE.name}  题材 {len(data['genres'])}  "
           f"世界观 {len(data['worldviews'])}  骨架 {len(data['skeletons'])}  "
           f"体积 {size_kb}KB")
+    print(f"slug 清洗：setting {clean_stats['setting']} 处 / "
+          f"characters {clean_stats['characters']} 处 / role {clean_stats['role']} 处")
+    if uncovered_tags:
+        print(f"警告：{len(uncovered_tags)} 个标签未中文化，保留原文："
+              f"{', '.join(uncovered_tags)}")
 
 
 if __name__ == "__main__":
