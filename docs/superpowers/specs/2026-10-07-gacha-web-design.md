@@ -29,21 +29,23 @@ web/gacha/data.js             # 生成物：window.GACHA_DATA = {...}
 
 | 来源 | 取什么 |
 |---|---|
-| `story_engine/plugins/genres/*.yaml`（315 个） | `name`、`fusion.core_conflict`、`fusion.parent_genres`（作标签）、`culture_bound`、`allowed_cultures`、`params.title`、`params.tracks`（id/name/archetype）、`params.conflict_types`、`params.emotion_arcs`、`params.resolution_pattern`、`params.beats_per_chapter` |
-| `story_engine/macro/templates.py`（20 个幕结构） | 模板名、act 列表（name/function/pct_range）、每 act 的 beats（name/pct/desc） |
-| `story_engine/worldview/presets.py`（10 个世界观） | `key`、`name`、`vibe`，以及从 71 个 params 里挑 6-8 个有表现力的参数翻译成中文规则句（导出脚本内置「参数+枚举值 → 规则句」映射表，如 `physics_deviation=none` → 「物理法则与现实完全一致」） |
-| 姓名库（新建，导出脚本内置） | 按文化分组：中文、日式、西幻、其他，各 30-50 个名字 |
+| `story_engine/plugins/genres/*.yaml`（315 个） | `name`、`fusion.core_conflict`、`culture_bound`、`allowed_cultures`、`params.title`、`params.taxonomy_tags`（标签，286/315 有，缺失回退 `fusion.parent_genres`）、`params.tracks`（id/name）、`params.conflict_types`（type 映射中文词）、`params.resolution_pattern`、`params.prompt.role/setting/characters`（315/315 全有，开局包质量担当，原文展示）、`params.recommended_preset`、`params.recommended_culture` |
+| `story_engine/meta/genre_taxonomy.py` | `macro_templates_for_genre(genre_id)` → 题材推荐幕结构列表（首个最推荐） |
+| `story_engine/macro/templates.py`（32 个幕结构，排除 `custom`） | 经 `compute_acts(name, 12)` 预算好 12 集定位：act（name/function/episode_range）+ beats（name/ep/desc，desc 本身是中文短语）；中文显示名沿用 `backend/routers/macro.py` 的映射表 |
+| `story_engine/worldview/presets.py` + `layers.py`（10 个世界观） | `key`、`name`、`vibe`；规则句从 71 个 params 里挑 10 个有表现力的键（physics_deviation/metaphysics/destiny_mechanism/power_source/cost_structure/species_diversity/political_system/core_values/taboo_system/hidden_truths），用 `layers.ALL_PARAMS` 自带的中文 label 翻译成「参数名：取值标签」 |
+| 姓名库（新建，导出脚本内置） | 按 4 池分组：cn（姓+名表）/jp/western/other；另内置 culture_key → 池映射（11 个文化 yaml） |
 
-瘦身规则：丢弃评估权重、插件清单、activation_events 等开局包用不到的字段。预估 data.js 体积 300-500KB。
+瘦身规则：丢弃评估权重、插件清单、activation_events、phase_beats、pacing_targets 等开局包用不到的字段。预估 data.js 体积 300-500KB。
 
 完整性校验（导出时报错而非静默跳过）：每个题材必须有 title、core_conflict、至少 1 条 track。
 
 ## 抽卡引擎（index.html 内）
 
 1. 随机抽题材（315 均匀分布）
-2. 按题材 `allowed_cultures` 过滤后随机抽文化/世界观（`culture_bound: true` 的题材锁定其绑定文化）；`*` 通配表示任意
-3. 随机抽幕结构模板（20 个），默认 12 集定位拍点（沿用 `pct → 集数` 换算逻辑，JS 重写一遍，约 10 行）
-4. 模板引擎拼装开局包并渲染
+2. 抽世界观：题材有 `recommended_preset` 时 70% 用推荐、30% 全随机（10 个均匀）；无推荐则全随机
+3. 抽骨架：题材有推荐幕结构（taxonomy）时 70% 用最推荐、30% 全随机（31 个，排除 `custom`）；12 集拍点位置已在导出时预算好
+4. 人物姓名：文化取 `recommended_culture`（缺失则从 `allowed_cultures` 随机，`*` 时默认 modern-chinese-urban），按 culture → 姓名池映射抽主角/对手/盟友，三者不重名
+5. 模板引擎拼装开局包并渲染
 
 ## 部分锁定
 
@@ -56,11 +58,12 @@ web/gacha/data.js             # 生成物：window.GACHA_DATA = {...}
 
 ## 大纲模板引擎（防复读机的核心）
 
-三层随机：
+三层随机 + 题材自带文案兜底：
 
-1. **填空料来自题材自身**：track 名（主线/副线）、conflict_types、pacing、resolution_pattern
-2. **拍点句式库**：每种拍点功能（建置/触发/升级/中点反转/至暗时刻/收束等，按 act.function 归类）备 3-5 个句式变体，随机选；句式中嵌入题材轨道名、冲突类型词、世界观名词
-3. **姓名随机**：按世界观文化从姓名库抽主角/对手/盟友名
+0. **题材自带文案直接展示**：`setting`（世界观简介）、`characters`（人物阵容）、`core_conflict` 都是题材 YAML 里写好的中文描述，原文呈现，质量有保证
+1. **填空料来自题材自身**：track 名（主线/副线）、conflict_types 映射中文词、resolution_pattern
+2. **拍点句式库**：拍点按名称/描述关键词归类（钩子/建置/触发/升级/反转/低谷/对决/收束 8 类 + 通用兜底），每类备 4 个句式变体随机选；句式中嵌入角色名、轨道名、冲突词、世界观名；骨架拍点自带的中文 desc（如「起式——主角登场，展露气度」）直接作为该拍小标题
+3. **姓名随机**：按文化池抽主角/对手/盟友
 
 降级规则：题材缺某字段时，该拍用通用句式（不含填空）。
 
