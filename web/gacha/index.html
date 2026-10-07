@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>StoryOS 开局抽卡</title>
+<style>
+  :root {
+    --bg: #f7f3ea; --card: #fffdf8; --ink: #2c2620; --ink2: #6b6155;
+    --accent: #b5501f; --line: #e3dccb;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+    line-height: 1.7; padding: 24px 16px 64px;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; }
+  h1 {
+    font-family: "Noto Serif SC", "Songti SC", "SimSun", serif;
+    font-size: 28px; text-align: center; margin-bottom: 4px;
+  }
+  .sub { text-align: center; color: var(--ink2); font-size: 14px; margin-bottom: 24px; }
+  .roll-btn {
+    display: block; width: 100%; padding: 16px; font-size: 20px; font-weight: bold;
+    color: #fff; background: var(--accent); border: none; border-radius: 12px;
+    cursor: pointer; margin-bottom: 16px;
+  }
+  .roll-btn:active { transform: scale(0.98); }
+  .code-bar {
+    display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+    background: var(--card); border: 1px dashed var(--line); border-radius: 10px;
+    padding: 10px 14px; margin-bottom: 20px; font-size: 14px;
+  }
+  .code-bar .code { font-family: monospace; font-weight: bold; color: var(--accent); }
+  .code-bar input {
+    flex: 1; min-width: 140px; padding: 6px 10px; border: 1px solid var(--line);
+    border-radius: 6px; background: var(--bg); font-family: monospace; font-size: 13px;
+  }
+  .btn {
+    padding: 6px 14px; border: 1px solid var(--line); border-radius: 6px;
+    background: #fff; cursor: pointer; font-size: 13px; color: var(--ink);
+  }
+  .btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .sec {
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    padding: 18px 20px; margin-bottom: 14px; position: relative;
+  }
+  .sec h2 {
+    font-family: "Noto Serif SC", "Songti SC", "SimSun", serif;
+    font-size: 17px; margin-bottom: 8px; padding-right: 40px;
+  }
+  .lock {
+    position: absolute; top: 14px; right: 14px; font-size: 18px;
+    background: none; border: none; cursor: pointer; opacity: 0.5;
+  }
+  .lock.on { opacity: 1; }
+  .tags { margin: 6px 0; }
+  .tag {
+    display: inline-block; font-size: 12px; color: var(--ink2);
+    border: 1px solid var(--line); border-radius: 20px; padding: 1px 10px;
+    margin: 2px 4px 2px 0;
+  }
+  .kv { font-size: 14px; color: var(--ink2); margin: 4px 0; }
+  .kv b { color: var(--ink); font-weight: 600; }
+  .rules li { font-size: 14px; margin-left: 20px; }
+  .act { margin: 10px 0 4px; }
+  .act-head { font-weight: 600; font-size: 15px; border-left: 3px solid var(--accent); padding-left: 8px; }
+  .beat { font-size: 14px; margin: 6px 0 6px 12px; }
+  .beat .ep { color: var(--accent); font-family: monospace; font-size: 12px; }
+  .beat .bdesc { color: var(--ink2); font-size: 13px; }
+  .hook-box {
+    background: #fbf6ec; border-left: 3px solid var(--accent);
+    padding: 10px 14px; border-radius: 0 8px 8px 0; font-size: 14px;
+  }
+  .actions { display: flex; gap: 10px; justify-content: center; margin-top: 20px; flex-wrap: wrap; }
+  .footer { text-align: center; color: var(--ink2); font-size: 12px; margin-top: 36px; }
+  #err { display: none; text-align: center; color: var(--accent); padding: 40px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>StoryOS 开局抽卡</h1>
+  <p class="sub">一次抽齐：题材 × 世界观 × 骨架 × 人物 × 分幕大纲 · 锁定满意的部分再重 Roll</p>
+  <button class="roll-btn" id="rollBtn">🎲 抽一个开局</button>
+  <div class="code-bar" id="codeBar" style="display:none">
+    <span>开局码</span><span class="code" id="codeText"></span>
+    <button class="btn" id="copyCodeBtn">复制码</button>
+    <input id="codeInput" placeholder="粘贴开局码还原">
+    <button class="btn" id="restoreBtn">还原</button>
+  </div>
+  <div id="err">数据加载失败，请检查 data.js 是否与 index.html 同目录</div>
+  <div id="pack"></div>
+  <div class="actions" id="actions" style="display:none">
+    <button class="btn primary" id="copyMdBtn">复制大纲</button>
+    <button class="btn" id="dlMdBtn">下载 .md</button>
+  </div>
+  <p class="footer">开局结构来自 StoryOS 题材库 · 315 题材 × 10 世界观 × 31 骨架</p>
+</div>
+<script src="data.js"></script>
+<script>
+"use strict";
+// ============ 种子随机 ============
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+const rngOf = seg => mulberry32(parseInt(seg, 36));
+const pick = (arr, rng) => arr[Math.floor(rng() * arr.length)];
+const newSeg = () => Math.floor(Math.random() * Math.pow(36, 4)).toString(36).padStart(4, "0");
+
+const BLOCKS = ["genre", "worldview", "skeleton", "cast", "outline"];
+const BLOCK_LABELS = {genre:"题材", worldview:"世界观", skeleton:"骨架", cast:"人物", outline:"大纲句式"};
+const state = {seeds: {}, locks: {}};
+
+// ============ 句式库（拍点分类 × 变体） ============
+const BEAT_RULES = [
+  [/hook|钩子/i, "hook"],
+  [/setup|建置|登场|日常|opening_stance|world_setting|建立|落脚|入学|受命/i, "setup"],
+  [/inciting|触发|break|打破|案发|崩塌|穿越|血仇|规则发布/i, "inciting"],
+  [/pressure|升级|加剧|escalation|power_up|提升|rising|集结|试炼|trial|打脸|face_slap|磨合|排查|下潜|开荒|历练|学习|skill/i, "escalation"],
+  [/midpoint|反转|转折|reveal|真相|揭露|truth|betray|背叛|hidden|裂|转机/i, "twist"],
+  [/all_is_lost|低谷|低点|崩溃|lost|失去|dark|至暗|暴露危机|虐/i, "low"],
+  [/climax|对决|高潮|showdown|battle|决战|final|终局|终战|决赛|通关|渡劫|清算|登顶|大案/i, "climax"],
+  [/resolution|收束|结局|收线|归隐|了结|legacy|新均衡|settle|收|毕业|结案|兴旺|暖收|愈|归队/i, "resolution"],
+];
+const SENTENCES = {
+  hook: [
+    "黄金钩子：{mc}一出场就被卷入「{main}」，{conflict}当头砸下",
+    "开场即高能：{world}的规则在{mc}面前撕开一道口子",
+    "第一秒入局：{rival}的登场让{mc}的日常彻底粉碎",
+    "冷开场：一桩{conflict}事件，把{mc}推向「{main}」的漩涡中心",
+  ],
+  setup: [
+    "{mc}的身份与日常铺开，「{main}」的引线悄然埋下",
+    "世界徐徐展开：{world}的底色里，{mc}与{ally}相遇",
+    "铺垫{mc}的处境与渴望，{conflict}的阴云在天边聚集",
+    "{mc}立身之处立着这个世界的规矩——而TA恰好是最不守规矩的那个",
+  ],
+  inciting: [
+    "打破平衡的事件降临：{mc}被迫踏上「{main}」之路",
+    "意外骤至，{mc}的日常戛然而止，{conflict}正式点燃",
+    "一个无法拒绝的契机出现，{mc}与{rival}的命运第一次相撞",
+    "引线烧尽：{mc}必须在沉默与行动之间做出选择",
+  ],
+  escalation: [
+    "「{main}」持续推进：{mc}小有所成，却引来{rival}的注视",
+    "{conflict}升级，{mc}在压力下暴露短板，{ally}出手补位",
+    "{mc}接连破局，声望与敌意同步滋长",
+    "阶段性胜利到来，但代价是{mc}被更深地绑上「{main}」的战车",
+  ],
+  twist: [
+    "中点反转：{mc}发现关于「{main}」的认知全是错的",
+    "真相掀开一角——{rival}的动机远比想象中复杂",
+    "信任崩塌或立场倒转，{mc}与{ally}的关系迎来拐点",
+    "隐秘浮出水面：{world}的运行规则本身就是最大的伏笔",
+  ],
+  low: [
+    "至暗时刻：{mc}失去依仗，「{main}」看似彻底崩盘",
+    "全线溃败，{rival}的压制让{mc}跌回原点，甚至更糟",
+    "{mc}为之前的抉择付出代价，{conflict}反噬自身",
+    "众叛亲离或信念动摇，{mc}独自面对最深的怀疑",
+  ],
+  climax: [
+    "终极对决：{mc}与{rival}正面相撞，「{main}」迎来总爆发",
+    "所有伏笔收拢成一局，{mc}押上全部筹码",
+    "高潮来临：{conflict}在最高点引爆，退路尽断",
+    "{mc}以这一路走来的全部成长，迎战{rival}的终极杀招",
+  ],
+  resolution: [
+    "尘埃落定：{res}",
+    "收束时刻：「{main}」画上句点，{mc}已非当初的TA",
+    "新均衡建立，{mc}与{ally}在余烬里找到各自的位置",
+    "恩怨了结，{world}翻过一页——{res}",
+  ],
+  generic: [
+    "「{main}」继续推进，{mc}面临新的抉择",
+    "{conflict}在暗处发酵，「{sub}」悄然交织进来",
+    "局势微妙变化，{mc}与{rival}的距离被迫拉近",
+    "伏笔回收，新的悬念浮出水面",
+  ],
+};
+const HOOKS = [
+  "全书钩子：{res}——但{rival}留下的最后一句话，让{mc}彻夜未眠",
+  "结尾钩子：{mc}以为一切都结束了，直到{ally}带来一个颠覆认知的消息",
+  "最终悬念：「{sub}」的线头还悬在那里，指向一个更大的局",
+];
+
+// ============ 生成模型（纯函数，无 DOM，可自检） ============
+function drawNames(pool, rng) {
+  const mk = () => {
+    if (pool.names) return pick(pool.names, rng);
+    if (pool.family) return pick(pool.given, rng) + "·" + pick(pool.family, rng);
+    return pick(pool.surnames, rng) + pick(pool.given, rng);
+  };
+  const a = mk(); let b = mk(), c = mk();
+  while (b === a) b = mk();
+  while (c === a || c === b) c = mk();
+  return {mc: a, rival: b, ally: c};
+}
+
+function fill(tpl, g, w, names, rng) {
+  const conflict = g.conflictWords.length ? pick(g.conflictWords, rng) : "矛盾";
+  return tpl
+    .replaceAll("{mc}", names.mc).replaceAll("{rival}", names.rival)
+    .replaceAll("{ally}", names.ally)
+    .replaceAll("{main}", g.tracks[0] ? g.tracks[0].name : "主线")
+    .replaceAll("{sub}", g.tracks[1] ? g.tracks[1].name : "副线")
+    .replaceAll("{conflict}", conflict)
+    .replaceAll("{world}", w.name)
+    .replaceAll("{res}", g.resolution || "主题兑现");
+}
+
+function beatLine(beat, g, w, names, rng) {
+  const text = beat.name + " " + beat.desc;
+  let cls = "generic";
+  for (const [re, c] of BEAT_RULES) if (re.test(text)) { cls = c; break; }
+  return fill(pick(SENTENCES[cls], rng), g, w, names, rng);
+}
+
+function buildModel(seeds) {
+  const D = window.GACHA_DATA;
+  const g = pick(D.genres, rngOf(seeds.genre));
+  const wr = rngOf(seeds.worldview);
+  let w = (g.recommendedPreset && wr() < 0.7)
+    ? (D.worldviews.find(x => x.key === g.recommendedPreset) || pick(D.worldviews, wr))
+    : pick(D.worldviews, wr);
+  const sr = rngOf(seeds.skeleton);
+  let s = (g.recommendedTemplates.length && sr() < 0.7)
+    ? (D.skeletons.find(x => x.id === g.recommendedTemplates[0]) || pick(D.skeletons, sr))
+    : pick(D.skeletons, sr);
+  const cr = rngOf(seeds.cast);
+  const culture = g.recommendedCulture || "modern-chinese-urban";
+  const pool = D.namePools[D.culturePool[culture] || "cn"];
+  const names = drawNames(pool, cr);
+  const orng = rngOf(seeds.outline);
+  const acts = s.acts.map(a => ({
+    name: a.name, func: a.function, range: a.range,
+    beats: a.beats.map(b => ({ep: b.ep, desc: b.desc, line: beatLine(b, g, w, names, orng)})),
+  }));
+  return {g, w, s, culture, names, acts, hook: fill(pick(HOOKS, orng), g, w, names, orng)};
+}
+
+// ============ 开局码 ============
+function encode(seeds) { return BLOCKS.map(b => seeds[b]).join("-"); }
+function decode(code) {
+  const segs = code.trim().toLowerCase().split("-");
+  if (segs.length !== 5 || segs.some(s => !/^[0-9a-z]{4}$/.test(s))) return null;
+  const seeds = {};
+  BLOCKS.forEach((b, i) => seeds[b] = segs[i]);
+  return seeds;
+}
+
+// ============ 渲染 ============
+const $ = id => document.getElementById(id);
+function esc(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+function lockBtn(block) {
+  const on = state.locks[block] ? " on" : "";
+  return `<button class="lock${on}" data-block="${block}" title="锁定${BLOCK_LABELS[block]}">${state.locks[block] ? "🔒" : "🔓"}</button>`;
+}
+function render() {
+  const m = buildModel(state.seeds);
+  $("codeText").textContent = encode(state.seeds);
+  history.replaceState(null, "", "#" + encode(state.seeds));
+  let html = "";
+  html += `<div class="sec">${lockBtn("genre")}<h2>题材 · ${esc(m.g.title)}</h2>
+    <div class="tags">${m.g.tags.map(t => `<span class="tag">${esc(t)}</span>`).join("")}</div>
+    <p class="kv"><b>核心冲突</b>：${esc(m.g.coreConflict)}</p>
+    <p class="kv">${esc(m.g.setting)}</p></div>`;
+  html += `<div class="sec">${lockBtn("worldview")}<h2>世界观 · ${esc(m.w.name)}</h2>
+    <p class="kv">${esc(m.w.vibe)}</p><ul class="rules">${m.w.rules.map(r => `<li>${esc(r)}</li>`).join("")}</ul></div>`;
+  html += `<div class="sec">${lockBtn("skeleton")}<h2>骨架 · ${esc(m.s.name)}</h2>
+    <p class="kv">${esc(m.s.brief)} · 共 ${m.s.acts.length} 幕 / 12 集</p></div>`;
+  html += `<div class="sec">${lockBtn("cast")}<h2>人物</h2>
+    <p class="kv"><b>主角</b> ${esc(m.names.mc)} · <b>对手</b> ${esc(m.names.rival)} · <b>盟友</b> ${esc(m.names.ally)}</p>
+    <p class="kv">${esc(m.g.characters)}</p></div>`;
+  let outline = `<div class="sec">${lockBtn("outline")}<h2>分幕大纲（12 集）</h2>`;
+  for (const a of m.acts) {
+    outline += `<div class="act"><div class="act-head">${esc(a.name)} <span class="bdesc">第${a.range[0]}-${a.range[1]}集 · ${esc(a.func)}</span></div>`;
+    for (const b of a.beats)
+      outline += `<div class="beat"><span class="ep">E${b.ep}</span> <span class="bdesc">${esc(b.desc)}</span><br>${esc(b.line)}</div>`;
+    outline += `</div>`;
+  }
+  outline += `<div class="hook-box">${esc(m.hook)}</div></div>`;
+  html += outline;
+  $("pack").innerHTML = html;
+  $("codeBar").style.display = "flex";
+  $("actions").style.display = "flex";
+}
+
+// ============ Markdown 导出 ============
+function toMarkdown() {
+  const m = buildModel(state.seeds);
+  const D = window.GACHA_DATA;
+  let md = `# ${m.g.title} · 开局包\n\n`;
+  md += `> 开局码 \`${encode(state.seeds)}\` · StoryOS 开局抽卡 · 数据版本 ${D.version}\n\n`;
+  md += `## 题材\n\n- **核心冲突**：${m.g.coreConflict}\n- **标签**：${m.g.tags.join(" / ")}\n\n${m.g.setting}\n\n`;
+  md += `## 世界观 · ${m.w.name}\n\n${m.w.vibe}\n\n${m.w.rules.map(r => "- " + r).join("\n")}\n\n`;
+  md += `## 骨架 · ${m.s.name}\n\n${m.s.brief}\n\n`;
+  md += `## 人物\n\n- 主角：${m.names.mc}\n- 对手：${m.names.rival}\n- 盟友：${m.names.ally}\n\n${m.g.characters}\n\n`;
+  md += `## 分幕大纲（12 集）\n\n`;
+  for (const a of m.acts) {
+    md += `### ${a.name}（第${a.range[0]}-${a.range[1]}集）\n\n`;
+    for (const b of a.beats) md += `- **E${b.ep} ${b.desc}**：${b.line}\n`;
+    md += "\n";
+  }
+  md += `**${m.hook}**\n`;
+  return md;
+}
+
+// ============ 交互 ============
+function roll() {
+  const locked = BLOCKS.filter(b => state.locks[b]);
+  if (locked.length === BLOCKS.length) { alert("已全部锁定，先解锁再 Roll"); return; }
+  for (const b of BLOCKS) if (!state.locks[b]) state.seeds[b] = newSeg();
+  render();
+}
+function copyText(text, btn) {
+  navigator.clipboard.writeText(text).then(() => {
+    const old = btn.textContent; btn.textContent = "已复制 ✓";
+    setTimeout(() => btn.textContent = old, 1200);
+  });
+}
+function initPage() {
+  if (!window.GACHA_DATA) { $("err").style.display = "block"; return; }
+  $("rollBtn").onclick = roll;
+  $("copyCodeBtn").onclick = e => copyText(encode(state.seeds), e.target);
+  $("copyMdBtn").onclick = e => copyText(toMarkdown(), e.target);
+  $("dlMdBtn").onclick = () => {
+    const blob = new Blob([toMarkdown()], {type: "text/markdown;charset=utf-8"});
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `开局包-${encode(state.seeds)}.md`;
+    a.click(); URL.revokeObjectURL(a.href);
+  };
+  $("restoreBtn").onclick = () => {
+    const seeds = decode($("codeInput").value);
+    if (!seeds) { alert("开局码格式不对（应为 5 段，如 k7x2-m9p4-q3z8-n1b6-r5t7）"); return; }
+    state.seeds = seeds; state.locks = {}; render();
+  };
+  $("pack").onclick = e => {
+    const btn = e.target.closest(".lock");
+    if (!btn) return;
+    const b = btn.dataset.block;
+    state.locks[b] = !state.locks[b];
+    render();
+  };
+  const fromHash = decode(location.hash.slice(1));
+  if (fromHash) { state.seeds = fromHash; render(); }
+  else { for (const b of BLOCKS) state.seeds[b] = newSeg(); render(); }
+}
+
+// ============ 自检（?selftest=1 时在 console 输出结果） ============
+function selftest() {
+  for (let i = 0; i < 200; i++) {
+    const seeds = {}; for (const b of BLOCKS) seeds[b] = newSeg();
+    const m1 = buildModel(seeds);
+    const seeds2 = decode(encode(seeds));
+    const m2 = buildModel(seeds2);
+    if (JSON.stringify(m1) !== JSON.stringify(m2))
+      throw new Error("开局码还原不一致 @" + encode(seeds));
+    const ns = [m1.names.mc, m1.names.rival, m1.names.ally];
+    if (new Set(ns).size !== 3) throw new Error("人物重名 @" + encode(seeds));
+    if (!m1.acts.length || !m1.acts[0].beats.length) throw new Error("大纲为空");
+  }
+  console.log("SELFTEST PASS：200 组种子还原一致、人物不重名、大纲非空");
+  document.title = "SELFTEST PASS";
+}
+
+initPage();
+if (location.search.includes("selftest")) selftest();
+</script>
+</body>
+</html>
