@@ -134,7 +134,7 @@ if (elements.get("footer")?.textContent !== "开局结构来自 StoryOS 题材�
 
 // 数据卫生断言：50 组随机码 × 5 个 tab 的渲染结果中不得有 slug 残留
 // （tags/setting/characters 展示区不出现 [a-z]+_[a-z]+ 模式与已知内部代号）
-const SLUG_RE = /[a-z]+_[a-z]+/;
+const SLUG_RE = /[a-z]+[_-][a-z]+/;
 const KNOWN_SLUGS = /modern-chinese-urban|infinite_flow|dungeon_loop|hard_reality|western_fantasy|xianxia_cultivation|post_apocalyptic/;
 t.state.locks = {};
 let slugHits = 0;
