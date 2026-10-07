@@ -31,6 +31,7 @@ globalThis.document = {
       elements.set(id, {
         style: {}, dataset: {}, offsetWidth: 0,
         classList: { add() {}, remove() {}, toggle() {} },
+        setAttribute() {},
       });
     }
     return elements.get(id);
@@ -39,6 +40,13 @@ globalThis.document = {
     return { click() {}, href: "", download: "" };
   },
   title: "",
+};
+// 最小 localStorage mock（内存 Map）；Task 7 降级测试会整体替换为抛错版本
+const lsStore = new Map();
+globalThis.localStorage = {
+  getItem: k => (lsStore.has(k) ? lsStore.get(k) : null),
+  setItem: (k, v) => { lsStore.set(k, String(v)); },
+  removeItem: k => { lsStore.delete(k); },
 };
 globalThis.history = { replaceState() {} };
 globalThis.location = { hash: "", search: "?selftest=1" };
@@ -63,7 +71,7 @@ try {
   (0, eval)(dataJs); // data.js 是 window.GACHA_DATA = {...} 赋值
   if (!globalThis.GACHA_DATA) throw new Error("data.js 执行后 window.GACHA_DATA 仍为空");
   // 页面脚本为严格模式 eval，函数不外泄；末尾导出引用供功能点抽查
-  (0, eval)(pageJs + "\n;globalThis.__t = {toMarkdown, roll, decode, encode, state, BLOCKS, buildModel, render, switchTab};");
+  (0, eval)(pageJs + "\n;globalThis.__t = {toMarkdown, roll, decode, encode, state, BLOCKS, buildModel, render, switchTab, pickGenre, fortuneOf, almanacOf, setZodiac, toggleFav, isFav, renderRecList, restoreCode, FORTUNE_TPLS, ALMANAC_POOL, ZODIACS};");
 } catch (e) {
   console.log = origLog;
   console.error("FAIL：页面脚本执行抛异常：", e);
@@ -134,7 +142,8 @@ if (elements.get("footer")?.textContent !== "开局结构来自 StoryOS 题材�
 if (!html.includes("凡事皆可 · ALL THINGS POSSIBLE")) fails.push("缺页脚品牌行「凡事皆可 · ALL THINGS POSSIBLE」");
 
 // 暗黑主题断言：设计 token 就位，旧皮肤（橙/米色/衬线字体栈）与 emoji 零残留
-const EMOJI_RE = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u;
+// 契合度星号 ★(U+2605)☆(U+2606) 为 brief 特许文本字符，从 emoji 区间中剔除
+const EMOJI_RE = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{2604}\u{2607}-\u{27BF}]/u;
 if (EMOJI_RE.test(html)) fails.push("index.html 源码含 emoji 残留");
 for (const legacy of ["#b5501f", "#f7f3ea", "#fffdf8", "🎲", "🔒", "🔓", "✓"])
   if (html.includes(legacy)) fails.push(`index.html 含旧皮肤残留「${legacy}」`);
@@ -255,6 +264,154 @@ for (let i = 0; i < N; i++) { t.roll(); if (t.state.wi === wantWi) hit++; }
 if (hit / N < 0.5) fails.push(`推荐跟随命中率异常：${hit}/${N}（期望≈73%）`);
 console.log(`FOLLOW OK：锁题材摇世界观 ${N} 次命中推荐 ${hit} 次（${(hit / N * 100).toFixed(1)}%，期望≈73%）`);
 
+// ==================== Task 7：玄学加成 / 抽卡历史 / 收藏 ====================
+// 结构断言：黄历在抽卡按钮上方、玄学区在按钮下方、「记录」是按钮组第三钮、记录面板在按钮组下方
+if (!(html.indexOf('id="almanac"') !== -1 && html.indexOf('id="almanac"') < html.indexOf('id="rollBtn"')))
+  fails.push("黄历行 #almanac 不在抽卡按钮上方");
+if (!(html.indexOf('id="rollBtn"') < html.indexOf('id="mystic"')))
+  fails.push("玄学折叠区 #mystic 不在抽卡按钮下方");
+if (!(html.indexOf('id="copyMdBtn"') < html.indexOf('id="dlMdBtn"') && html.indexOf('id="dlMdBtn"') < html.indexOf('id="recBtn"')))
+  fails.push("「记录」不是底部按钮组第三个按钮");
+if (!(html.indexOf('id="actions"') < html.indexOf('id="recPanel"') && html.indexOf('id="recPanel"') < html.indexOf('id="codeBar"')))
+  fails.push("记录面板 #recPanel 不在按钮组下方");
+// 黄历渲染：灰字一行、宜 3 忌 2、用词在词池内
+const almanacText = elements.get("almanac")?.textContent || "";
+if (!/^今日黄历 · 宜 .+ · 忌 .+$/.test(almanacText)) fails.push(`黄历行格式不对：${JSON.stringify(almanacText)}`);
+// 玄学折叠区：12 星座 chips 渲染
+const chipsHtml = elements.get("zodiacChips")?.innerHTML || "";
+if ((chipsHtml.match(/class="chip"/g) || []).length !== 12) fails.push("星座 chips 不是 12 个");
+for (const zn of ["白羊", "金牛", "双子", "巨蟹", "狮子", "处女", "天秤", "天蝎", "射手", "摩羯", "水瓶", "双鱼"])
+  if (!chipsHtml.includes(`>${zn}<`)) fails.push(`星座 chips 缺「${zn}」`);
+// 批注模板库 8 条逐字核对
+const TPLS8 = [
+  "{zodiac}今日与「{genre}」相位相合——这开局藏着你的本命故事",
+  "水星顺行：{mc}的决断力加成，宜立刻动笔",
+  "{zodiac}的守护星落在「{world}」，世界观与你同频",
+  "卦象显示：「{main}」线宜慢热，前三集忍住别爆",
+  "{zodiac}注意：{rival}这类对手，专治你的拖延症",
+  "今日抽到「{genre}」：{zodiac}的直觉会替你写好第一章",
+  "黄道吉日加持：此坑烂尾率下降（玄学意义上）",
+  "{zodiac}×「{genre}」：星盘说这里有个你没见过的反转",
+];
+if (JSON.stringify(t.FORTUNE_TPLS) !== JSON.stringify(TPLS8)) fails.push("批注模板库与 brief 8 条逐字不符");
+
+// 抽卡历史：点抽卡按钮 3 次 → 3 条、码格式合法；再 60 次 → 封顶 50
+t.state.locks = {};
+localStorage.removeItem("storyos_gacha_history");
+for (let i = 0; i < 3; i++) elements.get("rollBtn").onclick();
+let hist = JSON.parse(localStorage.getItem("storyos_gacha_history") || "[]");
+if (hist.length !== 3) fails.push(`抽卡 3 次后 history=${hist.length} 条（预期 3）`);
+else if (!hist.every(h => /^[0-9a-z]{2}-[0-9a-z]-[0-9a-z]-[0-9a-z]{4}-[0-9a-z]{4}$/.test(h.code) && h.genreTitle && h.ts > 0))
+  fails.push(`history 记录格式不对：${JSON.stringify(hist[0])}`);
+for (let i = 0; i < 60; i++) elements.get("rollBtn").onclick();
+hist = JSON.parse(localStorage.getItem("storyos_gacha_history") || "[]");
+if (hist.length !== 50) fails.push(`history 未封顶 50：${hist.length}`);
+// 历史列表行：题材+时间+码+还原钮+转收藏星钮
+t.renderRecList();
+const recHistHtml = elements.get("recList")?.innerHTML || "";
+if (!recHistHtml.includes('data-act="restore"')) fails.push("历史列表缺「还原」钮");
+if (!recHistHtml.includes('data-act="fav"')) fails.push("历史行缺转收藏星钮");
+if (!/rec-code/.test(recHistHtml)) fails.push("历史行缺等宽码");
+
+// 收藏：往返正确 + 上限 100 + hero 星钮状态刷新
+localStorage.removeItem("storyos_gacha_favs");
+t.toggleFav();
+let favs = JSON.parse(localStorage.getItem("storyos_gacha_favs") || "[]");
+if (favs.length !== 1 || favs[0].code !== t.encode(t.state)) fails.push("收藏未写入或内容不对");
+if (!t.isFav(t.encode(t.state))) fails.push("收藏后 isFav 应为 true");
+if (!(elements.get("favBtn")?.innerHTML || "").includes('fill="currentColor"')) fails.push("收藏后星钮未变实心");
+t.toggleFav();
+favs = JSON.parse(localStorage.getItem("storyos_gacha_favs") || "[]");
+if (favs.length !== 0 || t.isFav(t.encode(t.state))) fails.push("取消收藏未生效");
+if ((elements.get("favBtn")?.innerHTML || "").includes('fill="currentColor"')) fails.push("取消收藏后星钮未还原空心");
+for (let i = 0; i < 105; i++) { t.state.cast = i.toString(36).padStart(4, "0"); t.toggleFav(); }
+favs = JSON.parse(localStorage.getItem("storyos_gacha_favs") || "[]");
+if (favs.length !== 100) fails.push(`收藏未封顶 100：${favs.length}`);
+localStorage.removeItem("storyos_gacha_favs");
+// 收藏子 TAB：删除钮就位；清空后灰字提示
+t.toggleFav();
+elements.get("recTabFav").onclick();
+const recFavHtml = elements.get("recList")?.innerHTML || "";
+if (!recFavHtml.includes('data-act="del"')) fails.push("收藏列表缺「删除」钮");
+localStorage.removeItem("storyos_gacha_favs");
+t.renderRecList();
+if (!(elements.get("recList")?.innerHTML || "").includes("暂无记录，去抽一发")) fails.push("空收藏列表缺灰字提示");
+elements.get("recTabHist").onclick();
+
+// 记录面板「还原」= decode → state → render，不记历史
+const histLenBefore = JSON.parse(localStorage.getItem("storyos_gacha_history") || "[]").length;
+t.restoreCode("3k-9-b-k7x2-m9p4");
+if (t.encode(t.state) !== "3k-9-b-k7x2-m9p4") fails.push("记录面板还原未生效");
+if (JSON.parse(localStorage.getItem("storyos_gacha_history") || "[]").length !== histLenBefore)
+  fails.push("记录面板还原记了历史（不应记）");
+
+// 批注确定性：同码同星座同日期完全一致；12 星座至少 2 种结果；星数 1-5
+const fc = "3k-9-b-k7x2-m9p4", fd = "2026-10-07";
+const f1 = t.fortuneOf(fc, "天蝎", fd), f2 = t.fortuneOf(fc, "天蝎", fd);
+if (JSON.stringify(f1) !== JSON.stringify(f2)) fails.push("同码同星座同日期批注不一致");
+if (!(f1.stars >= 1 && f1.stars <= 5)) fails.push(`契合度星数越界：${f1.stars}`);
+if (new Set(t.ZODIACS.map(z => JSON.stringify(t.fortuneOf(fc, z.name, fd)))).size < 2)
+  fails.push("12 星座批注全部相同（异常）");
+
+// 黄历确定性：同日期两次一致、宜 3 忌 2、宜忌不重叠、用词不出词池
+const a1 = t.almanacOf(fd), a2 = t.almanacOf(fd);
+if (JSON.stringify(a1) !== JSON.stringify(a2)) fails.push("黄历同日期两次计算不一致");
+if (a1.yi.length !== 3 || a1.ji.length !== 2) fails.push("黄历宜忌数量不是 3 宜 2 忌");
+if (a1.yi.some(w => a1.ji.includes(w))) fails.push("黄历宜忌重叠");
+if (![...a1.yi, ...a1.ji].every(w => t.ALMANAC_POOL.includes(w))) fails.push("黄历用词超出词池");
+if (t.ALMANAC_POOL.length !== 20) fails.push(`黄历词池不是 20 词：${t.ALMANAC_POOL.length}`);
+
+// 星座加权：选天蝎抽 300 次，本命标签（暗黑/复仇/恐怖）题材占比 > 1.3 倍均匀期望
+t.setZodiac("天蝎");
+if (JSON.parse(localStorage.getItem("storyos_gacha_zodiac") || "null") !== "天蝎") fails.push("星座选择未持久化");
+const scoTags = ["暗黑", "复仇", "恐怖"];
+const scoIdx = new Set(D.genres.map((g, i) => g.tags.some(tg => scoTags.includes(tg)) ? i : -1).filter(i => i >= 0));
+if (!scoIdx.size) fails.push("天蝎本命标签零命中题材（映射全落空）");
+const TRIALS = 300;
+let zHit = 0;
+for (let i = 0; i < TRIALS; i++) if (scoIdx.has(t.pickGenre())) zHit++;
+const uniExp = TRIALS * scoIdx.size / D.genres.length;
+if (zHit <= uniExp * 1.3) fails.push(`天蝎加权不明显：命中 ${zHit}/${TRIALS}，均匀期望 ${uniExp.toFixed(1)}（要求 >1.3 倍）`);
+else console.log(`ZODIAC-WEIGHT OK：天蝎抽 ${TRIALS} 次命中本命题材 ${zHit} 次，均匀期望 ${uniExp.toFixed(1)}（${(zHit / uniExp).toFixed(2)} 倍）`);
+// 未选星座退化为均匀随机：命中不应显著超期望（粗检上限 1.6 倍，防卡死）
+t.setZodiac(null);
+if (localStorage.getItem("storyos_gacha_zodiac") !== null) fails.push("取消星座后 localStorage 未清除");
+let z0 = 0;
+for (let i = 0; i < TRIALS; i++) if (scoIdx.has(t.pickGenre())) z0++;
+if (z0 > uniExp * 1.6) fails.push(`无星座时题材分布异常偏高：${z0}/${TRIALS}（期望 ${uniExp.toFixed(1)}）`);
+
+// localStorage 抛错降级：抽卡/渲染/星座/收藏/记录面板全不崩
+const realLS = { getItem: localStorage.getItem, setItem: localStorage.setItem, removeItem: localStorage.removeItem };
+localStorage.getItem = () => { throw new Error("denied"); };
+localStorage.setItem = () => { throw new Error("denied"); };
+localStorage.removeItem = () => { throw new Error("denied"); };
+try {
+  t.state.locks = {};
+  elements.get("rollBtn").onclick();
+  t.render();
+  t.setZodiac("白羊");
+  t.setZodiac(null);
+  t.toggleFav();
+  t.renderRecList();
+} catch (e) {
+  fails.push("localStorage 抛错时主流程崩溃：" + (e && e.message));
+}
+Object.assign(localStorage, realLS);
+localStorage.removeItem("storyos_gacha_history");
+localStorage.removeItem("storyos_gacha_favs");
+// 降级后渲染内容仍完整（最近一次 render 产物）
+if (!elements.get("heroTitle")?.textContent) fails.push("localStorage 抛错降级后 hero 未渲染");
+
+// 新 UI 渲染结果无 emoji（星号 ★☆ 特许）：批注/记录面板/黄历/星座 chips/折叠钮/星钮
+t.setZodiac("天蝎");
+t.render();
+t.renderRecList();
+const newUiHtml = ["fortune", "recList", "zodiacChips", "mysticToggle", "favBtn"]
+  .map(id => elements.get(id)?.innerHTML || "").join("\n") + (elements.get("almanac")?.textContent || "");
+if (EMOJI_RE.test(newUiHtml)) fails.push("新增 UI 渲染结果含 emoji");
+if (!(elements.get("fortune")?.innerHTML || "").includes("★")) fails.push("批注区未渲染契合度星号");
+t.setZodiac(null);
+
 if (fails.length) {
   console.error("FAIL：\n- " + fails.join("\n- "));
   process.exit(1);
@@ -262,3 +419,4 @@ if (fails.length) {
 console.log("NODE SELFTEST OK：SELFTEST PASS 已输出、document.title 已置、hero/TAB/详情面板已渲染、开局码格式正确、副标题与页脚计数动态生成");
 console.log("THEME OK：暗黑设计 token 就位，旧皮肤（橙/米色/衬线）与 emoji 零残留，按钮与 TAB 锁钮 SVG 图标渲染到位");
 console.log("EXTRAS OK：toMarkdown 结构完整、五面板注释逐字一致、锁定 roll 语义正确、全锁 alert、坏码拒绝（含旧格式与越界下标）、大写码可还原、slug 残留零检出");
+console.log("MYSTIC OK：黄历 3 宜 2 忌确定性且不重叠、批注 8 模板逐字+同码同星座同日期恒定、星座加权显著（未选退化均匀）、历史 50 封顶、收藏往返+100 封顶、还原不记历史、localStorage 抛错静默降级不崩");
